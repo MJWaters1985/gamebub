@@ -63,6 +63,9 @@ pub static XY_SELECT_START: KvsKey<bool> = KvsKey::new_with_default("xy-select-s
 /// Tilt sensitivity for accelerometer games (index into a list of scales).
 pub static TILT_SENSITIVITY: KvsKey<i32> = KvsKey::new_with_default("tilt-sens", 2);
 
+/// Scale GB/GBC video one step larger, cropping the top and bottom.
+pub static GB_OVERSCALE: KvsKey<bool> = KvsKey::new_with_default("gb-overscale", false);
+
 /// Display white balance preset.
 pub static DISPLAY_WHITE_BALANCE: KvsKey<i32> = KvsKey::new_with_default("display-wb", 0);
 
@@ -89,4 +92,5 @@ pub fn flush_all() {
     XY_SELECT_START.flush();
     TILT_SENSITIVITY.flush();
     DISPLAY_WHITE_BALANCE.flush();
+    GB_OVERSCALE.flush();
 }

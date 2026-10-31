@@ -131,6 +131,15 @@ mod settings {
                 key: &keys::DMG_COLOR_PALETTE,
                 choices: &["Grayscale", "DMG Green", "GB Pocket"],
             },
+            Entry::Checkbox {
+                name: "Integer Overscale (crop)",
+                key: &keys::GB_OVERSCALE,
+            },
+            Entry::List {
+                name: "Tilt Sensitivity",
+                key: &keys::TILT_SENSITIVITY,
+                choices: &["Lowest", "Low", "Normal", "High"],
+            },
         ],
     };
 

@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <optional>
 #include <fstream>
+#include <filesystem>
 #include <sstream>
 #include <string>
 
