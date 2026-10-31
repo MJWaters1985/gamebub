@@ -93,6 +93,8 @@ export global Backend {
         },
     ];
     in-out property <int> settings-index: 0;
+    // Screen to return to when leaving the settings.
+    in property <ScreenId> settings-return-screen: ScreenId.MainMenu;
 
     in-out property <CoreSubscreen> core-subscreen;
     in property <[CoreListEntry]> core-list;
@@ -103,10 +105,14 @@ export global Backend {
     in property <bool> core-file-select-is-loading: false;
     in-out property <string> core-file-select-error;
     in-out property <int> core-file-select-index: 0;
+    // True while a core is waiting for the user to select a file.
+    in property <bool> core-file-select-active: false;
     in-out property <int> core-selected-index: 0;
     in-out property <string> core-error;
     in property <percent> core-progress: 0%;
     in property <bool> core-is-loading: false;
+    // Whether the running game was loaded from a file (rather than a cartridge).
+    in property <bool> game-can-load-rom: false;
 
     callback volume-changed(int);
     callback brightness-changed(int);
@@ -118,6 +124,7 @@ export global Backend {
     callback game-set-focused(bool);
     callback game-reset();
     callback game-exit();
+    callback game-load-rom();
     callback settings-changed(int, SettingValue);
     callback settings-back() -> bool;
     callback tools-start-usb-drive();
@@ -130,6 +137,8 @@ export global Backend {
     callback core-file-select-selected(int);
     callback core-file-select-up();
     callback core-file-select-cancel();
+    callback core-file-select-favorite(int);
+    callback core-file-select-settings();
 
     callback screen-enter(ScreenId);
 

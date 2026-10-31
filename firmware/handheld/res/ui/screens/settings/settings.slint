@@ -15,7 +15,7 @@ export component SettingsScreen inherits ScreenBase {
             if (event.text == "b") {
                 // If there's no page to go back to, go to the main menu.
                 if !Backend.settings-back() {
-                    Global.set-screen(ScreenId.MainMenu);
+                    Global.set-screen(Backend.settings-return-screen);
                 }
                 accept
             } else {
@@ -25,7 +25,7 @@ export component SettingsScreen inherits ScreenBase {
 
         key-released(event) => {
             if event.text == "Home" && !Global.home-consumed {
-                Global.set-screen(ScreenId.MainMenu);
+                Global.set-screen(Backend.settings-return-screen);
                 accept
             } else {
                 reject

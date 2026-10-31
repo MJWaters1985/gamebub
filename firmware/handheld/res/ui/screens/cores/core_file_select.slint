@@ -9,12 +9,22 @@ export component CoreFileSelect {
 
     forward-focus: list;
 
-    // TODO: correctly label new item when the list changes
-
     // Hack to call set-current-item when the backend forces a new item.
     private property <int> _selected-index: Backend.core-file-select-index;
     changed _selected-index => {
-        list.set-current-item(Backend.core-file-select-index);
+        list.force-current-item(Backend.core-file-select-index);
+    }
+
+    // When returning to this screen (e.g. from the settings), restore the
+    // selected item once the list has been laid out.
+    Timer {
+        interval: 1ms;
+        triggered => {
+            if (!Backend.core-file-select-is-loading) {
+                list.force-current-item(Backend.core-file-select-index);
+            }
+            self.running = false;
+        }
     }
 
     i-focus-scope := FocusScope {
@@ -28,7 +38,18 @@ export component CoreFileSelect {
                 }
                 accept
             } else if (event.text == "b" && !event.repeat) {
-                Backend.core-file-select-up();
+                if (Backend.core-file-select-path == "/") {
+                    on-cancel();
+                } else {
+                    Backend.core-file-select-is-loading = true;
+                    Backend.core-file-select-up();
+                }
+                accept
+            } else if (event.text == "Select" && !event.repeat) {
+                Backend.core-file-select-favorite(list.current-item);
+                accept
+            } else if (event.text == "Start" && !event.repeat) {
+                Backend.core-file-select-settings();
                 accept
             } else {
                 reject
@@ -64,10 +85,11 @@ export component CoreFileSelect {
                     disabled: Backend.core-file-select-is-loading || has-error;
                     on-item-selected(i) => {
                         Backend.core-file-select-index = i;
+                        Backend.core-file-select-is-loading = true;
                         Backend.core-file-select-selected(i);
                     }
                     current-item-changed(i) => {
-                        // TODO
+                        Backend.core-file-select-index = i;
                     }
                 }
 
@@ -97,6 +119,16 @@ export component CoreFileSelect {
                 ControlHint {
                     label: "Up";
                     button: "b";
+                }
+
+                ControlHint {
+                    label: "Favorite";
+                    button: "select";
+                }
+
+                ControlHint {
+                    label: "Settings";
+                    button: "start";
                 }
 
                 ControlHint {

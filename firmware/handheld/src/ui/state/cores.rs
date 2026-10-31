@@ -1,9 +1,4 @@
-use std::{
-    cell::RefCell,
-    path::{Path, PathBuf},
-    rc::Rc,
-    time::Duration,
-};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use super::super::slint::Backend;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
@@ -16,8 +11,6 @@ use crate::{
 };
 
 use super::UiState;
-
-pub const BASE_DIR: &str = "/sdcard/";
 
 struct FileListModel {
     data: Vec<(String, bool)>,
@@ -66,32 +59,44 @@ impl UiState {
             state.cores_handle_run(core_id);
         });
 
-        let state_ = state.clone();
         backend.on_core_file_select_selected(move |index| {
-            let mut state = state_.borrow_mut();
-            let root: crate::ui::slint::MainWindow = state.root.unwrap();
-            let backend = root.global::<Backend>();
-            let list = backend.get_core_file_select_list();
-            if let Some(data) = list.row_data(index as usize) {
-                let path = state.core_file_select_directory.join(data.name.as_str());
-                state.cores_handle_file_select_selected(path, data.name.as_str())
-            }
+            worker::send(worker::Message::CoreFileChoose(index as usize));
+        });
+
+        backend.on_core_file_select_up(move || {
+            worker::send(worker::Message::CoreFileUp);
+        });
+
+        backend.on_core_file_select_favorite(move |index| {
+            worker::send(worker::Message::CoreFileToggleFavorite(index as usize));
         });
 
         let state_ = state.clone();
-        backend.on_core_file_select_up(move || {
-            let mut state = state_.borrow_mut();
-            state.cores_handle_file_select_selected(PathBuf::new(), "..");
+        backend.on_core_file_select_cancel(move || {
+            let state = state_.borrow();
+            let root = state.root.unwrap();
+            root.invoke_set_title("Cores".into());
+            root.global::<Backend>().set_core_file_select_active(false);
+            worker::send(worker::Message::CoreFileCancelled);
         });
 
-        backend.on_core_file_select_cancel(move || {
-            worker::send(worker::Message::CoreFileCancelled);
+        let state_ = state.clone();
+        backend.on_core_file_select_settings(move || {
+            let core_id = kvs::keys::LAST_CORE.get().unwrap_or_default();
+            let root = {
+                let mut state = state_.borrow_mut();
+                state.settings_open_for_core(&core_id);
+                state.root.unwrap()
+            };
+            root.invoke_set_screen(ScreenId::Settings);
         });
     }
 
     pub fn cores_handle_run(&mut self, core_id: SharedString) {
         let core_id = core_id.to_string();
         kvs::keys::LAST_CORE.set(&core_id);
+        let root = self.root.unwrap();
+        root.global::<Backend>().set_game_can_load_rom(true);
         worker::send(worker::Message::RunCore(core_id));
     }
 
@@ -116,22 +121,7 @@ impl UiState {
         backend.set_core_list(list);
     }
 
-    pub fn cores_file_select_begin(&mut self, label: String, path: PathBuf) {
-        // `path` may be either a specific file (in which case
-        // that file should be selected), or a directory.
-        if path.is_file() {
-            self.core_file_select_filename =
-                path.file_name().unwrap().to_str().unwrap().to_string();
-            self.core_file_select_directory = {
-                let mut path = path;
-                path.pop();
-                path
-            };
-        } else {
-            self.core_file_select_filename.clear();
-            self.core_file_select_directory = path;
-        }
-
+    pub fn cores_file_select_begin(&mut self, label: String) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
         root.invoke_set_title(format!("Select {label}").into());
@@ -139,20 +129,19 @@ impl UiState {
         backend.set_core_file_select_list(slint::ModelRc::default());
         backend.set_core_file_select_index(-1);
         backend.set_core_file_select_is_loading(true);
-        self.cores_file_select_update_path();
+        backend.set_core_file_select_active(true);
         backend.set_core_subscreen(CoreSubscreen::FileSelect);
     }
 
-    pub fn cores_file_select_list(&mut self, files: Vec<(String, bool)>) {
-        // TODO: add .. (or do that in worker)
-
-        let selected = files
-            .iter()
-            .position(|(f, _)| *f == self.core_file_select_filename)
-            .unwrap_or(0);
-
+    pub fn cores_file_select_list(
+        &mut self,
+        path: String,
+        files: Vec<(String, bool)>,
+        selected: usize,
+    ) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
+        backend.set_core_file_select_path(path.into());
         let files = ModelRc::new(FileListModel { data: files });
         backend.set_core_file_select_list(files);
 
@@ -167,6 +156,8 @@ impl UiState {
                 move || {
                     let root = root.unwrap();
                     let backend = root.global::<Backend>();
+                    // Force a change notification, even if the index is the same.
+                    backend.set_core_file_select_index(-1);
                     backend.set_core_file_select_index(selected as i32);
                     backend.set_core_file_select_is_loading(false);
                 },
@@ -174,72 +165,18 @@ impl UiState {
         }
     }
 
-    pub fn cores_file_select_update_path(&self) {
-        // Remove base directory from name before displaying.
-        let path = &self.core_file_select_directory;
-        let mut directory = path
-            .strip_prefix(BASE_DIR)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .into_owned();
-        if !directory.starts_with("/") {
-            directory.insert_str(0, "/");
-        }
-
-        let root = self.root.unwrap();
-        let backend = root.global::<Backend>();
-        backend.set_core_file_select_path(directory.into());
-    }
-
-    pub fn cores_handle_file_select_selected(&mut self, path: PathBuf, filename: &str) {
-        if filename == ".." {
-            if self.core_file_select_directory == Path::new(BASE_DIR) {
-                log::warn!("No parent directory");
-                return;
-            }
-
-            // Highlight the directory we're just leaving.
-            self.core_file_select_filename = self
-                .core_file_select_directory
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
-            self.core_file_select_directory.pop();
-            worker::send(worker::Message::CoreFileSelected(
-                self.core_file_select_directory.clone(),
-            ));
-        } else if path.is_dir() {
-            log::info!("Entering subdirectory {}", filename);
-            self.core_file_select_filename.clear();
-            self.core_file_select_directory.push(filename);
-            worker::send(worker::Message::CoreFileSelected(
-                self.core_file_select_directory.clone(),
-            ));
-        } else {
-            worker::send(worker::Message::CoreFileSelected(path));
-        }
-
-        self.root
-            .unwrap()
-            .global::<Backend>()
-            .set_core_file_select_is_loading(true);
-        self.cores_file_select_update_path();
-    }
-
     pub fn cores_file_select_set_error(&mut self, error: String) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
         backend.set_core_file_select_is_loading(false);
         backend.set_core_file_select_error(error.into());
-        self.cores_file_select_update_path();
     }
 
     pub fn cores_set_error(&mut self, error: String) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
         backend.set_core_error(error.into());
+        backend.set_core_file_select_active(false);
         backend.set_core_subscreen(CoreSubscreen::Error);
         root.invoke_set_screen(ScreenId::Cores);
     }

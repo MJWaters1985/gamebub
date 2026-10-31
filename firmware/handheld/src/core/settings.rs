@@ -8,6 +8,10 @@ pub struct CoreSettings {
     #[serde(rename = "_file_paths")]
     pub file_paths: Vec<(u16, PathBuf)>,
 
+    /// Favorite files (full paths).
+    #[serde(rename = "_favorites", default)]
+    pub favorites: Vec<PathBuf>,
+
     #[serde(flatten)]
     pub settings: HashMap<String, serde_json::Value>,
 }

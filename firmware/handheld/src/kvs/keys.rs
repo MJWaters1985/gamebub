@@ -51,6 +51,21 @@ pub static LAST_CORE: KvsKey<String> = KvsKey::new("last-core");
 /// Whether docked controllers should have A/B and X/Y swapped.
 pub static DOCK_SWAP_ABXY: KvsKey<bool> = KvsKey::new_with_default("dock-swap-abxy", false);
 
+/// Where save files are stored (0: next to the ROM, 1: in the saves directory).
+pub static SAVE_LOCATION: KvsKey<i32> = KvsKey::new_with_default("save-location", 0);
+
+/// Minutes of inactivity before powering off (0 = never).
+pub static AUTO_POWER_OFF: KvsKey<i32> = KvsKey::new_with_default("auto-power-off", 0);
+
+/// Map the X/Y buttons to Select/Start in games.
+pub static XY_SELECT_START: KvsKey<bool> = KvsKey::new_with_default("xy-select-start", false);
+
+/// Tilt sensitivity for accelerometer games (index into a list of scales).
+pub static TILT_SENSITIVITY: KvsKey<i32> = KvsKey::new_with_default("tilt-sens", 2);
+
+/// Display white balance preset.
+pub static DISPLAY_WHITE_BALANCE: KvsKey<i32> = KvsKey::new_with_default("display-wb", 0);
+
 pub fn flush_all() {
     SETUP_STAGE.flush();
     UPTIME.flush();
@@ -69,4 +84,9 @@ pub fn flush_all() {
     GBA_BIOS_WARNING.flush();
     LAST_CORE.flush();
     DOCK_SWAP_ABXY.flush();
+    SAVE_LOCATION.flush();
+    AUTO_POWER_OFF.flush();
+    XY_SELECT_START.flush();
+    TILT_SENSITIVITY.flush();
+    DISPLAY_WHITE_BALANCE.flush();
 }

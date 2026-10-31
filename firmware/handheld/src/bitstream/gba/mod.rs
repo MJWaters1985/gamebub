@@ -227,7 +227,7 @@ impl Gba {
                 CoreFile {
                     id: FILE_CONFIG_OVERRIDE,
                     label: "Config Override".try_into().unwrap(),
-                    extensions: ["json".try_into().unwrap()].into_iter().collect(),
+                    extensions: [".json".try_into().unwrap()].into_iter().collect(),
                     filename: None,
 
                     optional: true,
@@ -321,8 +321,9 @@ impl Bitstream for Gba {
         let has_accel = self.emu_cart_config.as_ref().map_or(false, |h| h.has_accel);
         if has_accel {
             let accel_sample = device.imu.read_accel().unwrap();
-            let accel_x = ((0x3A0 as f32) + ((0x1D0 as f32) * -accel_sample.x)) as u16;
-            let accel_y = ((0x3A0 as f32) + ((0x1D0 as f32) * -accel_sample.y)) as u16;
+            let scale = 0x1D0 as f32 * super::tilt_sensitivity();
+            let accel_x = ((0x3A0 as f32) + (scale * -accel_sample.x)).clamp(0.0, 4095.0) as u16;
+            let accel_y = ((0x3A0 as f32) + (scale * -accel_sample.y)).clamp(0.0, 4095.0) as u16;
             device
                 .fpga
                 .write_u32(REG_IMU_ACCEL_X, accel_x as u32)
@@ -360,7 +361,8 @@ impl CoreHandler for Gba {
             file.seek(std::io::SeekFrom::Start(0)).map_err(|_| "I/O")?;
             let rom_header = RomHeader::parse(rom_header);
             if self.emu_cart_config.is_none() {
-                self.emu_cart_config = game_db::lookup(&rom_header.game_code);
+                self.emu_cart_config = game_db::lookup(&rom_header.game_code)
+                    .or_else(|| game_db::lookup_by_code_convention(&rom_header.game_code));
             }
             self.rom_header = Some(rom_header);
         } else if id == FILE_SAVE {
@@ -520,8 +522,8 @@ impl CoreHandler for Gba {
             let rtc_state = RtcState::from_fpga(rtc_lo, rtc_hi);
             let timestamp = device.get_datetime().unix_timestamp();
 
-            file.write(&rtc_state.to_disk()).map_err(|_| "I/O")?;
-            file.write(&(timestamp as u64).to_le_bytes())
+            file.write_all(&rtc_state.to_disk()).map_err(|_| "I/O")?;
+            file.write_all(&(timestamp as u64).to_le_bytes())
                 .map_err(|_| "I/O")?;
             log::info!("Wrote RTC state: {:?}", rtc_state);
         }

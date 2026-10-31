@@ -17,22 +17,26 @@ use crate::{
         drivers::fpga::{self, SpiCommand, MAX_SPI_READ_CLOCK},
         Device,
     },
-    ui,
+    kvs, ui,
 };
 pub use info::CoreFile;
 pub use info::CoreInfo;
 pub use info::CoreListEntry;
+use browse::{Anchor, EntryKey, Target};
 use settings::CoreSettings;
 
+mod browse;
 mod info;
 mod settings;
 
 static CORE_MANAGER: LazyLock<Mutex<CoreManager>> =
     LazyLock::new(|| Mutex::new(CoreManager::new()));
 
-/// Maximum number of files to show at once.
-/// TODO: save memory and increase this limit (or avoid altogether)
+/// Maximum number of files to show at once (larger directories are paged).
 const FILE_LIST_MAX: usize = 100;
+
+/// Directory for save files, when they're not stored next to the ROM.
+const DIR_SAVES: &str = "/sdcard/saves/";
 
 const PROGRESS_UPDATE_INTERVAL: Duration = Duration::from_millis(250);
 const NOTIFY_TIMEOUT: Duration = Duration::from_millis(10);
@@ -73,6 +77,11 @@ pub struct CoreManager {
     core_settings: Option<CoreSettings>,
     selected_files: Vec<Option<PathBuf>>,
     run_cartridge: bool,
+
+    /// Directory shown in the file browser (`None` for favorites).
+    browse_dir: Option<PathBuf>,
+    /// Entries currently shown in the file browser.
+    browse_entries: Vec<browse::Entry>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -169,6 +178,8 @@ impl CoreManager {
             core_settings: None,
             selected_files: Vec::new(),
             run_cartridge: false,
+            browse_dir: None,
+            browse_entries: Vec::new(),
         }
     }
 
@@ -294,12 +305,26 @@ impl CoreManager {
         bitstream::program_boot();
     }
 
+    /// Exit the current core and run it again, to select a different file.
+    pub fn reload_core(&mut self) {
+        let id = self.core_info.as_ref().map(|c| c.id);
+        let run_cartridge = self.run_cartridge;
+        self.exit_core();
+        match id {
+            Some(id) if !run_cartridge => self.run_core(&id, false),
+            _ => log::warn!("No core to reload"),
+        }
+    }
+
     fn reset_state(&mut self) {
         self.core_info = None;
         self.core_handler = CoreHandlerImpl::None;
         self.core_settings = None;
         self.stage = Stage::Idle;
         self.selected_files.clear();
+        self.browse_dir = None;
+        self.browse_entries.clear();
+        ui::GAME_FOCUSED.store(false, std::sync::atomic::Ordering::Relaxed);
 
         Device::lock().set_cart_power(false);
     }
@@ -377,6 +402,7 @@ impl CoreManager {
     }
 
     pub fn focus_changed(&mut self, has_focus: bool) {
+        ui::GAME_FOCUSED.store(has_focus, std::sync::atomic::Ordering::Relaxed);
         {
             let mut device = Device::lock();
             device.dac.set_power_down(0, !has_focus).expect("DAC power");
@@ -433,17 +459,20 @@ impl CoreManager {
         let last_dir = last_path.and_then(|p| p.parent());
 
         // Use the last path, or the last dir, or finally the root path.
-        let (initial_path, initial_dir) = match (last_path, last_dir) {
-            (Some(file), Some(parent)) if file.is_file() => (file, parent),
-            (_, Some(parent)) if parent.is_dir() => (parent, parent),
-            _ => (Path::new(DIR_SDCARD), Path::new(DIR_SDCARD)),
+        let (initial_dir, anchor) = match (last_path, last_dir) {
+            (Some(file), Some(parent)) if file.is_file() => {
+                let name = file.file_name().unwrap_or_default().to_string_lossy();
+                (parent, Anchor::Around(EntryKey::new(&name, true)))
+            }
+            (_, Some(parent)) if parent.is_dir() => (parent, Anchor::Start),
+            _ => (Path::new(DIR_SDCARD), Anchor::Start),
         };
+        let initial_dir = initial_dir.to_path_buf();
 
         ui::send(ui::Message::CoreFileSelectBegin {
             label: file.label.to_string(),
-            path: initial_path.to_path_buf(),
         });
-        self.send_core_file_list(initial_dir);
+        self.browse(Some(initial_dir), anchor);
     }
 
     fn finish_loading(&mut self) {
@@ -521,14 +550,28 @@ impl CoreManager {
 
             // TODO if asset path is not none, construct path based on that
 
+            // Path to load from, if different from the path to save to.
+            let mut load_path = None;
             if info.dependent_on_0 {
                 // Construct a new path based on file 0's path
                 assert!(path.is_none());
                 let extension = &info.extensions[0][1..]; // Remove the dot
                 let file_0_index = file_0_index.unwrap();
-                path = self.selected_files[file_0_index]
-                    .as_ref()
-                    .map(|p| p.with_extension(extension));
+                let rom_path = self.selected_files[file_0_index].as_ref();
+                let beside_rom = rom_path.map(|p| p.with_extension(extension));
+                if !info.read_only && kvs::keys::SAVE_LOCATION.get().unwrap_or(0) == 1 {
+                    let in_saves_dir = rom_path.map(|p| saves_dir_path(p, extension));
+                    // If there's no file in the saves directory yet, load the one
+                    // next to the ROM (it'll be saved to the saves directory).
+                    if let (Some(new), Some(old)) = (&in_saves_dir, &beside_rom) {
+                        if !new.exists() && old.exists() {
+                            load_path = Some(old.clone());
+                        }
+                    }
+                    path = in_saves_dir;
+                } else {
+                    path = beside_rom;
+                }
             }
 
             // Possibly override the path
@@ -544,9 +587,18 @@ impl CoreManager {
                 None => panic!("Missing path for required file {}", info.label),
             };
 
-            log::info!("Load file {} from {}", info.label, path.display());
+            let mut load_path = load_path.unwrap_or_else(|| path.clone());
+            if !info.read_only && !load_path.exists() {
+                // Recover from an interrupted save, if possible.
+                let backup = backup_path(&load_path);
+                if backup.is_file() {
+                    log::warn!("Loading backup file {}", backup.display());
+                    load_path = backup;
+                }
+            }
+            log::info!("Load file {} from {}", info.label, load_path.display());
 
-            let file = File::open(&path);
+            let file = File::open(&load_path);
             self.selected_files[i] = Some(path);
             let mut file = match file {
                 Ok(file) => file,
@@ -705,7 +757,13 @@ impl CoreManager {
                 file_size = override_size;
             }
 
-            let mut file = File::create(path)
+            // Write to a temporary file first, so that the previous save is
+            // kept intact if writing fails or is interrupted.
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let temp_path = temp_path(&path);
+            let mut file = File::create(&temp_path)
                 .map_err(|_| FailedSaveFile(info.label.to_string(), "Open failed".to_string()))?;
             let mut scratch = crate::bitstream::SCRATCH.take().expect("scratch buffer");
             let buf = scratch.deref_mut();
@@ -723,7 +781,7 @@ impl CoreManager {
                 let _ = Device::lock()
                     .fpga
                     .spi_read(max_clock, command, address, data);
-                file.write(data).map_err(|_| {
+                file.write_all(data).map_err(|_| {
                     FailedSaveFile(info.label.to_string(), "Write failed".to_string())
                 })?;
                 address += to_read as u32;
@@ -745,13 +803,18 @@ impl CoreManager {
                     .on_after_file_save(info.id, &mut file)
                     .map_err(|e| FailedSaveFile(info.label.to_string(), e))?;
             }
+            file.sync_all()
+                .map_err(|_| FailedSaveFile(info.label.to_string(), "Sync failed".to_string()))?;
+            drop(file);
+
+            replace_file(&temp_path, &path)
+                .map_err(|_| FailedSaveFile(info.label.to_string(), "Rename failed".to_string()))?;
         }
         Ok(())
     }
 
     /// Called to persist core settings to the core settings JSON file
     pub fn persist_settings(&mut self) -> Result<(), std::io::Error> {
-        assert!(self.stage == Stage::Running);
         let core = self.core_info.as_ref().unwrap();
         let settings = self.core_settings.as_ref().unwrap();
 
@@ -764,92 +827,265 @@ impl CoreManager {
             .map_err(|e| std::io::Error::new(ErrorKind::Other, e))
     }
 
-    /// Called when a file has been selected for the core.
-    /// This could be a file or a directory.
-    pub fn handle_file_selected(&mut self, path: PathBuf) {
-        if path.is_file() {
-            log::info!("File selected: {}", path.display());
-            let Stage::LoadSelectFile(file_index) = self.stage else {
-                panic!()
-            };
-
-            // Update settings
-            let settings = self.core_settings.as_mut().unwrap();
-            let file_id = self.core_info.as_ref().unwrap().files[file_index].id;
-            settings.file_paths.retain(|x| x.0 != file_id);
-            settings.file_paths.push((file_id, path.clone()));
-
-            self.selected_files[file_index] = Some(path);
-            self.next_file_select();
-        } else if path.is_dir() {
-            self.send_core_file_list(&path);
+    /// Called when a file browser entry is chosen.
+    pub fn file_select_choose(&mut self, index: usize) {
+        let Some(entry) = self.browse_entries.get(index) else {
+            log::warn!("Invalid file browser entry {index}");
+            return;
+        };
+        match entry.target.clone() {
+            Target::Path(path) if entry.is_dir => self.browse(Some(path), Anchor::Start),
+            Target::Path(path) => self.file_selected(path),
+            Target::Favorites => self.browse(None, Anchor::Start),
+            Target::PrevPage => {
+                let first = self.first_key();
+                let anchor = first.map_or(Anchor::Start, Anchor::Before);
+                self.browse(self.browse_dir.clone(), anchor);
+            }
+            Target::NextPage => {
+                let last = self.last_key();
+                let anchor = last.map_or(Anchor::Start, Anchor::After);
+                self.browse(self.browse_dir.clone(), anchor);
+            }
         }
+    }
+
+    /// Called to go to the parent directory in the file browser.
+    pub fn file_select_up(&mut self) {
+        match self.browse_dir.clone() {
+            // Favorites: go back to the root directory.
+            None => self.browse(Some(PathBuf::from(DIR_SDCARD)), Anchor::Start),
+            Some(dir) if dir == Path::new(DIR_SDCARD) => {
+                log::warn!("No parent directory");
+            }
+            Some(dir) => {
+                // Highlight the directory we're just leaving.
+                let name = dir.file_name().unwrap_or_default().to_string_lossy();
+                let anchor = Anchor::Around(EntryKey::new(&name, false));
+                let parent = dir.parent().map(Path::to_path_buf);
+                self.browse(parent, anchor);
+            }
+        }
+    }
+
+    /// Add or remove a file browser entry from the favorites.
+    pub fn file_select_toggle_favorite(&mut self, index: usize) {
+        let Some(entry) = self.browse_entries.get(index) else {
+            return;
+        };
+        let Target::Path(path) = &entry.target else {
+            return;
+        };
+        if entry.is_dir {
+            return;
+        }
+        let path = path.clone();
+        let Some(settings) = self.core_settings.as_mut() else {
+            return;
+        };
+
+        let added = match settings.favorites.iter().position(|p| *p == path) {
+            Some(i) => {
+                settings.favorites.remove(i);
+                false
+            }
+            None => {
+                settings.favorites.push(path);
+                true
+            }
+        };
+        if let Err(e) = self.persist_settings() {
+            log::error!("Error saving settings: {}", e);
+        }
+
+        let text = if added {
+            "Added to Favorites"
+        } else {
+            "Removed from Favorites"
+        };
+        ui::send(ui::Message::Notification(ui::Notification::new_short(
+            text.to_string(),
+        )));
+
+        // Refresh the favorites list if we're viewing it.
+        if self.browse_dir.is_none() {
+            let favorites = self.favorites_entries();
+            let highlight = index.min(favorites.len().saturating_sub(1));
+            self.show_entries(favorites, highlight);
+        }
+    }
+
+    fn file_selected(&mut self, path: PathBuf) {
+        log::info!("File selected: {}", path.display());
+        let Stage::LoadSelectFile(file_index) = self.stage else {
+            panic!()
+        };
+
+        // Update settings
+        let settings = self.core_settings.as_mut().unwrap();
+        let file_id = self.core_info.as_ref().unwrap().files[file_index].id;
+        settings.file_paths.retain(|x| x.0 != file_id);
+        settings.file_paths.push((file_id, path.clone()));
+
+        self.selected_files[file_index] = Some(path);
+        self.browse_entries.clear();
+        self.next_file_select();
     }
 
     /// Called if a file selection is cancelled.
     pub fn cancel_file_select(&mut self) {
         // TODO support multiple file select (go back to previous file)
         log::info!("File select cancelled");
+        if self.core_info.is_some() && self.stage != Stage::Running {
+            // Keep favorites changes.
+            let _ = self.persist_settings();
+        }
         self.core_info = None;
+        self.core_settings = None;
         self.stage = Stage::Idle;
+        self.browse_dir = None;
+        self.browse_entries.clear();
     }
 
-    fn send_core_file_list(&self, path: &Path) {
-        let files = match self.list_core_files(&path) {
-            Ok(files) => files,
+    fn first_key(&self) -> Option<EntryKey> {
+        self.browse_entries.iter().find_map(Self::entry_key)
+    }
+
+    fn last_key(&self) -> Option<EntryKey> {
+        self.browse_entries.iter().rev().find_map(Self::entry_key)
+    }
+
+    fn entry_key(entry: &browse::Entry) -> Option<EntryKey> {
+        match &entry.target {
+            Target::Path(path) => {
+                let name = path.file_name()?.to_string_lossy();
+                Some(EntryKey::new(&name, !entry.is_dir))
+            }
+            _ => None,
+        }
+    }
+
+    /// Show a directory (or the favorites, if `None`) in the file browser.
+    fn browse(&mut self, dir: Option<PathBuf>, anchor: Anchor) {
+        self.browse_dir = dir.clone();
+        let Some(dir) = dir else {
+            let favorites = self.favorites_entries();
+            self.show_entries(favorites, 0);
+            return;
+        };
+
+        let file_index = match self.stage {
+            Stage::LoadSelectFile(i) => i,
+            _ => panic!(),
+        };
+        let extensions = &self.core_info.as_ref().unwrap().files[file_index].extensions;
+        let extensions: Vec<&str> = extensions.iter().map(|e| e.as_str()).collect();
+
+        let window = match browse::read_dir_keys(&dir, &extensions) {
+            Ok(keys) => browse::window(keys, &anchor, FILE_LIST_MAX),
             Err(e) => {
                 log::warn!("Error listing directory: {:?}", e);
                 ui::send(ui::Message::CoreFileSelectError(format!(
                     "Error listing directory:\n{}",
                     e,
                 )));
-                Vec::new()
+                browse::window(std::iter::empty(), &anchor, FILE_LIST_MAX)
             }
         };
-        let truncated = files.len() >= FILE_LIST_MAX;
-        ui::send(ui::Message::CoreFileSelectList(files));
-        if truncated {
-            let message =
-                format!("More than {FILE_LIST_MAX} items in directory:\nsome items will be hidden");
-            ui::send(ui::Message::CoreFileSelectError(message));
+
+        let mut entries = Vec::with_capacity(window.entries.len() + 3);
+        let mut highlight = window.highlight;
+        if window.has_prev {
+            entries.push(browse::Entry {
+                label: "<< Previous page".to_string(),
+                is_dir: false,
+                target: Target::PrevPage,
+            });
+            highlight += 1;
+        } else if dir == Path::new(DIR_SDCARD)
+            && self
+                .core_settings
+                .as_ref()
+                .map_or(false, |s| !s.favorites.is_empty())
+        {
+            entries.push(browse::Entry {
+                label: "Favorites".to_string(),
+                is_dir: true,
+                target: Target::Favorites,
+            });
+            if matches!(anchor, Anchor::Around(_)) {
+                highlight += 1;
+            }
         }
+        for key in window.entries {
+            entries.push(browse::Entry {
+                target: Target::Path(dir.join(&key.name)),
+                label: key.name,
+                is_dir: !key.is_file,
+            });
+        }
+        if window.has_next {
+            entries.push(browse::Entry {
+                label: "Next page >>".to_string(),
+                is_dir: false,
+                target: Target::NextPage,
+            });
+        }
+        // When paging forward, highlight the first real entry.
+        if matches!(anchor, Anchor::After(_)) && window.has_prev {
+            highlight = 1;
+        }
+        self.show_entries(entries, highlight);
     }
 
-    /// Get the list of eligible files for the file select menu at the given directory
-    fn list_core_files(&self, path: &Path) -> std::io::Result<Vec<(String, bool)>> {
-        // Assumes we're in a valid file selection stage.
-        let file_index = match self.stage {
-            Stage::LoadSelectFile(i) => i,
-            _ => panic!(),
+    /// Build the list of favorites for the file browser.
+    fn favorites_entries(&self) -> Vec<browse::Entry> {
+        let Some(settings) = self.core_settings.as_ref() else {
+            return Vec::new();
         };
-        let extensions = &self.core_info.as_ref().unwrap().files[file_index].extensions;
-
-        let mut files = path
-            .read_dir()?
-            .filter_map(|e| {
-                let e = e.ok()?;
-                let name = e.file_name();
-                let name = name.to_str()?;
-                let kind = e.metadata().ok()?.file_type();
-                if name.starts_with(".") {
-                    return None;
-                }
-                if kind.is_file() && !extensions.iter().any(|&e| name.ends_with(e.as_str())) {
-                    return None;
-                }
-
-                Some((name.to_string(), kind))
-            })
+        let mut favorites: Vec<(EntryKey, &PathBuf)> = settings
+            .favorites
+            .iter()
+            .filter(|p| p.is_file())
+            .filter_map(|p| Some((EntryKey::new(&p.file_name()?.to_string_lossy(), true), p)))
             .take(FILE_LIST_MAX)
-            .collect::<Vec<_>>();
-        files.sort_unstable_by(|f1, f2| {
-            // Sort by name, with directories first.
-            let c1 = (f1.1.is_file(), f1.0.as_str());
-            let c2 = (f2.1.is_file(), f2.0.as_str());
-            c1.cmp(&c2)
+            .collect();
+        favorites.sort_by(|a, b| a.0.cmp(&b.0));
+        favorites
+            .into_iter()
+            .map(|(key, path)| browse::Entry {
+                label: key.name,
+                is_dir: false,
+                target: Target::Path(path.clone()),
+            })
+            .collect()
+    }
+
+    fn show_entries(&mut self, entries: Vec<browse::Entry>, highlight: usize) {
+        let path = match &self.browse_dir {
+            None => "/Favorites".to_string(),
+            Some(dir) => {
+                let mut path = dir
+                    .strip_prefix(DIR_SDCARD)
+                    .unwrap_or(dir)
+                    .to_string_lossy()
+                    .into_owned();
+                if !path.starts_with('/') {
+                    path.insert(0, '/');
+                }
+                path
+            }
+        };
+        let files = entries
+            .iter()
+            .map(|e| (e.label.clone(), e.is_dir))
+            .collect();
+        self.browse_entries = entries;
+        ui::send(ui::Message::CoreFileSelectList {
+            path,
+            files,
+            selected: highlight,
         });
-        let files = files.into_iter().map(|f| (f.0, f.1.is_dir())).collect();
-        Ok(files)
     }
 
     /// Clear a file slot to 0xFF
@@ -891,4 +1127,50 @@ impl CoreManager {
 
         Ok(())
     }
+}
+
+/// Path for a save file in the saves directory, e.g. `/sdcard/saves/gba/Game.sav`.
+fn saves_dir_path(rom_path: &Path, extension: &str) -> PathBuf {
+    let system = rom_path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_else(|| "other".to_string());
+    let mut path = PathBuf::from(DIR_SAVES);
+    path.push(system);
+    path.push(rom_path.file_name().unwrap_or_default());
+    path.set_extension(extension);
+    path
+}
+
+/// Append a suffix to a file name (`Game.sav` -> `Game.sav.bak`).
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    match path.file_name() {
+        Some(name) => {
+            let mut name = name.to_os_string();
+            name.push(suffix);
+            path.with_file_name(name)
+        }
+        None => PathBuf::new(),
+    }
+}
+
+/// Path of the previous version of a save file.
+fn backup_path(path: &Path) -> PathBuf {
+    with_suffix(path, ".bak")
+}
+
+/// Path of a save file while it's being written.
+fn temp_path(path: &Path) -> PathBuf {
+    with_suffix(path, ".tmp")
+}
+
+/// Replace `path` with `new`, keeping the previous version as a backup.
+fn replace_file(new: &Path, path: &Path) -> std::io::Result<()> {
+    if path.exists() {
+        let backup = backup_path(path);
+        // FAT can't rename over an existing file.
+        let _ = std::fs::remove_file(&backup);
+        std::fs::rename(path, &backup)?;
+    }
+    std::fs::rename(new, path)
 }

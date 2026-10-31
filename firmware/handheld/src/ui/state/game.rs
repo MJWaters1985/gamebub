@@ -22,6 +22,18 @@ impl UiState {
         });
 
         let state_ = state.clone();
+        backend.on_game_load_rom(move || {
+            worker::send(worker::Message::ReloadCore);
+            // Give it a moment to start loading the boot bitstream (avoid screen flash)
+            std::thread::sleep(Duration::from_millis(100));
+            let root = state_.borrow().root.unwrap();
+            let backend = root.global::<Backend>();
+            backend.set_core_file_select_active(true);
+            backend.set_core_file_select_is_loading(true);
+            root.invoke_set_screen(ScreenId::Cores);
+        });
+
+        let state_ = state.clone();
         backend.on_game_exit(move || {
             worker::send(worker::Message::ExitCore);
             // Give it a moment to start loading the boot bitstream (avoid screen flash)

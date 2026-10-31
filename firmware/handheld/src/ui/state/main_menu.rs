@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::super::slint::Backend;
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Global};
 
 use crate::{device::Device, worker};
 
@@ -13,6 +13,10 @@ impl UiState {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
 
-        backend.on_main_menu_run_cartridge(|| worker::send(worker::Message::RunCartridge));
+        let root_ = self.root.clone();
+        backend.on_main_menu_run_cartridge(move || {
+            Backend::get(&root_.unwrap()).set_game_can_load_rom(false);
+            worker::send(worker::Message::RunCartridge);
+        });
     }
 }

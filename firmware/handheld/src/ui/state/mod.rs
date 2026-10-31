@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::VecDeque, path::PathBuf, rc::Rc, time::Duration};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc, time::Duration};
 
 use slint::{ComponentHandle, Global, Timer, TimerMode, Weak};
 
@@ -25,8 +25,6 @@ pub struct UiState {
     notification_active: bool,
 
     settings: settings::SettingsState,
-    core_file_select_directory: PathBuf,
-    core_file_select_filename: String,
     core_file_select_timer: Timer,
 }
 
@@ -38,8 +36,6 @@ impl UiState {
             notification_queue: VecDeque::new(),
             notification_active: false,
             settings: settings::SettingsState::default(),
-            core_file_select_directory: PathBuf::new(),
-            core_file_select_filename: String::new(),
             core_file_select_timer: Timer::default(),
         };
         let state = Rc::new(RefCell::new(state));

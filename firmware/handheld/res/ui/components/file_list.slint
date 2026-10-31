@@ -70,6 +70,12 @@ export component FileListViewBase inherits ListView {
         current-item-changed(current-item);
     }
 
+    /// Like `set-current-item`, but also updates the view if the index is unchanged.
+    public function force-current-item(index: int) {
+        current-item = -1;
+        set-current-item(index);
+    }
+
     private property <length> item-height: self.viewport-height / self.model.length;
     private property <int> into-view-item: 0;
     private property <length> into-view-item-y: root.item-y(root.into-view-item);

@@ -80,6 +80,25 @@ mod settings {
                 key: &keys::STARTUP_ACTION,
                 choices: &["Main Menu", "Run Cartridge"],
             },
+            Entry::List {
+                name: "Save Files",
+                key: &keys::SAVE_LOCATION,
+                choices: &["Next to ROM", "/saves folder"],
+            },
+            Entry::List {
+                name: "Auto Power Off",
+                key: &keys::AUTO_POWER_OFF,
+                choices: &["Never", "3 min", "5 min", "10 min", "30 min"],
+            },
+            Entry::Checkbox {
+                name: "X/Y as Select/Start",
+                key: &keys::XY_SELECT_START,
+            },
+            Entry::List {
+                name: "Screen White Balance",
+                key: &keys::DISPLAY_WHITE_BALANCE,
+                choices: &["Default", "Warm", "Warmer", "Cool"],
+            },
         ],
     };
 
@@ -135,6 +154,11 @@ mod settings {
                 name: "Warn about missing BIOS",
                 key: &keys::GBA_BIOS_WARNING,
             },
+            Entry::List {
+                name: "Tilt Sensitivity",
+                key: &keys::TILT_SENSITIVITY,
+                choices: &["Lowest", "Low", "Normal", "High"],
+            },
         ],
     };
 }
@@ -143,6 +167,8 @@ pub struct SettingsState {
     model: Option<Rc<SettingsModel>>,
     page: &'static Page,
     stack: Vec<(&'static Page, usize)>,
+    /// Page to open when the settings screen is next entered.
+    pending_page: Option<&'static Page>,
 }
 
 impl Default for SettingsState {
@@ -151,6 +177,7 @@ impl Default for SettingsState {
             model: None,
             page: &settings::PAGE_ROOT,
             stack: Vec::new(),
+            pending_page: None,
         }
     }
 }
@@ -221,7 +248,28 @@ impl UiState {
 
     pub(super) fn on_settings_enter(&mut self) {
         self.settings.stack.clear();
-        self.set_settings_page(&settings::PAGE_ROOT, 0);
+        let root = self.root.unwrap();
+        let backend = root.global::<Backend>();
+        match self.settings.pending_page.take() {
+            Some(page) => {
+                backend.set_settings_return_screen(ScreenId::Cores);
+                self.set_settings_page(page, 0);
+            }
+            None => {
+                backend.set_settings_return_screen(ScreenId::MainMenu);
+                self.set_settings_page(&settings::PAGE_ROOT, 0);
+            }
+        }
+    }
+
+    /// Open the settings for a core next time the settings screen is entered.
+    /// Leaving the settings will return to the "Cores" screen.
+    pub(super) fn settings_open_for_core(&mut self, core_id: &str) {
+        self.settings.pending_page = match core_id {
+            "Game-Bub.GB" => Some(&settings::PAGE_CORE_GB),
+            "Game-Bub.GBA" => Some(&settings::PAGE_CORE_GBA),
+            _ => Some(&settings::PAGE_ROOT),
+        };
     }
 }
 

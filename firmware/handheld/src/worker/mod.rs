@@ -1,6 +1,5 @@
 //! Worker threads to do background blocking work.
 
-use std::path::PathBuf;
 use std::sync::{mpsc, OnceLock};
 
 use crate::core::CoreManager;
@@ -37,8 +36,14 @@ pub enum Message {
     RunCore(String),
     /// Exit the current core (or cancel loading)
     ExitCore,
-    /// A file was selected for the core (could be a directory).
-    CoreFileSelected(PathBuf),
+    /// Exit the current core, and start it again (to select a new file)
+    ReloadCore,
+    /// A file browser entry was chosen (by index).
+    CoreFileChoose(usize),
+    /// Go to the parent directory in the file browser.
+    CoreFileUp,
+    /// Toggle whether a file browser entry is a favorite (by index).
+    CoreFileToggleFavorite(usize),
     /// Core file selection was cancelled.
     CoreFileCancelled,
     /// Core focus changed
@@ -131,12 +136,16 @@ fn dispatch(message: Message) {
                 log::warn!("Idle during setup, powering off.");
                 Device::lock().power_off();
             }
-            // TODO: Dim the screen temporarily.
         }
         Message::FetchCoreList => CoreManager::lock().list_cores(),
         Message::RunCore(id) => CoreManager::lock().run_core(&id, false),
         Message::ExitCore => CoreManager::lock().exit_core(),
-        Message::CoreFileSelected(file) => CoreManager::lock().handle_file_selected(file),
+        Message::ReloadCore => CoreManager::lock().reload_core(),
+        Message::CoreFileChoose(index) => CoreManager::lock().file_select_choose(index),
+        Message::CoreFileUp => CoreManager::lock().file_select_up(),
+        Message::CoreFileToggleFavorite(index) => {
+            CoreManager::lock().file_select_toggle_favorite(index)
+        }
         Message::CoreFileCancelled => CoreManager::lock().cancel_file_select(),
         Message::CoreFocusChanged(focused) => CoreManager::lock().focus_changed(focused),
         #[allow(unreachable_patterns)]

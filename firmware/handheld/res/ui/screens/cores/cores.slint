@@ -9,21 +9,24 @@ import { CoreFileSelect } from "core_file_select.slint";
 import { CoreError } from "core_error.slint";
 
 export component CoresScreen inherits ScreenBase {
-    title: "Cores";
+    title: Backend.core-file-select-active ? "Select " + Backend.core-file-select-label : "Cores";
 
     in property <[CoreListEntry]> cores: Backend.core-list;
     private property <int> selected-core: Backend.core-selected-index;
 
     init => {
-        Backend.core-file-select-list = [];
-        Backend.core-file-select-label = "";
         if Backend.core-list.length == 0 {
             Backend.core-list-fetch();
         }
-        if (Backend.core-error.is-empty) {
-            Backend.core-subscreen = CoreSubscreen.List;
-        } else {
+        if (!Backend.core-error.is-empty) {
             Backend.core-subscreen = CoreSubscreen.Error;
+        } else if (Backend.core-file-select-active) {
+            // Returning from the settings in the middle of file selection.
+            Backend.core-subscreen = CoreSubscreen.FileSelect;
+        } else {
+            Backend.core-file-select-list = [];
+            Backend.core-file-select-label = "";
+            Backend.core-subscreen = CoreSubscreen.List;
         }
     }
 

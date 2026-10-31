@@ -38,14 +38,18 @@ export component GameScreen inherits ScreenBase {
             height: i-list.min-height;
 
             i-list := ButtonList {
-                items: ["Return", "Reset", "Exit Core"];
+                items: Backend.game-can-load-rom
+                    ? ["Return", "Load ROM", "Reset", "Exit Core"]
+                    : ["Return", "Reset", "Exit Core"];
                 on-selected(item) => {
-                    if (item == 0) {
+                    if (self.items[item] == "Return") {
                         root.set-menu-open(false);
-                    } else if (item == 1) {
+                    } else if (self.items[item] == "Load ROM") {
+                        Backend.game-load-rom();
+                    } else if (self.items[item] == "Reset") {
                         Backend.game-reset();
                         root.set-menu-open(false);
-                    } else if (item == 2) {
+                    } else if (self.items[item] == "Exit Core") {
                         Backend.game-exit();
                     }
                 }
