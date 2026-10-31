@@ -95,7 +95,7 @@ mod settings {
                 key: &keys::XY_SELECT_START,
             },
             Entry::List {
-                name: "Screen White Balance",
+                name: "Game Color Temperature",
                 key: &keys::DISPLAY_WHITE_BALANCE,
                 choices: &["Default", "Warm", "Warmer", "Cool"],
             },
