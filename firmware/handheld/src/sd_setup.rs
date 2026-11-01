@@ -9,7 +9,12 @@ use crate::wifi_setup::TaskUpdate;
 use crate::{library, ui};
 
 const ROOT: &str = "/sdcard";
-const GBA_BIOS: &str = "/sdcard/system/gba.bios.bin";
+const SYSTEM_DIR: &str = "/sdcard/system";
+
+/// BIOS files kept when erasing: the user's own copies, which can't be downloaded again (see
+/// "Custom BIOS files" in the Game Bub user guide).
+const BIOS_FILES: &[&str] =
+    &["gameboy.bios-dmg.bin", "gameboy.bios-cgb.bin", "gba.bios.bin", "gba.bios-fast.bin"];
 
 /// Folders Game Bub uses, besides one per system under /roms and /boxart.
 const FOLDERS: &[&str] = &["roms", "saves", "saves/backups", "boxart", "system", "settings"];
@@ -140,39 +145,58 @@ fn create_folders() -> anyhow::Result<Vec<String>> {
 }
 
 fn erase_and_set_up() -> anyhow::Result<String> {
-    // Keep the GBA BIOS: it can't be downloaded again.
-    let bios = std::fs::read(GBA_BIOS).ok();
+    let bios = read_bios_files()?;
     let card = Device::lock().sdcard;
-    let formatted_blank = match card {
-        Some(card) => {
-            task("Erasing and formatting...\nThis can take a minute.", None);
-            card.format(ROOT).map_err(|e| anyhow::anyhow!("Formatting failed: {e}"))?;
-            false
-        }
+    let card = match card {
+        Some(card) => card,
         None => {
-            task("Formatting...\nThis can take a minute.", None);
-            let (card, formatted) = sdcard::mount_or_format(ROOT)
+            // The card couldn't be read (e.g. exFAT): set it up so it can be formatted.
+            task("Preparing the card...\nThis can take a minute.", None);
+            let (card, temporary) = sdcard::mount_or_format(ROOT)
                 .map_err(|e| anyhow::anyhow!("No usable SD card was found ({e}).\nCheck that the card is inserted."))?;
-            if !formatted {
-                // The card turned out to be readable after all: erase it as asked.
-                card.format(ROOT).map_err(|e| anyhow::anyhow!("Formatting failed: {e}"))?;
-            }
+            log::info!("SD card mounted for formatting (temporary file system: {temporary})");
             Device::lock().sdcard = Some(card);
-            true
+            card
         }
     };
-    log::info!("SD card formatted (was unreadable: {formatted_blank})");
+    task("Erasing and formatting...\nThis can take a minute.", None);
+    card.format(ROOT).map_err(|e| anyhow::anyhow!("Formatting failed: {e}"))?;
+    log::info!("SD card formatted");
 
     task("Creating folders...", None);
     create_folders()?;
     let mut message = format!("The SD card was erased and set up.\n{}", card_size());
-    if let Some(bios) = bios {
-        match std::fs::write(GBA_BIOS, &bios) {
-            Ok(()) => message += "\nThe GBA BIOS was kept.",
-            Err(e) => message += &format!("\nThe GBA BIOS couldn't be put back: {e}"),
+    let mut kept = vec![];
+    for (name, data) in &bios {
+        match std::fs::write(Path::new(SYSTEM_DIR).join(name), data) {
+            Ok(()) => kept.push(*name),
+            Err(e) => message += &format!("\n{name} couldn't be put back: {e}"),
         }
     }
+    if !kept.is_empty() {
+        message += &format!("\nKept in /system: {}", kept.join(", "));
+    }
     Ok(message)
+}
+
+/// Read the BIOS files on the card, to put back after formatting. Fails (before anything is
+/// erased) if one can't be read.
+fn read_bios_files() -> anyhow::Result<Vec<(&'static str, Vec<u8>)>> {
+    let mut files = vec![];
+    for &name in BIOS_FILES {
+        let path = Path::new(SYSTEM_DIR).join(name);
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        let mut data = Vec::new();
+        if data.try_reserve_exact(meta.len() as usize).is_err() {
+            anyhow::bail!("Not enough free memory to keep /system/{name}.\nNothing was erased.");
+        }
+        std::io::Read::read_to_end(&mut std::fs::File::open(&path)?, &mut data)
+            .with_context(|| format!("Couldn't read /system/{name}.\nNothing was erased."))?;
+        files.push((name, data));
+    }
+    Ok(files)
 }
 
 /// Card size, e.g. "Size: 63.9 GB".

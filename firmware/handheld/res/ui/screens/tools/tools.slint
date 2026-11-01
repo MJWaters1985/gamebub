@@ -444,7 +444,7 @@ export component ToolsScreen inherits ScreenBase {
 
                     Text {
                         wrap: word-wrap;
-                        text: "Game Bub needs a FAT32 card (exFAT cards can't be read). It keeps ROMs in /roms/<system>, saves in /saves, box art in /boxart and the GBA BIOS in /system.";
+                        text: "Game Bub needs a FAT32 card (exFAT cards can't be read). It keeps ROMs in /roms/<system>, saves in /saves, box art in /boxart and BIOS files in /system.";
                     }
 
                     choices := TextListView {
@@ -522,7 +522,7 @@ export component ToolsScreen inherits ScreenBase {
                     Text {
                         horizontal-alignment: center;
                         wrap: word-wrap;
-                        text: "Everything on the card is deleted: ROMs, saves, save backups, box art and screenshots. The GBA BIOS is kept.\n\nHold A for 3 seconds to erase.";
+                        text: "Everything on the card is deleted: ROMs, saves, save backups, box art and screenshots. BIOS files in /system are kept.\n\nHold A for 3 seconds to erase.";
                     }
 
                     Rectangle {

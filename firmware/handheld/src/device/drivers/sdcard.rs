@@ -78,8 +78,8 @@ pub fn mount_sdcard(
     result
 }
 
-/// Mount a card that wasn't mounted at startup (e.g. blank or exFAT), formatting it if it has
-/// no usable file system.
+/// Mount a card that wasn't mounted at startup (e.g. blank or exFAT), giving it a temporary
+/// file system if it has no usable one, so that it can then be formatted with `format`.
 pub fn mount_or_format(path: &str) -> Result<(Sdcard, bool), EspError> {
     let pins = PINS
         .lock()
@@ -91,16 +91,65 @@ pub fn mount_or_format(path: &str) -> Result<(Sdcard, bool), EspError> {
     }
 }
 
+/// Where the partition starts when formatting: 4 MiB, the alignment the SD Association's
+/// formatter uses, so clusters line up with the card's erase blocks.
+const PARTITION_START: usize = 8192;
+
 impl Sdcard {
-    /// Erase the card: a new partition table with one FAT32 partition (FAT16 on small cards).
-    /// No files may be open.
+    /// Erase the card: a new MBR with one FAT32 partition (FAT16 on cards under 2 GB) starting
+    /// at 4 MiB. Old partition tables (including GPT and its backup at the end of the card) are
+    /// wiped first. No files may be open.
     pub fn format(&self, path: &str) -> Result<(), EspError> {
         let mount_point = CString::new(path)
             .map_err(|_| EspError::from_infallible::<{ esp_idf_sys::ESP_ERR_INVALID_ARG }>())?;
+        self.write_partition_table()?;
+        // Format partition 1 of the new table, rather than letting FatFs make its own table
+        // (which starts the partition at sector 63).
+        let pdrv = unsafe { esp_idf_sys::ff_diskio_get_pdrv_card(self.card) } as usize;
+        let vol_to_part = unsafe { (&raw mut esp_idf_sys::VolToPart).cast::<esp_idf_sys::PARTITION>().add(pdrv) };
         let mut config = fat_config(false);
-        EspError::convert(unsafe {
-            esp_idf_sys::esp_vfs_fat_sdcard_format_cfg(mount_point.as_ptr(), self.card, &mut config)
-        })
+        let result = unsafe {
+            (*vol_to_part).pt = 1;
+            let result = esp_idf_sys::esp_vfs_fat_sdcard_format_cfg(mount_point.as_ptr(), self.card, &mut config);
+            (*vol_to_part).pt = 0;
+            result
+        };
+        EspError::convert(result)
+    }
+
+    /// Clear the start and end of the card and write an MBR with one partition.
+    fn write_partition_table(&self) -> Result<(), EspError> {
+        let card = unsafe { &*self.card };
+        let total = card.csd.capacity as usize;
+        if card.csd.sector_size != 512 || total < PARTITION_START * 2 {
+            return Err(EspError::from_infallible::<{ esp_idf_sys::ESP_ERR_NOT_SUPPORTED }>());
+        }
+        const CHUNK: usize = 32;
+        let zeros = vec![0u8; CHUNK * 512];
+        let write = |start: usize, count: usize, data: &[u8]| {
+            EspError::convert(unsafe {
+                esp_idf_sys::sdmmc_write_sectors(self.card, data.as_ptr().cast(), start, count)
+            })
+        };
+        // The first 4 MiB (old MBR, GPT header and table) and the last 1 MiB (backup GPT).
+        for start in (0..PARTITION_START).step_by(CHUNK) {
+            write(start, CHUNK, &zeros)?;
+        }
+        for start in (total - 2048..total).step_by(CHUNK) {
+            write(start, CHUNK.min(total - start), &zeros)?;
+        }
+
+        let mut mbr = [0u8; 512];
+        let entry = &mut mbr[446..462];
+        // Status 0, then CHS start / end set to the "use LBA" values.
+        entry[1..4].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        entry[4] = 0x0C; // FAT32 (LBA); f_mkfs sets the final type
+        entry[5..8].copy_from_slice(&[0xFE, 0xFF, 0xFF]);
+        entry[8..12].copy_from_slice(&(PARTITION_START as u32).to_le_bytes());
+        entry[12..16].copy_from_slice(&((total - PARTITION_START) as u32).to_le_bytes());
+        mbr[510] = 0x55;
+        mbr[511] = 0xAA;
+        write(0, 1, &mbr)
     }
 }
 

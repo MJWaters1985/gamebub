@@ -106,9 +106,12 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
     `/saves/backups`, `/system` and `/settings`. Existing files are kept.
   - **Check ROMs**: reads every ROM in `/roms` and compares it with the database, to find
     damaged files or an unreliable card. Only reads.
-  - **Erase and format card** (hold A for 3 seconds): a new partition table with one FAT32
-    partition (32 KiB clusters), then the folders. The GBA BIOS (`/system/gba.bios.bin`) is
-    kept. Works on cards Game Bub can't read, such as new exFAT cards.
+  - **Erase and format card** (hold A for 3 seconds): clears the old partition table
+    (including GPT and its backup copy), writes an MBR with one FAT32 partition starting at
+    4 MiB (the standard alignment) with 32 KiB clusters, then creates the folders. Custom BIOS files in `/system`
+    (`gameboy.bios-dmg.bin`, `gameboy.bios-cgb.bin`, `gba.bios.bin`, `gba.bios-fast.bin`) are
+    kept; if one can't be read, nothing is erased. Works on cards Game Bub can't read, such as
+    new exFAT cards.
   - If the card couldn't be mounted at startup, the screen shows why.
 - **File browser.**
   - Natural, case-insensitive sorting
