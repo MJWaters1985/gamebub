@@ -147,3 +147,14 @@ pub fn describe_offset(offset: UtcOffset) -> String {
         format!("UTC{sign}{:02}:{:02}", h.abs(), m.abs())
     }
 }
+
+/// The time for the status bar, e.g. "6:10 PM" or "18:10" (see Settings > General).
+pub fn clock_text(local: OffsetDateTime) -> String {
+    let (hour, minute) = (local.hour(), local.minute());
+    if keys::CLOCK_FORMAT.get().unwrap_or(0) == 1 {
+        format!("{hour:02}:{minute:02}")
+    } else {
+        let hour12 = if hour % 12 == 0 { 12 } else { hour % 12 };
+        format!("{hour12}:{minute:02} {}", if hour < 12 { "AM" } else { "PM" })
+    }
+}

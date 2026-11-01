@@ -1,3 +1,4 @@
+import { TextUtil } from "../text_util.slint";
 import { ListView } from "std-widgets.slint";
 
 export component ListViewBase inherits Rectangle {
@@ -159,11 +160,44 @@ export component ListViewBase inherits Rectangle {
 
 component TextListItem {
     in property <string> text;
-    height: i-text.min-height + 2px;
+    // Scroll the text if it doesn't fit (for the highlighted item)
+    in property <bool> scroll: false;
+    // Room for the text, given by the list: using this item's own width would make the width
+    // depend on the text (a binding loop).
+    in property <length> text-width;
+    height: i-measure.min-height + 2px;
+
+    // Measures the full width of the text (the shown copy is cut short)
+    i-measure := Text {
+        width: 0px;
+        text: root.text;
+        visible: false;
+    }
+
+    // How far the text overflows the item
+    private property <length> excess: max(0px, i-measure.preferred-width - root.text-width);
+    private property <bool> scrolling: root.scroll && root.excess > 0px;
+    // Scrolling steps a character at a time and only draws what fits: drawing the whole name
+    // and clipping it needs more renderer memory than there is.
+    private property <int> chars: TextUtil.length(root.text);
+    private property <int> last-step: root.scrolling
+        ? ceil(root.excess / (i-measure.preferred-width / max(1, root.chars))) + 1
+        : 0;
+    // When scrolling started, so each name starts from its beginning
+    private property <int> start: 0;
+    // One character per tick (150 ms), pausing about 1 s (7 ticks) at each end.
+    private property <int> step: root.scrolling
+        ? clamp(mod(TextUtil.tick - root.start, root.last-step + 14) - 7, 0, root.last-step)
+        : 0;
+
+    changed scrolling => {
+        root.start = TextUtil.tick;
+    }
 
     i-text := Text {
         x: 2px;
-        text: root.text;
+        width: root.width - 4px;
+        text: root.step == 0 ? root.text : TextUtil.tail(root.text, root.step);
         vertical-alignment: center;
         horizontal-alignment: left;
         overflow: elide;
@@ -172,9 +206,14 @@ component TextListItem {
 
 export component TextListView inherits ListViewBase {
     in property <[string]> model;
+    // Scroll the highlighted item's text if it's too long to show
+    in property <bool> scroll-focused: false;
     num-items: model.length;
 
     for item[index] in root.model: child-items := TextListItem {
         text: item;
+        scroll: root.scroll-focused && index == root.focus-item;
+        // List width less its border, padding and scroll bar
+        text-width: root.width - 12px;
     }
 }

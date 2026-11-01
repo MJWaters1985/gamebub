@@ -1,0 +1,10 @@
+// Text helpers implemented in Rust (Slint can't slice strings).
+export global TextUtil {
+    // Length in characters
+    pure callback length(string) -> int;
+    // The text without its first characters
+    pure callback tail(string, int) -> string;
+    // Counts up every 150 ms, for scrolling text (a timer, so the screen only redraws when the
+    // text moves)
+    in property <int> tick;
+}

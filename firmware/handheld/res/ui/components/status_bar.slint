@@ -16,6 +16,14 @@ export component StatusBar inherits Rectangle {
         padding-right: 4px;
         height: 100%;
 
+        // Clock (Settings > General > Show Clock)
+        if Backend.clock-text != "": Text {
+            text: Backend.clock-text;
+            font-weight: 800;
+            horizontal-stretch: 0;
+            vertical-alignment: center;
+        }
+
         // Title text
         Text {
             text: root.title;
@@ -26,6 +34,7 @@ export component StatusBar inherits Rectangle {
         // Battery text
         Text {
             text: "\{Backend.battery-level}%";
+            font-weight: 800;
             horizontal-stretch: 0;
             vertical-alignment: center;
         }

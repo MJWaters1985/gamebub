@@ -61,6 +61,8 @@ export global Backend {
     in property <string> dock-firmware-version;
 
     in property <bool> sdcard-mounted: true;
+    // Time shown in the status bar (empty when the clock is turned off)
+    in property <string> clock-text;
     // Why the SD card isn't usable (empty if it is)
     in property <string> sdcard-status;
 

@@ -30,6 +30,8 @@ pub struct UiState {
     core_file_select_timer: Timer,
     library: library::LibraryState,
     wifi: wifi::WifiState,
+    clock_timer: Timer,
+    text_tick_timer: Timer,
 }
 
 impl UiState {
@@ -43,6 +45,8 @@ impl UiState {
             core_file_select_timer: Timer::default(),
             library: library::LibraryState::default(),
             wifi: wifi::WifiState::default(),
+            clock_timer: Timer::default(),
+            text_tick_timer: Timer::default(),
         };
         let state = Rc::new(RefCell::new(state));
         state.borrow_mut().setup(state.clone(), device);
@@ -69,6 +73,37 @@ impl UiState {
         backend.set_firmware_version(env!("FIRMWARE_DISPLAY_VERSION").into());
         backend.set_sdcard_mounted(std::fs::exists("/sdcard").unwrap_or(false));
         backend.set_sdcard_status(crate::sd_setup::status().into());
+
+        let text_util = root.global::<super::slint::TextUtil>();
+        text_util.on_length(|text| text.chars().count() as i32);
+        text_util.on_tail(|text, skip| text.chars().skip(skip.max(0) as usize).collect::<String>().into());
+        let root_ = self.root.clone();
+        self.text_tick_timer.start(TimerMode::Repeated, Duration::from_millis(150), move || {
+            if let Some(root) = root_.upgrade() {
+                let text_util = root.global::<super::slint::TextUtil>();
+                text_util.set_tick(text_util.get_tick().wrapping_add(1));
+            }
+        });
+
+        // Status bar clock (Settings > General > Show Clock), checked every second so setting
+        // changes and the minute rolling over show up promptly.
+        let root_ = self.root.clone();
+        let update_clock = move || {
+            let Some(root) = root_.upgrade() else {
+                return;
+            };
+            let text = if kvs::keys::SHOW_CLOCK.get().unwrap_or(false) {
+                crate::timezone::clock_text(crate::timezone::to_local(time::OffsetDateTime::now_utc()))
+            } else {
+                String::new()
+            };
+            let backend = root.global::<Backend>();
+            if backend.get_clock_text() != text.as_str() {
+                backend.set_clock_text(text.into());
+            }
+        };
+        update_clock();
+        self.clock_timer.start(TimerMode::Repeated, Duration::from_secs(1), update_clock);
 
         self.setup_setup(&state, device);
         self.setup_main_menu(&state, device);

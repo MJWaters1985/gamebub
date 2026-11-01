@@ -84,6 +84,15 @@ mod settings {
                 key: &keys::TIME_ZONE,
                 choices: &crate::timezone::ZONE_NAMES,
             },
+            Entry::Checkbox {
+                name: "Show Clock",
+                key: &keys::SHOW_CLOCK,
+            },
+            Entry::List {
+                name: "Clock Format",
+                key: &keys::CLOCK_FORMAT,
+                choices: &["12-hour", "24-hour"],
+            },
             Entry::List {
                 name: "Startup Action",
                 key: &keys::STARTUP_ACTION,

@@ -69,7 +69,8 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 - **Run ROM** on the home screen (between Run Cartridge and Cores): pick a system, then a
   game from `/roms/Game Boy`, `/roms/Game Boy Color` or `/roms/Game Boy Advance`, sorted by
   name, with its box art (from `/boxart/<system>/<game>.thumb`). Games start directly with
-  the right core, without the file browser. Remembers the last system and game.
+  the right core, without the file browser. Remembers the last system and game. A long name
+  scrolls when highlighted.
 - **Cartridge Manager** (Tools → Cartridge Manager): work with physical cartridges on the
   device, without a computer.
   - **Identify**: shows the game's name (from a built-in database of about 6,000 Game Boy,
@@ -137,9 +138,17 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   | Game Color Temperature | General | Default, Warm, Warmer, Cool | [#24](https://github.com/elipsitz/gamebub/issues/24) |
   | Integer Overscale (crop) | Core: GB / GBC | On, off (one scale step larger, cropping top and bottom) | [#30](https://github.com/elipsitz/gamebub/issues/30) |
   | Tilt Sensitivity | Core: GB / GBC and Core: GBA | Lowest, Low, Normal, High | [#63](https://github.com/elipsitz/gamebub/issues/63) |
+  | Time Zone | General | Named time zones (with daylight saving time) or a fixed UTC offset | |
+  | Show Clock | General | On, off (the time in the status bar, opposite the battery level) | |
+  | Clock Format | General | 12-hour (6:10 PM), 24-hour (18:10) | |
 
 ## Bug fixes
 
+- **Buttons stop working during animations.** The UI only read button presses when nothing
+  on screen was animating, so any continuous animation would lock out the controls. It now
+  checks for presses about once a frame while animating.
+- **Less memory for list settings.** Settings with a list of choices now only draw the current
+  choice, instead of all of them (Time Zone has 61).
 - **Lists that don't wrap around now scroll** to the highlighted item (e.g. the Cartridge
   Manager's actions, Wi-Fi networks, saves to restore). Previously the highlight could move
   out of view.
