@@ -21,22 +21,27 @@ fn main() {
         .trim();
     println!("cargo:rustc-env=GIT_COMMIT={}", commit_hash);
 
-    // Version string shown to the user: "<version>-custom <build date>", e.g.
-    // "1.0.3-custom 31-Oct-2026". The date is refreshed whenever sources change.
+    // Version string shown to the user: "<version>.mod-<commit date> (<short hash>)", e.g.
+    // "1.0.3.mod-20261101 (a60e14f)". "-dirty" is appended to the hash when built with
+    // uncommitted changes.
+    println!("cargo:rerun-if-changed=../../.git/refs/heads");
+    println!("cargo:rerun-if-changed=../../.git/packed-refs");
+    println!("cargo:rerun-if-changed=../../.git/index");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=res");
-    let output = Command::new("date")
-        .arg("+%d-%b-%Y")
-        .env("LC_ALL", "C")
-        .output()
-        .expect("date command failed");
-    let build_date = str::from_utf8(&output.stdout)
-        .expect("date output invalid utf-8")
-        .trim();
+    let git = |args: &[&str]| -> String {
+        let output = Command::new("git").args(args).output().expect("git command failed");
+        String::from_utf8(output.stdout).expect("git output invalid utf-8").trim().to_string()
+    };
+    let commit_date = git(&["log", "-1", "--format=%cd", "--date=format:%Y%m%d"]);
+    let short_hash = git(&["rev-parse", "--short=7", "HEAD"]);
+    let dirty = !git(&["status", "--porcelain", "--untracked-files=no"]).is_empty();
     println!(
-        "cargo:rustc-env=FIRMWARE_DISPLAY_VERSION={}-custom {}",
+        "cargo:rustc-env=FIRMWARE_DISPLAY_VERSION={}.mod-{} ({}{})",
         env!("CARGO_PKG_VERSION"),
-        build_date
+        commit_date,
+        short_hash,
+        if dirty { "-dirty" } else { "" }
     );
 
     println!("cargo:rustc-link-arg=-Wl,--wrap=esp_panic_handler");
