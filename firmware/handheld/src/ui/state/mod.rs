@@ -60,7 +60,7 @@ impl UiState {
         backend.set_brightness_level((kvs::keys::BRIGHTNESS.get().unwrap() * 100.0) as i32);
         backend.set_hardware_version(crate::hwinfo::get_hardware_version().to_string().into());
         backend.set_hardware_serial(crate::hwinfo::get_serial_number().to_string().into());
-        backend.set_firmware_version(env!("CARGO_PKG_VERSION").into());
+        backend.set_firmware_version(env!("FIRMWARE_DISPLAY_VERSION").into());
         backend.set_sdcard_mounted(std::fs::exists("/sdcard").unwrap_or(false));
 
         self.setup_setup(&state, device);
@@ -78,13 +78,13 @@ impl UiState {
         // Firmware update notification.
         {
             let last_fw = kvs::keys::LAST_FIRMWARE_VERSION.get();
-            if last_fw.as_deref() != Some(env!("CARGO_PKG_VERSION")) {
-                kvs::keys::LAST_FIRMWARE_VERSION.set(&env!("CARGO_PKG_VERSION").to_string());
+            if last_fw.as_deref() != Some(env!("FIRMWARE_DISPLAY_VERSION")) {
+                kvs::keys::LAST_FIRMWARE_VERSION.set(&env!("FIRMWARE_DISPLAY_VERSION").to_string());
 
                 if last_fw.is_some() {
                     let notification = notifications::Notification::new_long(format!(
                         "Firmware updated to {}",
-                        env!("CARGO_PKG_VERSION")
+                        env!("FIRMWARE_DISPLAY_VERSION")
                     ));
                     self.queue_notification(state.clone(), notification);
                 }

@@ -96,7 +96,7 @@ pub fn setup() {
 fn write_crash(crash: &CrashReport) -> std::io::Result<()> {
     let mut file = File::create("/sdcard/crash-log.txt")?;
     writeln!(file, "Crash Report")?;
-    writeln!(file, "  FW: {}", env!("CARGO_PKG_VERSION"))?;
+    writeln!(file, "  FW: {}", env!("FIRMWARE_DISPLAY_VERSION"))?;
     writeln!(file, "  HW: {}", crate::hwinfo::get_hardware_version())?;
     writeln!(file, "  Serial: {}", crate::hwinfo::get_serial_number())?;
     writeln!(file)?;
