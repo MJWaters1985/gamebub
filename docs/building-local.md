@@ -33,6 +33,16 @@ from AMD, then:
 /tmp/vivado-installer/xsetup -b Install -a XilinxEULA,3rdPartyEULA -c ~/.Xilinx/install_config.txt
 ```
 
+On newer distributions (e.g. Ubuntu 24.04+) Vivado 2023.2 fails to start with
+`libtinfo.so.5: cannot open shared object file`. Point it at the current
+library from inside the Vivado install:
+
+```sh
+L=/tools/Xilinx/Vivado/2023.2/lib/lnx64.o
+ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 $L/libtinfo.so.5
+ln -s /usr/lib/x86_64-linux-gnu/libncurses.so.6 $L/libncurses.so.5
+```
+
 ## Firmware
 
 ```sh
