@@ -117,14 +117,15 @@ fn clock_note(wifi: &mut net::Wifi) -> String {
     if !kvs::keys::WIFI_SYNC_CLOCK.get().unwrap_or(true) {
         return String::new();
     }
-    match wifi.sync_clock() {
+    match wifi.sync_clock().map(crate::timezone::to_local) {
         Ok(now) => format!(
-            "\n\nClock set to {:04}-{:02}-{:02} {:02}:{:02} UTC.",
+            "\n\nClock set to {:04}-{:02}-{:02} {:02}:{:02} ({}).",
             now.year(),
             now.month() as u8,
             now.day(),
             now.hour(),
-            now.minute()
+            now.minute(),
+            crate::timezone::describe_offset(now.offset())
         ),
         Err(e) => format!("\n\nThe clock wasn't set: {e:#}"),
     }

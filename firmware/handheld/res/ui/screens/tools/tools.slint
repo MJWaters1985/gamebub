@@ -8,6 +8,7 @@ export component ToolsScreen inherits ScreenBase {
         "Cartridge Manager",
         "Download Box Art",
         "Mount SD Card over USB",
+        "Set Up SD Card",
         "FlashGBX Cartridge Backup / Restore",
         "Debug battery info"
     ];
@@ -389,6 +390,219 @@ export component ToolsScreen inherits ScreenBase {
             }
         }
 
+        // Set up the SD card: create folders, or erase and format it first
+        if selected-tool == 3: FocusScope {
+            // 0: menu, 1: confirm erasing, 2: working / result
+            private property <int> view: 0;
+            // How long A has been held on the confirmation screen
+            private property <duration> held: 0ms;
+            private property <bool> holding: false;
+
+            init => {
+                self.focus();
+            }
+
+            Timer {
+                interval: 50ms;
+                running: view == 1 && holding;
+                triggered => {
+                    held += 50ms;
+                    if held >= 3s {
+                        holding = false;
+                        held = 0ms;
+                        view = 2;
+                        Backend.task-done = false;
+                        Backend.sd-setup(true);
+                    }
+                }
+            }
+
+            if view == 0: FocusScope {
+                init => {
+                    choices.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "b" {
+                        root.selected-tool = -1;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
+
+                    if Backend.sdcard-status != "": Text {
+                        wrap: word-wrap;
+                        font-weight: 800;
+                        text: Backend.sdcard-status;
+                    }
+
+                    Text {
+                        wrap: word-wrap;
+                        text: "Game Bub needs a FAT32 card (exFAT cards can't be read). It keeps ROMs in /roms/<system>, saves in /saves, box art in /boxart and the GBA BIOS in /system.";
+                    }
+
+                    choices := TextListView {
+                        model: ["Create missing folders (keeps files)", "Check ROMs (reads only)", "Erase and format card"];
+                        on-item-selected(i) => {
+                            if i == 0 {
+                                view = 2;
+                                Backend.task-done = false;
+                                Backend.sd-setup(false);
+                            } else if i == 1 {
+                                view = 2;
+                                Backend.task-done = false;
+                                Backend.sd-check();
+                            } else {
+                                held = 0ms;
+                                view = 1;
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        ControlHint {
+                            label: "Back";
+                            button: "b";
+                        }
+
+                        ControlHint {
+                            label: "Select";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+
+            if view == 1: FocusScope {
+                init => {
+                    self.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "a" {
+                        holding = true;
+                        accept
+                    } else if event.text == "b" && !event.repeat {
+                        holding = false;
+                        held = 0ms;
+                        view = 0;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+                key-released(event) => {
+                    if event.text == "a" {
+                        holding = false;
+                        held = 0ms;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    padding: 16px;
+                    spacing: 12px;
+
+                    Text {
+                        horizontal-alignment: center;
+                        font-weight: 800;
+                        text: "Erase the SD card?";
+                    }
+
+                    Text {
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        text: "Everything on the card is deleted: ROMs, saves, save backups, box art and screenshots. The GBA BIOS is kept.\n\nHold A for 3 seconds to erase.";
+                    }
+
+                    Rectangle {
+                        height: 12px;
+                        border-color: black;
+                        border-width: 1px;
+
+                        Rectangle {
+                            x: 2px;
+                            y: 2px;
+                            height: parent.height - 4px;
+                            width: (parent.width - 4px) * min(1, held / 3s);
+                            background: black;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        ControlHint {
+                            label: "Cancel";
+                            button: "b";
+                        }
+
+                        ControlHint {
+                            label: "Hold to erase";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+
+            if view == 2: FocusScope {
+                init => {
+                    self.focus();
+                }
+                key-released(event) => {
+                    if event.text == "b" && Backend.task-done {
+                        root.selected-tool = -1;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                if !Backend.task-done: Text {
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    text: Backend.task-label + "\n\nDon't remove the SD card.";
+                }
+
+                if Backend.task-done: VerticalLayout {
+                    alignment: center;
+                    spacing: 12px;
+                    padding: 16px;
+
+                    Text {
+                        horizontal-alignment: center;
+                        font-weight: 800;
+                        text: Backend.task-result-ok ? "Done" : "Problem";
+                    }
+
+                    Text {
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        text: Backend.task-result;
+                    }
+
+                    HorizontalLayout {
+                        alignment: start;
+
+                        ControlHint {
+                            label: "Back";
+                            button: "b";
+                        }
+                    }
+                }
+            }
+        }
+
         // Mount SD card over USB
         if selected-tool == 2: FocusScope {
             init => {
@@ -424,7 +638,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Cartridge backup / restore
-        if selected-tool == 3: FocusScope {
+        if selected-tool == 4: FocusScope {
             init => {
                 self.focus();
                 Backend.tools-start-cart-reader();
@@ -450,7 +664,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Debug battery info
-        if selected-tool == 4: FocusScope {
+        if selected-tool == 5: FocusScope {
             private property <BatteryInfo> info;
             init => {
                 self.focus();

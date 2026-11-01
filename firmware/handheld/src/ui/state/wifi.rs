@@ -53,6 +53,8 @@ impl UiState {
         });
 
         backend.on_boxart_download_all(|| wifi_setup::download_library_boxart());
+        backend.on_sd_setup(|erase| crate::sd_setup::start(erase));
+        backend.on_sd_check(|| crate::sd_setup::start_check());
     }
 
     fn wifi_show_menu(&mut self) {
@@ -131,6 +133,9 @@ impl UiState {
         let backend = root.global::<Backend>();
         match update.result {
             Some((ok, message)) => {
+                // Set Up SD Card can mount a card that wasn't usable before.
+                backend.set_sdcard_mounted(std::fs::exists("/sdcard").unwrap_or(false));
+                backend.set_sdcard_status(crate::sd_setup::status().into());
                 backend.set_task_result(message.into());
                 backend.set_task_result_ok(ok);
                 backend.set_task_done(true);

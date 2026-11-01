@@ -61,6 +61,8 @@ export global Backend {
     in property <string> dock-firmware-version;
 
     in property <bool> sdcard-mounted: true;
+    // Why the SD card isn't usable (empty if it is)
+    in property <string> sdcard-status;
 
     in-out property <bool> volume-visible: false;
     in-out property <int> volume-level: 50;
@@ -184,6 +186,10 @@ export global Backend {
     in property <string> task-result;
     in property <bool> task-result-ok;
     callback boxart-download-all();
+    // Tools > Set Up SD Card (true: erase and format first)
+    callback sd-setup(bool);
+    // Tools > Set Up SD Card > Check ROMs (reads only)
+    callback sd-check();
 
     // Cartridge Manager. View: 0 busy, 1 menu, 2 save list, 3 result
     in-out property <int> cart-tool-view: 0;

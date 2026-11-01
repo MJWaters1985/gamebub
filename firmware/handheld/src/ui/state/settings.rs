@@ -77,7 +77,12 @@ mod settings {
         name: "General",
         entries: &[
             Entry::SystemDatetime {
-                name: "Date and Time (UTC)",
+                name: "Date and Time",
+            },
+            Entry::List {
+                name: "Time Zone",
+                key: &keys::TIME_ZONE,
+                choices: &crate::timezone::ZONE_NAMES,
             },
             Entry::List {
                 name: "Startup Action",
@@ -347,7 +352,7 @@ impl Model for SettingsModel {
                 r#type: SettingType::Datetime,
                 value: SettingValue {
                     datetime_value: {
-                        let dt = OffsetDateTime::now_utc();
+                        let dt = crate::timezone::to_local(OffsetDateTime::now_utc());
                         SettingDatetime {
                             year: dt.year(),
                             month: dt.month() as i32,
@@ -402,11 +407,19 @@ impl SettingsModel {
 
         match entry {
             settings::Entry::Checkbox { key, .. } => key.set(&value.bool_value),
-            settings::Entry::List { key, .. } => key.set(&value.int_value),
+            settings::Entry::List { key, .. } => {
+                key.set(&value.int_value);
+                if std::ptr::eq(*key, &crate::kvs::keys::TIME_ZONE) {
+                    // The date and time row shows local time.
+                    crate::timezone::apply();
+                    self.notify.reset();
+                    return SettingsAction::None;
+                }
+            }
             settings::Entry::SystemDatetime { .. } => {
                 let dt = convert_settings_datetime(&value.datetime_value).unwrap();
                 let dt = dt.replace_second(0).unwrap();
-                let dt = dt.assume_utc();
+                let dt = crate::timezone::from_local(dt);
                 Device::lock().set_datetime(dt);
             }
             settings::Entry::Subpage { page, .. } => {

@@ -24,6 +24,8 @@ mod led;
 mod net;
 mod library;
 mod power;
+mod sd_setup;
+mod timezone;
 pub mod ui;
 mod util;
 mod wifi_setup;
@@ -92,6 +94,7 @@ fn main() -> anyhow::Result<()> {
         log::warn!("Failed to mount SD card");
     }
     device.set_brightness(kvs::keys::BRIGHTNESS.get().unwrap());
+    timezone::apply();
 
     // Setup workers.
     worker::start();

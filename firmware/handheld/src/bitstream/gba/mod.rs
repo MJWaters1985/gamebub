@@ -22,7 +22,7 @@ use super::{
 };
 use save_type_detector::SaveTypeDetector;
 
-mod game_db;
+pub(crate) mod game_db;
 mod rtc;
 pub(crate) mod save_type_detector;
 
@@ -102,7 +102,7 @@ impl SaveType {
 
 #[derive(Copy, Clone, Deserialize, Default)]
 #[serde(default)]
-struct EmulatedCartridgeConfig {
+pub(crate) struct EmulatedCartridgeConfig {
     pub save_type: SaveType,
     pub has_rumble: bool,
     pub has_rtc: bool,
@@ -491,7 +491,7 @@ impl CoreHandler for Gba {
             let rtc_state = match self.rtc_state {
                 Some(state) => state,
                 None => {
-                    let datetime = device.get_datetime();
+                    let datetime = device.get_local_datetime();
                     RtcState::from_offset_date_time(datetime, 0)
                 }
             };

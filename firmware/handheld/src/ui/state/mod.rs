@@ -68,6 +68,7 @@ impl UiState {
         backend.set_hardware_serial(crate::hwinfo::get_serial_number().to_string().into());
         backend.set_firmware_version(env!("FIRMWARE_DISPLAY_VERSION").into());
         backend.set_sdcard_mounted(std::fs::exists("/sdcard").unwrap_or(false));
+        backend.set_sdcard_status(crate::sd_setup::status().into());
 
         self.setup_setup(&state, device);
         self.setup_main_menu(&state, device);

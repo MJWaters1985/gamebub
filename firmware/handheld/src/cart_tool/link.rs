@@ -39,6 +39,7 @@ mod cmd {
     pub const DMG_CART_WRITE_SRAM: u8 = 0xB3;
     pub const DMG_MBC_RESET: u8 = 0xB4;
     pub const AGB_CART_READ: u8 = 0xC1;
+    pub const AGB_CART_WRITE: u8 = 0xC2;
     pub const AGB_CART_READ_SRAM: u8 = 0xC3;
     pub const AGB_CART_WRITE_SRAM: u8 = 0xC4;
     pub const AGB_CART_READ_EEPROM: u8 = 0xC5;
@@ -416,6 +417,15 @@ impl Link {
             self.read(part)?;
         }
         Ok(())
+    }
+
+    /// Write a 16-bit value to the ROM area (e.g. the GPIO port used by cartridge clocks).
+    pub fn agb_write(&mut self, address: u32, value: u16) -> Result<()> {
+        let mut buf = [0u8; 7];
+        buf[0] = cmd::AGB_CART_WRITE;
+        buf[1..5].copy_from_slice(&(address >> 1).to_be_bytes());
+        buf[5..7].copy_from_slice(&value.to_be_bytes());
+        self.command_ack(&buf)
     }
 
     /// Read SRAM / FRAM / Flash save memory.

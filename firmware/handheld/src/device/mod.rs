@@ -743,6 +743,11 @@ impl Device<'_> {
         time::OffsetDateTime::from_unix_timestamp(ts as i64).unwrap()
     }
 
+    /// Get the Device datetime in local time (see Settings > General > Time Zone).
+    pub fn get_local_datetime(&mut self) -> time::OffsetDateTime {
+        crate::timezone::to_local(self.get_datetime())
+    }
+
     /// Set the Device datetime.
     pub fn set_datetime(&mut self, dt: time::OffsetDateTime) {
         log::info!("Setting system time: {:?}", dt);

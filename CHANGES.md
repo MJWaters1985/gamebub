@@ -86,6 +86,29 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - Supports Game Boy cartridges without a mapper or with MBC1, MBC2, MBC3 or MBC5, and GBA
     cartridges with SRAM/FRAM, Flash (64 or 128 KiB) or EEPROM (4 or 64 Kbit). Real-time
     clock data isn't backed up yet.
+  - **Cartridge clock**: for cartridges with a real-time clock, the details show the clock,
+    and **Set cartridge clock to now** sets it to the local time.
+    - GBA (Seiko S-3511, e.g. Pokémon Ruby, Sapphire and Emerald): sets the date and time.
+      A clock that lost power (dead or replaced battery) is reset first. Tested with
+      Pokémon Emerald.
+    - Game Boy MBC3 (e.g. Pokémon Gold, Silver and Crystal): sets the time of day and keeps
+      the day counter, since these games keep their own offset from it. The save is backed up
+      first, because the clock is written through the save memory area. Not yet tested on a
+      cartridge.
+    - The clock is read back after setting it. Access follows FlashGBX.
+- **Time Zone** (Settings → General). Choose a time zone (or a fixed UTC offset); daylight
+  saving time changes automatically. The device clock still keeps UTC; local time is used
+  for Date and Time in Settings, the clock of GBA games without a saved clock, save backup
+  names, file times on the SD card and the clock sync message.
+- **Set Up SD Card** (Tools). Game Bub reads FAT32 (or FAT16) cards, not exFAT.
+  - **Create missing folders**: `/roms/<system>`, `/boxart/<system>`, `/saves`,
+    `/saves/backups`, `/system` and `/settings`. Existing files are kept.
+  - **Check ROMs**: reads every ROM in `/roms` and compares it with the database, to find
+    damaged files or an unreliable card. Only reads.
+  - **Erase and format card** (hold A for 3 seconds): a new partition table with one FAT32
+    partition (32 KiB clusters), then the folders. The GBA BIOS (`/system/gba.bios.bin`) is
+    kept. Works on cards Game Bub can't read, such as new exFAT cards.
+  - If the card couldn't be mounted at startup, the screen shows why.
 - **File browser.**
   - Natural, case-insensitive sorting
     ([#65](https://github.com/elipsitz/gamebub/issues/65)).

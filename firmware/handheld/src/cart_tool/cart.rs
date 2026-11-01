@@ -168,6 +168,16 @@ impl CartInfo {
     pub fn has_save(&self) -> bool {
         self.save.size() > 0
     }
+
+    /// Game Boy cartridge type byte (mapper and extras).
+    pub fn cart_type(&self) -> u8 {
+        self.header[0x147]
+    }
+
+    /// GBA game code, e.g. "BPEE".
+    pub fn game_code(&self) -> [u8; 4] {
+        self.header[0xAC..0xB0].try_into().unwrap()
+    }
 }
 
 /// Replace characters that FAT doesn't allow in file names.
@@ -708,7 +718,7 @@ pub fn write_save(
 
 /// Timestamp for backup file names, e.g. "2026-11-01 10-42".
 fn timestamp() -> String {
-    let now = crate::device::Device::lock().get_datetime();
+    let now = crate::device::Device::lock().get_local_datetime();
     format!(
         "{:04}-{:02}-{:02} {:02}-{:02}-{:02}",
         now.year(),

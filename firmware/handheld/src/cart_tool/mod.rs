@@ -10,6 +10,7 @@ use link::Link;
 use crate::ui;
 
 mod cart;
+mod clock;
 mod db;
 mod link;
 
@@ -42,6 +43,7 @@ enum Action {
     DumpRom,
     BackupSave,
     RestoreSave,
+    SetClock,
     ReadAgain,
 }
 
@@ -51,6 +53,7 @@ impl Action {
             Self::DumpRom => "Dump ROM to SD card",
             Self::BackupSave => "Back up save",
             Self::RestoreSave => "Restore save to cartridge",
+            Self::SetClock => "Set cartridge clock to now",
             Self::ReadAgain => "Read cartridge again",
         }
     }
@@ -92,11 +95,13 @@ struct Worker {
     info: Option<CartInfo>,
     actions: Vec<Action>,
     saves: Vec<SaveFile>,
+    /// Cartridge clock, if the cartridge has one (or an error reading it).
+    clock: Option<Result<clock::Clock, String>>,
 }
 
 impl Worker {
     fn new() -> Self {
-        Worker { link: None, info: None, actions: vec![], saves: vec![] }
+        Worker { link: None, info: None, actions: vec![], saves: vec![], clock: None }
     }
 
     fn run(mut self, rx: Receiver<Request>) {
@@ -108,6 +113,7 @@ impl Worker {
                     Some(Action::DumpRom) => self.dump_rom(),
                     Some(Action::BackupSave) => self.backup_save(),
                     Some(Action::RestoreSave) => self.list_saves(),
+                    Some(Action::SetClock) => self.set_clock(),
                     Some(Action::ReadAgain) => self.identify(),
                     None => self.show_menu(),
                 },
@@ -127,6 +133,7 @@ impl Worker {
     fn identify(&mut self) {
         busy("Reading cartridge...", -1.0);
         self.info = None;
+        self.clock = None;
         if self.link.is_none() {
             match Link::open() {
                 Ok(link) => self.link = Some(link),
@@ -139,6 +146,10 @@ impl Worker {
         match cart::identify(link) {
             Ok(info) => {
                 log::info!("Cartridge: {info:?}");
+                if clock::expected(&info) {
+                    busy("Reading the cartridge clock...", -1.0);
+                    self.clock = Some(clock::read(link, &info).map_err(|e| format!("{e:#}")));
+                }
                 self.info = Some(info);
                 self.show_menu();
             }
@@ -172,6 +183,11 @@ impl Worker {
             (SaveKind::None, true) => "Save: detected when needed".to_string(),
             (save, _) => format!("Save: {}", save.describe()),
         });
+        match &self.clock {
+            Some(Ok(clock)) => details.push(clock.describe()),
+            Some(Err(e)) => details.push(format!("Clock: couldn't be read ({e})")),
+            None => {}
+        }
         let rom_path = info.rom_path();
         if rom_path.exists() {
             details.push("ROM already on SD card".to_string());
@@ -181,6 +197,9 @@ impl Worker {
         if info.has_save() || info.save_guessed {
             self.actions.push(Action::BackupSave);
             self.actions.push(Action::RestoreSave);
+        }
+        if self.clock.is_some() {
+            self.actions.push(Action::SetClock);
         }
         self.actions.push(Action::ReadAgain);
         send(Update::Menu {
@@ -304,6 +323,51 @@ impl Worker {
             Err(e) => self.fail(e),
         }
     }
+}
+
+impl Worker {
+    fn set_clock(&mut self) {
+        let (Some(link), Some(info)) = (self.link.as_mut(), self.info.as_ref()) else {
+            return self.identify();
+        };
+        let result = (|| -> anyhow::Result<(clock::Clock, Option<std::path::PathBuf>)> {
+            // The MBC3 clock is written through the save RAM area: keep a copy of the save in
+            // case a write goes astray.
+            let backup = if info.mode == link::CartMode::Dmg && info.has_save() {
+                busy("Backing up the save...", 0.0);
+                let (backup, _) = cart::backup_save(link, info, "(before clock set)", false, &mut |p| {
+                    busy("Backing up the save...", p)
+                })?;
+                Some(backup)
+            } else {
+                None
+            };
+            busy("Setting the cartridge clock...", -1.0);
+            let now = crate::device::Device::lock().get_local_datetime();
+            Ok((clock::set(link, info, now)?, backup))
+        })();
+        match result {
+            Ok((clock, backup)) => {
+                let mut message = format!("Cartridge clock set.\n{}", clock.describe());
+                if matches!(clock, clock::Clock::Mbc3 { .. }) {
+                    message += "\n\nGame Boy clocks count days, not dates: the game keeps its own offset, \
+                        so its in-game clock may still need setting in the game.";
+                }
+                if let Some(backup) = backup {
+                    message += &format!("\n\nSave backed up first to\n{}", display_path(&backup));
+                }
+                self.clock = Some(Ok(clock));
+                send(Update::Result { ok: true, message });
+            }
+            Err(e) => self.fail(e),
+        }
+    }
+}
+
+/// CRC32 of the known good dump of a ROM, looked up by its header.
+pub fn known_crc32(gba: bool, header: &[u8]) -> Option<u32> {
+    let mode = if gba { link::CartMode::Agb } else { link::CartMode::Dmg };
+    db::lookup(mode, header).map(|entry| entry.crc32)
 }
 
 /// Download box art for a dumped cartridge, if enabled. Returns a note for the result.

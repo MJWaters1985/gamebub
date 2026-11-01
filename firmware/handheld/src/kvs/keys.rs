@@ -80,6 +80,8 @@ pub static WIFI_PASSWORD: KvsKey<String> = KvsKey::new("wifi-pass");
 pub static WIFI_SYNC_CLOCK: KvsKey<bool> = KvsKey::new_with_default("wifi-clock", true);
 /// Download box art after dumping a cartridge.
 pub static BOXART_AFTER_DUMP: KvsKey<bool> = KvsKey::new_with_default("boxart-auto", true);
+/// Time zone: index into timezone::ZONES.
+pub static TIME_ZONE: KvsKey<i32> = KvsKey::new_with_default("time-zone", 0);
 
 pub fn flush_all() {
     SETUP_STAGE.flush();
@@ -111,4 +113,5 @@ pub fn flush_all() {
     WIFI_PASSWORD.flush();
     WIFI_SYNC_CLOCK.flush();
     BOXART_AFTER_DUMP.flush();
+    TIME_ZONE.flush();
 }
