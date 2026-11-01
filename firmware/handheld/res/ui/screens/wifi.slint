@@ -1,0 +1,202 @@
+import { Global, ScreenId, Backend } from "../common.slint";
+import { ScreenBase } from "../components/screen.slint";
+import { TextListView } from "../components/list_view.slint";
+import { ControlHint } from "../components/control_hint.slint";
+import { Keyboard } from "../components/keyboard.slint";
+
+// Settings > Wi-Fi > Network: choose a network, test it, or forget it.
+export component WifiScreen inherits ScreenBase {
+    title: "Wi-Fi";
+    forward-focus: i-focus-scope;
+
+    init => {
+        Backend.wifi-open();
+    }
+
+    i-focus-scope := FocusScope {
+        // Menu
+        if Backend.wifi-view == 0: FocusScope {
+            init => {
+                actions.focus();
+            }
+            key-pressed(event) => {
+                if event.text == "b" {
+                    Global.set-screen(ScreenId.Settings);
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            VerticalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+
+                Text {
+                    font-weight: 800;
+                    text: Backend.wifi-status;
+                }
+
+                Text {
+                    wrap: word-wrap;
+                    color: #666;
+                    text: "Wi-Fi is only turned on to download box art and set the clock.";
+                }
+
+                actions := TextListView {
+                    model: Backend.wifi-has-network
+                        ? ["Choose a network", "Test the connection", "Forget this network"]
+                        : ["Choose a network"];
+                    on-item-selected(i) => {
+                        if i == 0 {
+                            Backend.wifi-scan();
+                        } else if i == 1 {
+                            Backend.wifi-test();
+                        } else {
+                            Backend.wifi-forget();
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: space-between;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+
+                    ControlHint {
+                        label: "Select";
+                        button: "a";
+                    }
+                }
+            }
+        }
+
+        // Busy
+        if Backend.wifi-view == 1: FocusScope {
+            init => {
+                self.focus();
+            }
+
+            Text {
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                text: Backend.wifi-busy-label;
+            }
+        }
+
+        // Networks
+        if Backend.wifi-view == 2: FocusScope {
+            init => {
+                networks.focus();
+            }
+            key-pressed(event) => {
+                if event.text == "b" {
+                    Backend.wifi-open();
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            VerticalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+
+                Text {
+                    font-weight: 800;
+                    text: "Choose a network";
+                }
+
+                networks := TextListView {
+                    model: Backend.wifi-networks;
+                    on-item-selected(i) => {
+                        Backend.wifi-select-network(i);
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: space-between;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+
+                    ControlHint {
+                        label: "Select";
+                        button: "a";
+                    }
+                }
+            }
+        }
+
+        // Password
+        if Backend.wifi-view == 3: Keyboard {
+            label: "Password for " + Backend.wifi-selected-ssid;
+            text: Backend.wifi-password;
+            init => {
+                self.focus();
+            }
+            typed(t) => {
+                Backend.wifi-typed(t);
+            }
+            deleted => {
+                Backend.wifi-deleted();
+            }
+            done => {
+                Backend.wifi-join();
+            }
+            cancel => {
+                Backend.wifi-view = 2;
+            }
+        }
+
+        // Result
+        if Backend.wifi-view == 4: FocusScope {
+            init => {
+                self.focus();
+            }
+            key-pressed(event) => {
+                if event.text == "a" || event.text == "b" {
+                    Backend.wifi-open();
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                padding: 16px;
+                spacing: 12px;
+
+                Text {
+                    horizontal-alignment: center;
+                    font-weight: 800;
+                    text: Backend.wifi-result-ok ? "Done" : "Problem";
+                }
+
+                Text {
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: Backend.wifi-result;
+                }
+
+                HorizontalLayout {
+                    alignment: end;
+
+                    ControlHint {
+                        label: "OK";
+                        button: "a";
+                    }
+                }
+            }
+        }
+    }
+}

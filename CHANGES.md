@@ -54,6 +54,18 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 
 ## New features
 
+- **Wi-Fi** (Settings → Wi-Fi). The radio was unused; Wi-Fi is only turned on for a task and
+  then off again.
+  - **Network**: scan for networks and enter the password with an on-screen keyboard (D-pad
+    to move, A to type, B to delete, X for shift, Y for symbols, Start when done). The network
+    is only saved if the connection works. Also test the connection or forget the network.
+    The password is stored in the device's settings memory (not encrypted).
+  - **Sync Clock on Connect**: set the clock from the internet whenever Wi-Fi connects.
+  - **Box Art After Dump**: the Cartridge Manager downloads box art after dumping a ROM.
+- **Download Box Art** (Tools): downloads box art for every game in `/roms` that doesn't
+  have it, from the [libretro thumbnail library](https://thumbnails.libretro.com) via the
+  [images.weserv.nl](https://images.weserv.nl) image proxy (only the game's name is sent),
+  saved as 120×120 thumbnails in `/boxart/<system>/`.
 - **Run ROM** on the home screen (between Run Cartridge and Cores): pick a system, then a
   game from `/roms/Game Boy`, `/roms/Game Boy Color` or `/roms/Game Boy Advance`, sorted by
   name, with its box art (from `/boxart/<system>/<game>.thumb`). Games start directly with
@@ -131,6 +143,13 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - Physical-cartridge and slow-ROM bus models (`SIM_PHYSICAL_CART`, `SIM_SLOW_CART`).
   - Linux build fixes.
 - `fpga/scripts/run_test_roms.py` runs test ROM suites against reference screenshots.
+- **More free memory** (the ESP32-S3 has no external RAM; the heap was down to ~100 KB in
+  ~30 KB pieces): the Wi-Fi driver's code is kept in flash instead of internal RAM (+17 KB),
+  and the 16 KB bulk transfer buffer is allocated only while it's used, with smaller
+  fallbacks (+16 KB). Longer jobs run on one background thread started at boot. Wi-Fi uses
+  plain HTTP with small buffers; box art comes as small JPEGs decoded by the TJpgDec
+  decoder in the ESP32-S3 ROM (PNG decoding needs a 32 KB window in one piece), and is
+  loaded and shown in ~8 KB strips.
 - `firmware/handheld/scripts/gen_game_db.py` builds the Cartridge Manager's game database
   (`res/gamedb.bin`) from FlashGBX's database files.
 - **Cartridge read log.** If `/sdcard/cartlog.enable` exists, the GBA core's log of

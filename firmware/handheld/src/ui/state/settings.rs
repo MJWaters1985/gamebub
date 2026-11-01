@@ -55,6 +55,10 @@ mod settings {
                 page: &PAGE_GENERAL,
             },
             Entry::Subpage {
+                name: "Wi-Fi",
+                page: &PAGE_WIFI,
+            },
+            Entry::Subpage {
                 name: "Dock",
                 page: &PAGE_DOCK,
             },
@@ -98,6 +102,24 @@ mod settings {
                 name: "Game Color Temperature",
                 key: &keys::DISPLAY_WHITE_BALANCE,
                 choices: &["Default", "Warm", "Warmer", "Cool"],
+            },
+        ],
+    };
+
+    pub static PAGE_WIFI: Page = Page {
+        name: "Wi-Fi",
+        entries: &[
+            Entry::Screen {
+                name: "Network",
+                screen: ScreenId::Wifi,
+            },
+            Entry::Checkbox {
+                name: "Sync Clock on Connect",
+                key: &keys::WIFI_SYNC_CLOCK,
+            },
+            Entry::Checkbox {
+                name: "Box Art After Dump",
+                key: &keys::BOXART_AFTER_DUMP,
             },
         ],
     };

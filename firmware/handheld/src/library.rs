@@ -75,12 +75,24 @@ impl System {
 /// Free memory to leave after loading a thumbnail.
 const THUMBNAIL_HEADROOM: usize = 24 * 1024;
 
+/// Rows per strip: the heap is fragmented into blocks of ~30 KiB, so a thumbnail is loaded as
+/// several small images (about 8 KiB each at 120 pixels wide) shown stacked.
+const STRIP_ROWS: usize = 24;
+
+/// A loaded thumbnail: its size, and its image strips (top to bottom).
+pub struct LoadedThumbnail {
+    pub width: u32,
+    pub height: u32,
+    /// Loaded at reduced resolution (low memory)
+    pub reduced: bool,
+    pub strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
+}
+
 /// Load a thumbnail file: b"BBX1", u16 width, u16 height (little endian), then RGB888 rows.
 ///
-/// The pixels are read straight into the image buffer (one allocation). If there isn't enough
-/// free memory for the full size, the image is shrunk while it's read (every 2nd or 3rd pixel).
-/// Returns None if the file is missing or invalid.
-pub fn load_thumbnail(path: &Path) -> Option<Result<SharedPixelBuffer<Rgb8Pixel>, LowMemory>> {
+/// If there isn't enough free memory for the full size, the image is shrunk while it's read
+/// (every 2nd or 3rd pixel). Returns None if the file is missing or invalid.
+pub fn load_thumbnail(path: &Path) -> Option<Result<LoadedThumbnail, LowMemory>> {
     let mut file = std::io::BufReader::with_capacity(2048, std::fs::File::open(path).ok()?);
     let mut header = [0u8; 8];
     file.read_exact(&mut header).ok()?;
@@ -92,37 +104,46 @@ pub fn load_thumbnail(path: &Path) -> Option<Result<SharedPixelBuffer<Rgb8Pixel>
     if width == 0 || height == 0 || width > MAX_THUMBNAIL as usize || height > MAX_THUMBNAIL as usize {
         return None;
     }
-    let largest_free = unsafe {
-        esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT)
+    let (free, largest_free) = unsafe {
+        use esp_idf_svc::sys::{heap_caps_get_free_size, heap_caps_get_largest_free_block, MALLOC_CAP_8BIT};
+        (heap_caps_get_free_size(MALLOC_CAP_8BIT), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT))
     };
-    let fits = |step: usize| (width / step) * (height / step) * 3 + THUMBNAIL_HEADROOM <= largest_free;
+    let fits = |step: usize| {
+        let (w, h) = (width / step, height / step);
+        w * h * 3 + THUMBNAIL_HEADROOM <= free && w * STRIP_ROWS.min(h) * 3 + 4096 <= largest_free
+    };
     let Some(step) = (1..=3).find(|&step| fits(step)) else {
-        log::warn!("Not enough memory for box art (largest free block {largest_free})");
-        return Some(Err(LowMemory { largest_free }));
+        log::warn!("Not enough memory for box art (free {free}, largest block {largest_free})");
+        return Some(Err(LowMemory { largest_free: free }));
     };
     let (out_width, out_height) = (width / step, height / step);
-    let mut buffer = SharedPixelBuffer::<Rgb8Pixel>::new(out_width as u32, out_height as u32);
-    if step == 1 {
-        file.read_exact(buffer.make_mut_bytes()).ok()?;
-    } else {
-        let out = buffer.make_mut_bytes();
-        let mut row = vec![0u8; width * 3];
-        for y in 0..out_height * step {
-            file.read_exact(&mut row).ok()?;
-            if y % step != 0 {
-                continue;
-            }
-            let out_row = &mut out[(y / step) * out_width * 3..][..out_width * 3];
-            for x in 0..out_width {
-                out_row[x * 3..x * 3 + 3].copy_from_slice(&row[x * step * 3..x * step * 3 + 3]);
+    let mut strips = vec![];
+    let mut row = vec![0u8; width * 3];
+    let mut out_y = 0;
+    while out_y < out_height {
+        let rows = STRIP_ROWS.min(out_height - out_y);
+        let mut strip = SharedPixelBuffer::<Rgb8Pixel>::new(out_width as u32, rows as u32);
+        let out = strip.make_mut_bytes();
+        for r in 0..rows {
+            // Read `step` source rows, keep the first.
+            for skip in 0..step {
+                file.read_exact(&mut row).ok()?;
+                if skip == 0 {
+                    let out_row = &mut out[r * out_width * 3..][..out_width * 3];
+                    for x in 0..out_width {
+                        out_row[x * 3..x * 3 + 3].copy_from_slice(&row[x * step * 3..x * step * 3 + 3]);
+                    }
+                }
             }
         }
+        strips.push(strip);
+        out_y += rows;
     }
-    Some(Ok(buffer))
+    Some(Ok(LoadedThumbnail { width: out_width as u32, height: out_height as u32, reduced: step > 1, strips }))
 }
 
 /// A thumbnail wasn't loaded because there wasn't enough free memory.
 pub struct LowMemory {
-    /// Largest free memory block, in bytes
+    /// Free memory, in bytes
     pub largest_free: usize,
 }

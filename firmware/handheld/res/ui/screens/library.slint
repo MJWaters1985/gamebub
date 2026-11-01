@@ -103,6 +103,9 @@ export component LibraryScreen inherits ScreenBase {
                         model: Backend.library-games;
                         focus-item <=> Backend.library-game-index;
                         on-item-focused(i) => {
+                            // Free the old box art now; load the new one once the screen has
+                            // redrawn (only then is the old image's memory released).
+                            Backend.library-clear-boxart();
                             boxart-timer.running = false;
                             boxart-timer.running = true;
                         }
@@ -116,13 +119,36 @@ export component LibraryScreen inherits ScreenBase {
                         border-color: black;
                         border-width: 1px;
 
-                        if Backend.library-has-boxart: Image {
-                            x: 4px;
-                            y: 4px;
-                            width: parent.width - 8px;
-                            height: parent.height - 8px;
-                            source: Backend.library-boxart;
-                            image-fit: contain;
+                        // Whole-number scale that fits the panel: the renderer doesn't smooth
+                        // when scaling, so fractional scales double some pixels and not others.
+                        property <float> boxart-scale: max(1, floor(min(
+                            (self.width - 8px) / 1px / Backend.library-boxart-width,
+                            (self.height - 8px) / 1px / Backend.library-boxart-height)));
+
+                        if Backend.library-has-boxart: VerticalLayout {
+                            alignment: center;
+                            spacing: 0px;
+
+                            for strip in Backend.library-boxart: HorizontalLayout {
+                                alignment: center;
+
+                                Image {
+                                    source: strip;
+                                    width: strip.width * boxart-scale * 1px;
+                                    height: strip.height * boxart-scale * 1px;
+                                    image-fit: fill;
+                                    image-rendering: pixelated;
+                                }
+                            }
+                        }
+
+                        if Backend.library-has-boxart && Backend.library-boxart-reduced: Text {
+                            y: parent.height - self.height - 2px;
+                            width: parent.width;
+                            horizontal-alignment: center;
+                            font-size: 10px;
+                            color: #888;
+                            text: "Reduced (low memory)";
                         }
 
                         if !Backend.library-has-boxart: Text {

@@ -16,6 +16,7 @@ of the official firmware and FPGA cores. See **[CHANGES.md](CHANGES.md)** for th
 Highlights:
 
 - **Run ROM**: browse your games by system, with box art, and start them directly.
+- **Wi-Fi**: download box art for your games and set the clock from the internet.
 - **Cartridge Manager**: identify cartridges, dump ROMs to the SD card, and back up or
   restore saves, all on the device.
 - **More physical GBA cartridges work**: fixed cartridge read timing for slow and large ROMs

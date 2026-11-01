@@ -48,13 +48,26 @@ impl UiState {
 
         let state_ = state.clone();
         backend.on_library_close(move || state_.borrow_mut().library_close());
+
+        let state_ = state.clone();
+        backend.on_library_clear_boxart(move || state_.borrow_mut().library_clear_boxart());
+    }
+
+    /// Release the box art. Its memory is only freed after the next redraw, so the next image
+    /// is loaded later (from a timer), never right after this.
+    fn library_clear_boxart(&mut self) {
+        let root = self.root.unwrap();
+        let backend = root.global::<Backend>();
+        backend.set_library_boxart(ModelRc::default());
+        backend.set_library_has_boxart(false);
+        backend.set_library_boxart_note("".into());
     }
 
     /// Release the game list and box art (when leaving the screen or starting a game).
     fn library_close(&mut self) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
-        backend.set_library_boxart(Image::default());
+        backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
         backend.set_library_games(ModelRc::default());
         self.library.games = vec![];
@@ -64,7 +77,7 @@ impl UiState {
     fn library_open(&mut self) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
-        backend.set_library_boxart(Image::default());
+        backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
         let systems: Vec<(System, usize)> = library::SYSTEMS
             .iter()
@@ -118,15 +131,19 @@ impl UiState {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
         // Release the previous image first, so two are never in memory at once.
-        backend.set_library_boxart(Image::default());
+        backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
         let thumbnail = match (self.library.system, self.library.games.get(index)) {
             (Some(system), Some(game)) => library::load_thumbnail(&system.thumbnail_path(&game.name)),
             _ => None,
         };
         match thumbnail {
-            Some(Ok(buffer)) => {
-                backend.set_library_boxart(Image::from_rgb8(buffer));
+            Some(Ok(thumbnail)) => {
+                let strips: Vec<Image> = thumbnail.strips.into_iter().map(Image::from_rgb8).collect();
+                backend.set_library_boxart_width(thumbnail.width as i32);
+                backend.set_library_boxart_height(thumbnail.height as i32);
+                backend.set_library_boxart_reduced(thumbnail.reduced);
+                backend.set_library_boxart(ModelRc::from(Rc::new(VecModel::from(strips))));
                 backend.set_library_has_boxart(true);
             }
             Some(Err(low)) => backend.set_library_boxart_note(

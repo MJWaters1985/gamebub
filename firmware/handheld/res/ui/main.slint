@@ -13,6 +13,7 @@ import { Notification } from "components/notification.slint";
 import { SetupScreen } from "screens/setup.slint";
 import { CoresScreen } from "screens/cores/cores.slint";
 import { LibraryScreen } from "screens/library.slint";
+import { WifiScreen } from "screens/wifi.slint";
 
 export { ScreenId, Backend }
 export component MainWindow inherits Window {
@@ -114,6 +115,14 @@ export component MainWindow inherits Window {
                 if (Global.current-screen == ScreenId.Cores): CoresScreen {
                     init => {
                         Global.ui-status-bar = true;
+                        root.screen-title = self.title;
+                    }
+                }
+
+                if (Global.current-screen == ScreenId.Wifi): WifiScreen {
+                    init => {
+                        Global.ui-status-bar = true;
+                        self.focus();
                         root.screen-title = self.title;
                     }
                 }

@@ -66,14 +66,10 @@ pub fn start() {
     }
     let (tx, rx) = channel();
     *sender = Some(tx);
-    std::thread::Builder::new()
-        .name("cart_tool".to_string())
-        .stack_size(16 * 1024)
-        .spawn(move || {
-            Worker::new().run(rx);
-            *SENDER.lock().unwrap() = None;
-        })
-        .unwrap();
+    crate::jobs::run(move || {
+        Worker::new().run(rx);
+        *SENDER.lock().unwrap() = None;
+    });
 }
 
 /// Send a request to the Cartridge Manager.
@@ -213,13 +209,15 @@ impl Worker {
                     Some(false) => "Warning: the ROM checksum is wrong.\nClean the contacts and dump again.",
                     None => "Not in the database, so it couldn't be verified.",
                 };
+                let boxart = fetch_boxart(info);
                 send(Update::Result {
                     ok: result.verified != Some(false),
                     message: format!(
-                        "Saved {}\n\nCRC32: {:08x}\n{}",
+                        "Saved {}\n\nCRC32: {:08x}\n{}{}",
                         display_path(&result.path),
                         result.crc32,
-                        check
+                        check,
+                        boxart
                     ),
                 });
             }
@@ -305,6 +303,26 @@ impl Worker {
             }),
             Err(e) => self.fail(e),
         }
+    }
+}
+
+/// Download box art for a dumped cartridge, if enabled. Returns a note for the result.
+fn fetch_boxart(info: &CartInfo) -> String {
+    if !crate::kvs::keys::BOXART_AFTER_DUMP.get().unwrap_or(true) || crate::net::saved_network().is_none() {
+        return String::new();
+    }
+    let Some(system) = crate::library::SYSTEMS.iter().find(|s| s.folder == info.system.folder()) else {
+        return String::new();
+    };
+    let name = info.name();
+    if system.thumbnail_path(&name).exists() {
+        return String::new();
+    }
+    match crate::boxart::fetch(&[(*system, name)], &mut |label, p| busy(label, p)) {
+        Ok(r) if r.found > 0 => "\nBox art downloaded.".into(),
+        Ok(r) if r.not_found > 0 => "\nNo box art found for this game.".into(),
+        Ok(_) => "\nThe box art couldn't be downloaded.".into(),
+        Err(e) => format!("\nBox art: {e:#}"),
     }
 }
 

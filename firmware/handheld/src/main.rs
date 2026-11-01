@@ -8,6 +8,7 @@ use crate::{
 };
 
 mod bitstream;
+mod boxart;
 mod cart_backup;
 mod cart_tool;
 mod control;
@@ -17,12 +18,15 @@ mod device;
 mod fwinfo;
 mod hwinfo;
 mod input;
+mod jobs;
 mod kvs;
 mod led;
+mod net;
 mod library;
 mod power;
 pub mod ui;
 mod util;
+mod wifi_setup;
 mod worker;
 
 enum StartupAction {
@@ -91,6 +95,7 @@ fn main() -> anyhow::Result<()> {
 
     // Setup workers.
     worker::start();
+    jobs::start();
 
     // Check for headphones once headset detection has settled (it's
     // debounced), in case the detection interrupt fired before the interrupt

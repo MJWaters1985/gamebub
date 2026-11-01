@@ -19,6 +19,7 @@ export enum ScreenId {
     About,
     Cores,
     Library,
+    Wifi,
 }
 
 export struct BatteryInfo {
@@ -142,7 +143,12 @@ export global Backend {
     in property <string> library-system-name;
     in property <[string]> library-games;
     in-out property <int> library-game-index: 0;
-    in property <image> library-boxart;
+    // Box art, as strips stacked top to bottom (see library::load_thumbnail)
+    in property <[image]> library-boxart;
+    in property <int> library-boxart-width: 1;
+    in property <int> library-boxart-height: 1;
+    // Shown at reduced resolution because memory was low
+    in property <bool> library-boxart-reduced;
     in property <bool> library-has-boxart;
     in property <string> library-boxart-note: "No box art";
     callback library-open();
@@ -150,6 +156,34 @@ export global Backend {
     callback library-focus-game(int);
     callback library-run-game(int);
     callback library-close();
+    callback library-clear-boxart();
+
+    // Wi-Fi screen. View: 0 menu, 1 busy, 2 networks, 3 password, 4 result
+    in-out property <int> wifi-view: 0;
+    in property <string> wifi-status;
+    in property <bool> wifi-has-network;
+    in property <string> wifi-busy-label;
+    in property <[string]> wifi-networks;
+    in property <string> wifi-selected-ssid;
+    in property <string> wifi-password;
+    in property <string> wifi-result;
+    in property <bool> wifi-result-ok;
+    callback wifi-open();
+    callback wifi-scan();
+    callback wifi-select-network(int);
+    callback wifi-typed(string);
+    callback wifi-deleted();
+    callback wifi-join();
+    callback wifi-test();
+    callback wifi-forget();
+
+    // Tools task (box art download)
+    in property <string> task-label;
+    in property <float> task-progress: -1;
+    in-out property <bool> task-done: false;
+    in property <string> task-result;
+    in property <bool> task-result-ok;
+    callback boxart-download-all();
 
     // Cartridge Manager. View: 0 busy, 1 menu, 2 save list, 3 result
     in-out property <int> cart-tool-view: 0;

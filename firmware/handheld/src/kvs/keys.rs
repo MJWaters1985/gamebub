@@ -73,6 +73,14 @@ pub static DISPLAY_WHITE_BALANCE: KvsKey<i32> = KvsKey::new_with_default("displa
 pub static LIBRARY_LAST_SYSTEM: KvsKey<String> = KvsKey::new("lib-last-system");
 pub static LIBRARY_LAST_GAME: KvsKey<String> = KvsKey::new("lib-last-game");
 
+/// Wi-Fi network (set in Settings > Wi-Fi > Network).
+pub static WIFI_SSID: KvsKey<String> = KvsKey::new("wifi-ssid");
+pub static WIFI_PASSWORD: KvsKey<String> = KvsKey::new("wifi-pass");
+/// Set the clock from the internet whenever Wi-Fi connects.
+pub static WIFI_SYNC_CLOCK: KvsKey<bool> = KvsKey::new_with_default("wifi-clock", true);
+/// Download box art after dumping a cartridge.
+pub static BOXART_AFTER_DUMP: KvsKey<bool> = KvsKey::new_with_default("boxart-auto", true);
+
 pub fn flush_all() {
     SETUP_STAGE.flush();
     UPTIME.flush();
@@ -99,4 +107,8 @@ pub fn flush_all() {
     GB_OVERSCALE.flush();
     LIBRARY_LAST_SYSTEM.flush();
     LIBRARY_LAST_GAME.flush();
+    WIFI_SSID.flush();
+    WIFI_PASSWORD.flush();
+    WIFI_SYNC_CLOCK.flush();
+    BOXART_AFTER_DUMP.flush();
 }

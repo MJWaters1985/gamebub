@@ -102,6 +102,10 @@ pub enum Message {
     CoreLoadProgress(f32),
     /// Cartridge Manager update
     CartTool(crate::cart_tool::Update),
+    /// Wi-Fi screen update
+    Wifi(crate::wifi_setup::WifiUpdate),
+    /// Tools task (box art download) update
+    Task(crate::wifi_setup::TaskUpdate),
 }
 
 /// Send a message to the UI thread.
@@ -390,6 +394,12 @@ impl UI {
             }
             Message::CartTool(update) => {
                 self.state.borrow_mut().cart_tool_update(update);
+            }
+            Message::Wifi(update) => {
+                self.state.borrow_mut().wifi_update(update);
+            }
+            Message::Task(update) => {
+                self.state.borrow_mut().task_update(update);
             }
         }
     }

@@ -1,0 +1,184 @@
+// On-screen keyboard for typing text with the D-pad.
+//
+// D-pad: move, A: type the highlighted key, B: delete (or cancel when empty), X: shift,
+// Y: letters / symbols, Start: done. The bottom row has Shift, Symbols, Space, Delete and Done
+// keys too. Slint strings can't be edited character by character, so typing is reported
+// through callbacks and the owner updates `text`.
+
+import { ControlHint } from "control_hint.slint";
+
+export component Keyboard inherits Rectangle {
+    in property <string> text;
+    in property <string> label;
+    callback typed(string);
+    callback deleted();
+    callback done();
+    callback cancel();
+
+    private property <bool> shift: false;
+    private property <bool> symbols: false;
+    private property <int> cur-row: 1;
+    private property <int> cur-col: 0;
+
+    private property <[[string]]> lower: [
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+        ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+        ["a", "s", "d", "f", "g", "h", "j", "k", "l", "-"],
+        ["z", "x", "c", "v", "b", "n", "m", ".", "_", "@"],
+    ];
+    private property <[[string]]> upper: [
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+        ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+        ["A", "S", "D", "F", "G", "H", "J", "K", "L", "-"],
+        ["Z", "X", "C", "V", "B", "N", "M", ".", "_", "@"],
+    ];
+    private property <[[string]]> syms: [
+        ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
+        ["-", "_", "=", "+", "[", "]", "{", "}", "\\", "|"],
+        [";", ":", "'", "\"", ",", ".", "<", ">", "/", "?"],
+        ["`", "~", "€", "£", "¥", "§", "°", "±", "×", "÷"],
+    ];
+    private property <[[string]]> keys: symbols ? syms : (shift ? upper : lower);
+    private property <[string]> specials: ["Shift", "Symbols", "Space", "Delete", "Done"];
+
+    pure function row-length(r: int) -> int {
+        return r == 4 ? 5 : 10;
+    }
+
+    function press() {
+        if cur-row < 4 {
+            typed(keys[cur-row][cur-col]);
+            if shift && !symbols {
+                shift = false;
+            }
+        } else if cur-col == 0 {
+            shift = !shift;
+        } else if cur-col == 1 {
+            symbols = !symbols;
+        } else if cur-col == 2 {
+            typed(" ");
+        } else if cur-col == 3 {
+            deleted();
+        } else {
+            done();
+        }
+    }
+
+    forward-focus: scope;
+    background: white;
+
+    scope := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.UpArrow {
+                cur-row = mod(cur-row + 4, 5);
+                cur-col = min(cur-col, row-length(cur-row) - 1);
+            } else if event.text == Key.DownArrow {
+                cur-row = mod(cur-row + 1, 5);
+                cur-col = min(cur-col, row-length(cur-row) - 1);
+            } else if event.text == Key.LeftArrow {
+                cur-col = mod(cur-col + row-length(cur-row) - 1, row-length(cur-row));
+            } else if event.text == Key.RightArrow {
+                cur-col = mod(cur-col + 1, row-length(cur-row));
+            } else if event.text == "a" {
+                press();
+            } else if event.text == "b" {
+                if text == "" {
+                    cancel();
+                } else {
+                    deleted();
+                }
+            } else if event.text == "x" && !event.repeat {
+                shift = !shift;
+            } else if event.text == "y" && !event.repeat {
+                symbols = !symbols;
+            } else if event.text == "Start" && !event.repeat {
+                done();
+            } else {
+                return reject;
+            }
+            accept
+        }
+
+        VerticalLayout {
+            spacing: 3px;
+
+            Text {
+                text: root.label;
+                font-weight: 800;
+                overflow: elide;
+            }
+
+            Rectangle {
+                height: 22px;
+                border-color: black;
+                border-width: 1px;
+
+                Text {
+                    x: 4px;
+                    width: parent.width - 8px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    text: root.text + "_";
+                }
+            }
+
+            for keyrow[r] in root.keys: HorizontalLayout {
+                spacing: 3px;
+
+                // Plain filled tiles (no borders): the renderer has little memory, and borders
+                // add four more drawing operations per key.
+                for key[c] in keyrow: Rectangle {
+                    height: 26px;
+                    background: (root.cur-row == r && root.cur-col == c) ? black : #ddd;
+
+                    Text {
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        color: (root.cur-row == r && root.cur-col == c) ? white : black;
+                        text: key;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 3px;
+
+                for label[c] in root.specials: Rectangle {
+                    height: 26px;
+                    background: (root.cur-row == 4 && root.cur-col == c) ? black : ((c == 0 && root.shift) || (c == 1 && root.symbols)) ? #999 : #ddd;
+
+                    Text {
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        color: (root.cur-row == 4 && root.cur-col == c) ? white : black;
+                        text: label;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                alignment: space-between;
+
+                ControlHint {
+                    label: "Delete";
+                    button: "b";
+                }
+
+                ControlHint {
+                    label: "Shift";
+                    button: "x";
+                }
+
+                ControlHint {
+                    label: "Type";
+                    button: "a";
+                }
+
+                ControlHint {
+                    label: "Done";
+                    button: "start";
+                }
+            }
+        }
+    }
+}

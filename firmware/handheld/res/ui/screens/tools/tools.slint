@@ -6,6 +6,7 @@ import { ControlHint } from "../../components/control_hint.slint";
 export component ToolsScreen inherits ScreenBase {
     in property <[string]> tools: [
         "Cartridge Manager",
+        "Download Box Art",
         "Mount SD Card over USB",
         "FlashGBX Cartridge Backup / Restore",
         "Debug battery info"
@@ -318,8 +319,78 @@ export component ToolsScreen inherits ScreenBase {
             }
         }
 
-        // Mount SD card over USB
+        // Download box art for games in /roms that don't have it
         if selected-tool == 1: FocusScope {
+            init => {
+                self.focus();
+                Backend.task-done = false;
+                Backend.boxart-download-all();
+            }
+            key-released(event) => {
+                if event.text == "b" && Backend.task-done {
+                    root.selected-tool = -1;
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            if !Backend.task-done: VerticalLayout {
+                alignment: center;
+                spacing: 12px;
+                padding: 24px;
+
+                Text {
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: Backend.task-label;
+                }
+
+                if Backend.task-progress >= 0: Rectangle {
+                    height: 12px;
+                    border-color: black;
+                    border-width: 1px;
+
+                    Rectangle {
+                        x: 2px;
+                        y: 2px;
+                        height: parent.height - 4px;
+                        width: (parent.width - 4px) * min(1, Backend.task-progress / 100);
+                        background: black;
+                    }
+                }
+            }
+
+            if Backend.task-done: VerticalLayout {
+                alignment: center;
+                spacing: 12px;
+                padding: 16px;
+
+                Text {
+                    horizontal-alignment: center;
+                    font-weight: 800;
+                    text: Backend.task-result-ok ? "Done" : "Problem";
+                }
+
+                Text {
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: Backend.task-result;
+                }
+
+                HorizontalLayout {
+                    alignment: start;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+                }
+            }
+        }
+
+        // Mount SD card over USB
+        if selected-tool == 2: FocusScope {
             init => {
                 self.focus();
                 if Backend.sdcard-mounted {
@@ -353,7 +424,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Cartridge backup / restore
-        if selected-tool == 2: FocusScope {
+        if selected-tool == 3: FocusScope {
             init => {
                 self.focus();
                 Backend.tools-start-cart-reader();
@@ -379,7 +450,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Debug battery info
-        if selected-tool == 3: FocusScope {
+        if selected-tool == 4: FocusScope {
             private property <BatteryInfo> info;
             init => {
                 self.focus();

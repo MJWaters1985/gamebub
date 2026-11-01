@@ -17,6 +17,7 @@ pub mod notifications;
 mod settings;
 mod setup;
 mod tools;
+mod wifi;
 
 pub struct UiState {
     root: Weak<MainWindow>,
@@ -28,6 +29,7 @@ pub struct UiState {
     settings: settings::SettingsState,
     core_file_select_timer: Timer,
     library: library::LibraryState,
+    wifi: wifi::WifiState,
 }
 
 impl UiState {
@@ -40,6 +42,7 @@ impl UiState {
             settings: settings::SettingsState::default(),
             core_file_select_timer: Timer::default(),
             library: library::LibraryState::default(),
+            wifi: wifi::WifiState::default(),
         };
         let state = Rc::new(RefCell::new(state));
         state.borrow_mut().setup(state.clone(), device);
@@ -73,6 +76,7 @@ impl UiState {
         self.setup_settings(&state, device);
         self.setup_cores(&state, device);
         self.setup_library(&state, device);
+        self.setup_wifi(&state, device);
 
         // Check for first boot
         if kvs::keys::SETUP_STAGE.get().unwrap_or_default() == 0 {
