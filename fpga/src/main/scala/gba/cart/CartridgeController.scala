@@ -176,9 +176,9 @@ class CartridgeController extends Module {
         currentRequestPort := romRequests.asUInt
 
         // Initial burst wait: 0 [extra] cycles if total waits is 2,
-        // otherwise 1. Physical cartridge reads: always a single address cycle (see RomStage0).
+        // otherwise 1.
         val wait = Mux1H(romRequests, waitRomFirst)
-        when (wait === 2.U || (!io.cartridge.isEmulated && !romRequestWrite)) {
+        when (wait === 2.U) {
           waitCounter := 0.U
         } .otherwise {
           waitCounter := 1.U
@@ -227,13 +227,15 @@ class CartridgeController extends Module {
         waitCounter := waitCounter - 1.U
         when (waitCounter === 0.U) {
           state := State.RomStage1
-          // Physical cartridge reads: nRD goes low right after the single address cycle (the
-          // cartridge latched the address when nCS fell) and stays low for the rest of the
-          // access, like on a GBA. Otherwise nRD is only low for the last 1-2 cycles (1 cycle at
-          // the common 3 wait state setting), too short for slower cartridge ROMs. Writes keep
-          // the address cycle(s) and a data cycle before nWR falls. Total access time is unchanged.
-          val longReadStrobe = !io.cartridge.isEmulated && !currentIsWrite
-          waitCounter := Mux(longReadStrobe, VecInit(2.U, 1.U, 0.U, 6.U)(wait), VecInit(1.U, 0.U, 0.U, 5.U)(wait))
+          // Physical cartridge reads with 3 wait states (the setting most games use) take one
+          // extra cycle, the same timing as 4 wait states: 2 address cycles, then nRD low for 2
+          // cycles. The usual timing (nRD low for only 1 cycle) is too short for some slower
+          // ROMs (Super Mario Advance 2 hangs at a white screen), but some larger mask ROMs return
+          // all 1s if nRD falls less than ~1.5 cycles after nCS (Pokemon Emerald, Lunar Legend
+          // and Donkey Kong Country crash), so the access can't just be rebalanced. (A GBA gives
+          // the cartridge most of the final cycle too, where this controller latches the data.)
+          val longReadStrobe = !io.cartridge.isEmulated && !currentIsWrite && wait === 1.U
+          waitCounter := Mux(longReadStrobe, 1.U, VecInit(1.U, 0.U, 0.U, 5.U)(wait))
           when (currentIsWrite) {
             reg_nWR := 0.U
           } .otherwise {
