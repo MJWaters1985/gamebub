@@ -36,7 +36,7 @@ class Test:
 GB_TESTS = [
     # Blargg
     Test("blargg/cpu_instrs/cpu_instrs.gb", "blargg/cpu_instrs/cpu_instrs-dmg-cgb.png", 31),
-    Test("blargg/cpu_instrs/cpu_instrs.gb", "blargg/cpu_instrs/cpu_instrs-dmg-cgb.png", 55, "dmg"),
+    Test("blargg/cpu_instrs/cpu_instrs.gb", "blargg/cpu_instrs/cpu_instrs-dmg-cgb.png", 60, "dmg"),
     Test("blargg/instr_timing/instr_timing.gb", "blargg/instr_timing/instr_timing-dmg-cgb.png", 1),
     Test("blargg/instr_timing/instr_timing.gb", "blargg/instr_timing/instr_timing-dmg-cgb.png", 1, "dmg"),
     Test("blargg/mem_timing/mem_timing.gb", "blargg/mem_timing/mem_timing-dmg-cgb.png", 3),
