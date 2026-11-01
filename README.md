@@ -4,6 +4,44 @@
   </a>
 </p>
 
+> [!NOTE]
+> **This is an unofficial fork** of [elipsitz/gamebub](https://github.com/elipsitz/gamebub)
+> for the Rev 4 handheld, based on the official 1.0.3 release. It isn't affiliated with or
+> supported by the Game Bub team: please report problems with this fork here, not upstream.
+
+## About this fork
+
+This fork adds cartridge compatibility fixes, quality-of-life features and bug fixes on top
+of the official firmware and FPGA cores. See **[CHANGES.md](CHANGES.md)** for the full list.
+Highlights:
+
+- **More physical GBA cartridges work**: fixed cartridge read timing for slow and large ROMs
+  (e.g. Super Mario Advance 2, Pokémon Emerald, Lunar Legend, Donkey Kong Country).
+- **Game Boy core fixes**: Kirby's Dream Land 2 no longer hangs at a white screen, the HALT
+  bug is implemented, and DMG games can't accidentally switch to double speed.
+- **Better file browser**: natural sorting, large folders, favorites (Select) and core
+  settings before loading a ROM (Start). **Load ROM** from the in-game menu.
+- **Safer saves** with a backup copy, and an optional `/saves` folder.
+- **New settings**: auto power off, X/Y as Select/Start, game color temperature, integer
+  overscale for GB/GBC and tilt sensitivity.
+- **Crash and bug fixes**: WarioWare: Twisted, Game Boy Player rumble, headphones after a
+  power cycle, USB drive mode after updates.
+
+Firmware built from this fork shows a version like `1.0.3.mod-20261101 (3711c01)` in
+**Settings → About**: the official version it's based on, the commit date and the commit.
+
+### Installing
+
+No prebuilt updates are published yet. Build a `.uf2` update file by following
+[docs/building-local.md](docs/building-local.md), then install it like an official update:
+hold **Volume Down** while pressing **Power** to start update mode, and copy the file to the
+**GAME BUB** drive that appears on your computer. To go back, install an official update
+the same way.
+
+---
+
+*The rest of this README is from the official project.*
+
 [![Game Bub trailer](./assets/video-poster.jpg)](https://www.youtube.com/watch?v=f16E5J6qljw)
 
 **Game Bub** is an open-source FPGA retro emulation handheld, with support for Game Boy, Game Boy Color, and Game Boy Advance games.

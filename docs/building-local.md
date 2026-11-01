@@ -53,6 +53,12 @@ cargo build --release --features rev4
 
 The first build downloads ESP-IDF v5.4.3 into `~/.espressif` (several minutes).
 
+The version shown in **Settings → About** comes from git:
+`<Cargo.toml version>.mod-<commit date> (<short commit>)`, e.g.
+`1.0.3.mod-20261101 (3711c01)`, with `-dirty` added to the commit when the
+working tree has uncommitted changes. Commit before building an update you
+intend to keep, so the version identifies the exact code.
+
 ## FPGA
 
 Run the unit tests (some upstream tests are known to fail; see below):
@@ -90,6 +96,21 @@ build/sim-gba/VSimGba --headless --frames 600 --screenshot out.ppm \
     --input 300:start:5,400:a:5 --bios-path gba.bios.bin game.gba
 ```
 
+To simulate a physical cartridge instead of the emulated one, set these
+environment variables when building the GBA simulator:
+
+| Variable | Effect |
+|---|---|
+| `SIM_PHYSICAL_CART=1` | Runs the cartridge controller in physical mode and serves ROM data from the bus signals like a Game Pak (address latched when nCS falls, incremented when nRD rises, A16–23 live). EEPROM, backup memory and GPIO still come from the emulated cartridge. Prints `ROMCHECK` for reads that don't match the ROM image and `CARTBUS` if A16–23 change during an access. |
+| `SIM_SLOW_CART=1` | With `SIM_PHYSICAL_CART=1`: ROM data is only valid once nRD has been low long enough, like a slow cartridge ROM. |
+
+```sh
+SIM_PHYSICAL_CART=1 SIM_SLOW_CART=1 .venv/bin/python scripts/build_sim.py gba --build-root build/sim-gba-slow
+```
+
+The simulator can't reproduce every real cartridge's timing quirks, so test
+cartridge timing changes on hardware too.
+
 `scripts/run_test_roms.py` runs a set of test ROMs and compares screenshots
 against reference images. Test ROMs come from
 [c-sp/game-boy-test-roms](https://github.com/c-sp/game-boy-test-roms) and
@@ -101,6 +122,25 @@ against reference images. Test ROMs come from
 .venv/bin/python scripts/run_test_roms.py gba --sim build/sim-gba/VSimGba \
     --roms testroms/gba-tests --bios-gba gba.bios.bin
 ```
+
+### Debugging physical GBA cartridges
+
+The GBA core logs physical cartridge ROM reads in the header region (and the
+EEPROM range): address, data and a cycle timestamp, for up to 2048 reads after
+the core starts. To capture it on the device:
+
+1. Create an empty file `/sdcard/cartlog.enable` on the SD card.
+2. Run the cartridge. At the point of interest (e.g. a frozen BIOS logo), open
+   the in-game menu: the firmware writes `/sdcard/cartlog.bin`.
+3. Copy the log off the SD card (**Tools → USB drive**), then compare it with a
+   dump of the cartridge:
+
+```sh
+python3 scripts/parse_cart_log.py cartlog.bin game.gba
+```
+
+Each read is printed with its cycle gap from the previous read, and reads that
+don't match the dump are marked `MISMATCH`. Delete `cartlog.enable` when done.
 
 ## Packaging a UF2 update
 
