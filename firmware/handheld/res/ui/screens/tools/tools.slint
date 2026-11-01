@@ -156,6 +156,7 @@ export component ToolsScreen inherits ScreenBase {
                     }
 
                     actions := TextListView {
+                        min-height: 80px;
                         model: Backend.cart-tool-actions;
                         on-item-selected(i) => {
                             Backend.cart-tool-action(i);

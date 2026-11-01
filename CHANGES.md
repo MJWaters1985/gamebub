@@ -92,9 +92,10 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
       A clock that lost power (dead or replaced battery) is reset first. Tested with
       Pokémon Emerald.
     - Game Boy MBC3 (e.g. Pokémon Gold, Silver and Crystal): sets the time of day and keeps
-      the day counter, since these games keep their own offset from it. The save is backed up
-      first, because the clock is written through the save memory area. Not yet tested on a
-      cartridge.
+      the day counter, since these games keep their own offset from it, so the in-game time
+      still needs resetting in the game (in Pokémon Gold / Silver: Down + Select + B on the
+      title screen). The save is backed up first, because the clock is written through the
+      save memory area. Tested with Pokémon Gold.
     - The clock is read back after setting it. Access follows FlashGBX.
 - **Time Zone** (Settings → General). Choose a time zone (or a fixed UTC offset); daylight
   saving time changes automatically. The device clock still keeps UTC; local time is used
@@ -135,6 +136,10 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   | Tilt Sensitivity | Core: GB / GBC and Core: GBA | Lowest, Low, Normal, High | [#63](https://github.com/elipsitz/gamebub/issues/63) |
 
 ## Bug fixes
+
+- **Lists that don't wrap around now scroll** to the highlighted item (e.g. the Cartridge
+  Manager's actions, Wi-Fi networks, saves to restore). Previously the highlight could move
+  out of view.
 
 - **WarioWare: Twisted crash**
   ([#61](https://github.com/elipsitz/gamebub/issues/61)). A transient error reading the

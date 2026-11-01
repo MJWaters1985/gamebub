@@ -168,16 +168,13 @@ impl Worker {
         let Some(info) = &self.info else {
             return self.identify();
         };
-        let mut details = vec![
-            format!("System: {}", info.system.folder()),
-            match &info.db {
-                Some(_) => "In database: yes".to_string(),
-                None => format!("In database: no (header title \"{}\")", info.header_title),
-            },
-            format!("ROM: {}", format_size(info.rom_size)),
-        ];
+        let mut summary = format!("{}, {} ROM", info.system.folder(), format_size(info.rom_size));
         if info.mode == link::CartMode::Dmg {
-            details.push(format!("Mapper: {}", info.mbc.name()));
+            summary += &format!(", {}", info.mbc.name());
+        }
+        let mut details = vec![summary];
+        if info.db.is_none() {
+            details.push(format!("Not in the database (header title \"{}\")", info.header_title));
         }
         details.push(match (info.save, info.save_guessed) {
             (SaveKind::None, true) => "Save: detected when needed".to_string(),

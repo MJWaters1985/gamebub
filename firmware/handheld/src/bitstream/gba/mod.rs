@@ -392,7 +392,7 @@ impl CoreHandler for Gba {
             file.read(&mut rom_header).map_err(|_| "I/O")?;
             file.seek(std::io::SeekFrom::Start(0)).map_err(|_| "I/O")?;
             let rom_header = RomHeader::parse(rom_header);
-            if self.emu_cart_config.is_none() && Path::new(CART_LOG_ENABLE_PATH).exists() {
+            if self.emu_cart_config.is_none() {
                 self.emu_cart_config = game_db::lookup(&rom_header.game_code)
                     .or_else(|| game_db::lookup_by_code_convention(&rom_header.game_code));
             }
@@ -591,7 +591,8 @@ impl CoreHandler for Gba {
             let rate = (num_cycles as f32) / ((num_cycles as f32) + (num_stalls as f32));
             log::info!("Run rate: {}%", rate * 100.0);
 
-            if self.emu_cart_config.is_none() {
+            // ROM files always have a config by now, so this is a physical cartridge.
+            if self.emu_cart_config.is_none() && Path::new(CART_LOG_ENABLE_PATH).exists() {
                 Self::dump_cart_log(&mut device);
             }
         }
