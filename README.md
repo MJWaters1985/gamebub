@@ -32,11 +32,12 @@ Firmware built from this fork shows a version like `1.0.3.mod-20261101 (3711c01)
 
 ### Installing
 
-No prebuilt updates are published yet. Build a `.uf2` update file by following
-[docs/building-local.md](docs/building-local.md), then install it like an official update:
-hold **Volume Down** while pressing **Power** to start update mode, and copy the file to the
-**GAME BUB** drive that appears on your computer. To go back, install an official update
-the same way.
+Download the `.uf2` update file from the latest
+**[release](https://github.com/MJWaters1985/gamebub/releases/latest)** (Rev 4 only), or
+build your own by following [docs/building-local.md](docs/building-local.md). Install it
+like an official update: hold **Volume Down** while pressing **Power** to start update mode,
+and copy the file to the **GAME BUB** drive that appears on your computer. To go back,
+install an official update the same way.
 
 ---
 
