@@ -357,3 +357,4 @@ project/plugins/project/
 hs_err_pid*
 
 dist/
+cart-dumps/
