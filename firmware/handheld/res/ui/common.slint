@@ -18,6 +18,7 @@ export enum ScreenId {
     Error,
     About,
     Cores,
+    Library,
 }
 
 export struct BatteryInfo {
@@ -132,6 +133,23 @@ export global Backend {
     callback tools-start-cart-reader();
     callback tools-end-cart-reader();
     callback tools-get-battery-info() -> BatteryInfo;
+
+    // Run ROM. View: 0 systems, 1 games
+    in-out property <int> library-view: 0;
+    in property <[string]> library-systems;
+    in property <bool> library-empty;
+    in-out property <int> library-system-index: 0;
+    in property <string> library-system-name;
+    in property <[string]> library-games;
+    in-out property <int> library-game-index: 0;
+    in property <image> library-boxart;
+    in property <bool> library-has-boxart;
+    in property <string> library-boxart-note: "No box art";
+    callback library-open();
+    callback library-open-system(int);
+    callback library-focus-game(int);
+    callback library-run-game(int);
+    callback library-close();
 
     // Cartridge Manager. View: 0 busy, 1 menu, 2 save list, 3 result
     in-out property <int> cart-tool-view: 0;

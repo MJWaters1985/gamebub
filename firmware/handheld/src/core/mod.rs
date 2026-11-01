@@ -25,7 +25,7 @@ pub use info::CoreListEntry;
 use browse::{Anchor, EntryKey, Target};
 use settings::CoreSettings;
 
-mod browse;
+pub mod browse;
 mod info;
 mod settings;
 
@@ -80,6 +80,8 @@ pub struct CoreManager {
     core_handler: CoreHandlerImpl,
     core_settings: Option<CoreSettings>,
     selected_files: Vec<Option<PathBuf>>,
+    /// ROM to load instead of showing the file browser (Run ROM).
+    preset_rom: Option<PathBuf>,
     run_cartridge: bool,
 
     /// Directory shown in the file browser (`None` for favorites).
@@ -181,6 +183,7 @@ impl CoreManager {
             core_handler: CoreHandlerImpl::None,
             core_settings: None,
             selected_files: Vec::new(),
+            preset_rom: None,
             run_cartridge: false,
             browse_dir: None,
             browse_entries: Vec::new(),
@@ -232,6 +235,14 @@ impl CoreManager {
 
         self.selected_files = vec![None; core.files.len()];
         self.next_file_select();
+    }
+
+    /// Run a core with a ROM file, without showing the file browser.
+    pub fn run_core_with_rom(&mut self, id: &str, rom: PathBuf) {
+        self.preset_rom = Some(rom);
+        self.run_core(id, false);
+        // If the core didn't take it (e.g. it failed to load), don't leave it for later.
+        self.preset_rom = None;
     }
 
     fn load_settings(core: &CoreInfo) -> Option<CoreSettings> {
@@ -453,6 +464,11 @@ impl CoreManager {
             break index;
         };
         let file = &core.files[index];
+        if file.id == 0 {
+            if let Some(rom) = self.preset_rom.take() {
+                return self.file_selected(rom);
+            }
+        }
 
         // Get the starting path for the file browser.
         let last_path = self

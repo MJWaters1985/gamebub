@@ -1,0 +1,155 @@
+import { Global, ScreenId, Backend } from "../common.slint";
+import { ScreenBase } from "../components/screen.slint";
+import { TextListView } from "../components/list_view.slint";
+import { ControlHint } from "../components/control_hint.slint";
+
+// "Run ROM": pick a system, then a game from /roms/<system>.
+export component LibraryScreen inherits ScreenBase {
+    title: Backend.library-view == 0 ? "Run ROM" : Backend.library-system-name;
+    forward-focus: i-focus-scope;
+
+    init => {
+        Backend.library-open();
+    }
+
+    i-focus-scope := FocusScope {
+        // Systems
+        if Backend.library-view == 0: FocusScope {
+            init => {
+                if Backend.library-empty {
+                    self.focus();
+                } else {
+                    systems.focus();
+                }
+            }
+            key-pressed(event) => {
+                if event.text == "b" {
+                    Backend.library-close();
+                    Global.set-screen(ScreenId.MainMenu);
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                if Backend.library-empty: Text {
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                    text: "No ROMs yet.\n\nDump cartridges with Tools → Cartridge Manager,\nor copy ROMs to /roms/Game Boy, /roms/Game Boy Color\nor /roms/Game Boy Advance on the SD card.";
+                }
+
+                systems := TextListView {
+                    visible: !Backend.library-empty;
+                    model: Backend.library-systems;
+                    focus-item <=> Backend.library-system-index;
+                    on-item-selected(i) => {
+                        Backend.library-open-system(i);
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: space-between;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+
+                    if !Backend.library-empty: ControlHint {
+                        label: "Open";
+                        button: "a";
+                    }
+                }
+            }
+        }
+
+        // Games, with the highlighted game's box art
+        if Backend.library-view == 1: FocusScope {
+            init => {
+                games.focus();
+                games.ensure-focus-visible();
+            }
+            key-pressed(event) => {
+                if event.text == "b" {
+                    Backend.library-open();
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            // Load box art shortly after the highlight stops moving.
+            boxart-timer := Timer {
+                interval: 150ms;
+                running: false;
+                triggered => {
+                    self.running = false;
+                    Backend.library-focus-game(Backend.library-game-index);
+                }
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    games := TextListView {
+                        horizontal-stretch: 3;
+                        model: Backend.library-games;
+                        focus-item <=> Backend.library-game-index;
+                        on-item-focused(i) => {
+                            boxart-timer.running = false;
+                            boxart-timer.running = true;
+                        }
+                        on-item-selected(i) => {
+                            Backend.library-run-game(i);
+                        }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 2;
+                        border-color: black;
+                        border-width: 1px;
+
+                        if Backend.library-has-boxart: Image {
+                            x: 4px;
+                            y: 4px;
+                            width: parent.width - 8px;
+                            height: parent.height - 8px;
+                            source: Backend.library-boxart;
+                            image-fit: contain;
+                        }
+
+                        if !Backend.library-has-boxart: Text {
+                            width: parent.width - 8px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                            color: #666;
+                            text: Backend.library-boxart-note;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: space-between;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+
+                    ControlHint {
+                        label: "Play";
+                        button: "a";
+                    }
+                }
+            }
+        }
+    }
+}

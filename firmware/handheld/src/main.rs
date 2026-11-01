@@ -19,6 +19,7 @@ mod hwinfo;
 mod input;
 mod kvs;
 mod led;
+mod library;
 mod power;
 pub mod ui;
 mod util;

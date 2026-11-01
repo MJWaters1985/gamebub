@@ -54,6 +54,10 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 
 ## New features
 
+- **Run ROM** on the home screen (between Run Cartridge and Cores): pick a system, then a
+  game from `/roms/Game Boy`, `/roms/Game Boy Color` or `/roms/Game Boy Advance`, sorted by
+  name, with its box art (from `/boxart/<system>/<game>.thumb`). Games start directly with
+  the right core, without the file browser. Remembers the last system and game.
 - **Cartridge Manager** (Tools → Cartridge Manager): work with physical cartridges on the
   device, without a computer.
   - **Identify**: shows the game's name (from a built-in database of about 6,000 Game Boy,

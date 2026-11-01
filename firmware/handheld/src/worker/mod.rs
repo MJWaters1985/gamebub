@@ -34,6 +34,8 @@ pub enum Message {
     FetchCoreList,
     /// Start running a core (ID)
     RunCore(String),
+    /// Run a core (ID) with a ROM file, skipping the file browser
+    RunRom { core_id: String, path: std::path::PathBuf },
     /// Exit the current core (or cancel loading)
     ExitCore,
     /// Exit the current core, and start it again (to select a new file)
@@ -139,6 +141,7 @@ fn dispatch(message: Message) {
         }
         Message::FetchCoreList => CoreManager::lock().list_cores(),
         Message::RunCore(id) => CoreManager::lock().run_core(&id, false),
+        Message::RunRom { core_id, path } => CoreManager::lock().run_core_with_rom(&core_id, path),
         Message::ExitCore => CoreManager::lock().exit_core(),
         Message::ReloadCore => CoreManager::lock().reload_core(),
         Message::CoreFileChoose(index) => CoreManager::lock().file_select_choose(index),

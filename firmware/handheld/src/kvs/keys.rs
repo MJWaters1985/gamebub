@@ -69,6 +69,10 @@ pub static GB_OVERSCALE: KvsKey<bool> = KvsKey::new_with_default("gb-overscale",
 /// Display white balance preset.
 pub static DISPLAY_WHITE_BALANCE: KvsKey<i32> = KvsKey::new_with_default("display-wb", 0);
 
+/// Run ROM: last system and game (ROM path) viewed.
+pub static LIBRARY_LAST_SYSTEM: KvsKey<String> = KvsKey::new("lib-last-system");
+pub static LIBRARY_LAST_GAME: KvsKey<String> = KvsKey::new("lib-last-game");
+
 pub fn flush_all() {
     SETUP_STAGE.flush();
     UPTIME.flush();
@@ -93,4 +97,6 @@ pub fn flush_all() {
     TILT_SENSITIVITY.flush();
     DISPLAY_WHITE_BALANCE.flush();
     GB_OVERSCALE.flush();
+    LIBRARY_LAST_SYSTEM.flush();
+    LIBRARY_LAST_GAME.flush();
 }

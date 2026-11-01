@@ -11,6 +11,7 @@ use super::slint::{
 
 mod cores;
 mod game;
+mod library;
 mod main_menu;
 pub mod notifications;
 mod settings;
@@ -26,6 +27,7 @@ pub struct UiState {
 
     settings: settings::SettingsState,
     core_file_select_timer: Timer,
+    library: library::LibraryState,
 }
 
 impl UiState {
@@ -37,6 +39,7 @@ impl UiState {
             notification_active: false,
             settings: settings::SettingsState::default(),
             core_file_select_timer: Timer::default(),
+            library: library::LibraryState::default(),
         };
         let state = Rc::new(RefCell::new(state));
         state.borrow_mut().setup(state.clone(), device);
@@ -69,6 +72,7 @@ impl UiState {
         self.setup_tools(&state, device);
         self.setup_settings(&state, device);
         self.setup_cores(&state, device);
+        self.setup_library(&state, device);
 
         // Check for first boot
         if kvs::keys::SETUP_STAGE.get().unwrap_or_default() == 0 {
