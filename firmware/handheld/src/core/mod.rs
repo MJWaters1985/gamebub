@@ -1157,6 +1157,15 @@ fn saves_dir_path(rom_path: &Path, extension: &str) -> PathBuf {
     path
 }
 
+/// Where a ROM's save file is kept, following the "Save Files" setting.
+pub fn save_path_for_rom(rom_path: &Path) -> PathBuf {
+    if kvs::keys::SAVE_LOCATION.get().unwrap_or(0) == 1 {
+        saves_dir_path(rom_path, "sav")
+    } else {
+        rom_path.with_extension("sav")
+    }
+}
+
 /// Append a suffix to a file name (`Game.sav` -> `Game.sav.bak`).
 fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     match path.file_name() {
@@ -1175,12 +1184,12 @@ fn backup_path(path: &Path) -> PathBuf {
 }
 
 /// Path of a save file while it's being written.
-fn temp_path(path: &Path) -> PathBuf {
+pub fn temp_path(path: &Path) -> PathBuf {
     with_suffix(path, ".tmp")
 }
 
 /// Replace `path` with `new`, keeping the previous version as a backup.
-fn replace_file(new: &Path, path: &Path) -> std::io::Result<()> {
+pub fn replace_file(new: &Path, path: &Path) -> std::io::Result<()> {
     if path.exists() {
         let backup = backup_path(path);
         // FAT can't rename over an existing file.

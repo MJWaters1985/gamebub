@@ -24,7 +24,7 @@ use save_type_detector::SaveTypeDetector;
 
 mod game_db;
 mod rtc;
-mod save_type_detector;
+pub(crate) mod save_type_detector;
 
 const SYSTEM_CLOCK_RATE: Hertz = Hertz(16 * 1024 * 1024);
 const ROM_HEADER_LENGTH: usize = 192;
@@ -63,7 +63,7 @@ pub enum GbaError {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum SaveType {
+pub(crate) enum SaveType {
     /// Autodetect
     #[default]
     Autodetect,

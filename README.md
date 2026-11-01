@@ -15,6 +15,8 @@ This fork adds cartridge compatibility fixes, quality-of-life features and bug f
 of the official firmware and FPGA cores. See **[CHANGES.md](CHANGES.md)** for the full list.
 Highlights:
 
+- **Cartridge Manager**: identify cartridges, dump ROMs to the SD card, and back up or
+  restore saves, all on the device.
 - **More physical GBA cartridges work**: fixed cartridge read timing for slow and large ROMs
   (e.g. Super Mario Advance 2, Pokémon Emerald, Lunar Legend, Donkey Kong Country).
 - **Game Boy core fixes**: Kirby's Dream Land 2 no longer hangs at a white screen, the HALT

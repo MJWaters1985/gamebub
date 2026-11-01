@@ -100,6 +100,8 @@ pub enum Message {
     CoreLoadError(String),
     /// Core loading progress
     CoreLoadProgress(f32),
+    /// Cartridge Manager update
+    CartTool(crate::cart_tool::Update),
 }
 
 /// Send a message to the UI thread.
@@ -385,6 +387,9 @@ impl UI {
             }
             Message::CoreLoadError(error) => {
                 self.state.borrow_mut().cores_set_error(error);
+            }
+            Message::CartTool(update) => {
+                self.state.borrow_mut().cart_tool_update(update);
             }
         }
     }

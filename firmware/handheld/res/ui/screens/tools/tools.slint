@@ -5,6 +5,7 @@ import { ControlHint } from "../../components/control_hint.slint";
 
 export component ToolsScreen inherits ScreenBase {
     in property <[string]> tools: [
+        "Cartridge Manager",
         "Mount SD Card over USB",
         "FlashGBX Cartridge Backup / Restore",
         "Debug battery info"
@@ -58,8 +59,267 @@ export component ToolsScreen inherits ScreenBase {
             }
         }
 
-        // Mount SD card over USB
+        // Cartridge Manager: dump ROMs and back up / restore saves on the device
         if selected-tool == 0: FocusScope {
+            // Index of the save picked for restoring (confirmation pending), or -1
+            private property <int> confirm-save: -1;
+
+            init => {
+                self.focus();
+                Backend.cart-tool-view = 0;
+                Backend.cart-tool-busy-label = "Starting...";
+                Backend.cart-tool-progress = -1;
+                Backend.cart-tool-start();
+            }
+
+            function exit() {
+                Backend.cart-tool-exit();
+                root.selected-tool = -1;
+            }
+
+            key-released(event) => {
+                if event.text == "Home" && !Global.home-consumed && Backend.cart-tool-view != 0 {
+                    exit();
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            // Busy: label and progress bar
+            if Backend.cart-tool-view == 0: VerticalLayout {
+                alignment: center;
+                spacing: 12px;
+                padding: 24px;
+
+                Text {
+                    horizontal-alignment: center;
+                    text: Backend.cart-tool-busy-label;
+                }
+
+                if Backend.cart-tool-progress >= 0: Rectangle {
+                    height: 12px;
+                    border-color: black;
+                    border-width: 1px;
+
+                    Rectangle {
+                        x: 2px;
+                        y: 2px;
+                        height: parent.height - 4px;
+                        width: (parent.width - 4px) * min(1, Backend.cart-tool-progress / 100);
+                        background: black;
+                    }
+                }
+
+                if Backend.cart-tool-progress >= 0: Text {
+                    horizontal-alignment: center;
+                    text: "\{Math.round(Backend.cart-tool-progress)}%";
+                }
+
+                Text {
+                    horizontal-alignment: center;
+                    text: "Don't remove the cartridge";
+                    color: #666;
+                }
+            }
+
+            // Menu: cartridge details and actions
+            if Backend.cart-tool-view == 1 && confirm-save < 0: FocusScope {
+                init => {
+                    actions.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "b" {
+                        exit();
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
+
+                    Text {
+                        font-weight: 800;
+                        wrap: word-wrap;
+                        text: Backend.cart-tool-title;
+                    }
+
+                    Text {
+                        wrap: word-wrap;
+                        text: Backend.cart-tool-details;
+                    }
+
+                    actions := TextListView {
+                        model: Backend.cart-tool-actions;
+                        on-item-selected(i) => {
+                            Backend.cart-tool-action(i);
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        ControlHint {
+                            label: "Exit";
+                            button: "b";
+                        }
+
+                        ControlHint {
+                            label: "Select";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+
+            // Save list for restoring
+            if Backend.cart-tool-view == 2 && confirm-save < 0: FocusScope {
+                init => {
+                    saves.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "b" {
+                        Backend.cart-tool-view = 1;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
+
+                    Text {
+                        font-weight: 800;
+                        text: "Restore which save?";
+                    }
+
+                    saves := TextListView {
+                        model: Backend.cart-tool-saves;
+                        on-item-selected(i) => {
+                            confirm-save = i;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        ControlHint {
+                            label: "Back";
+                            button: "b";
+                        }
+
+                        ControlHint {
+                            label: "Restore";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+
+            // Confirm before writing to the cartridge
+            if confirm-save >= 0: FocusScope {
+                init => {
+                    self.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "a" {
+                        Backend.cart-tool-restore(confirm-save);
+                        confirm-save = -1;
+                        accept
+                    } else if event.text == "b" {
+                        confirm-save = -1;
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    padding: 16px;
+                    spacing: 12px;
+
+                    Text {
+                        horizontal-alignment: center;
+                        font-weight: 800;
+                        text: "Overwrite the save on the cartridge?";
+                    }
+
+                    Text {
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        text: "\{Backend.cart-tool-saves[confirm-save]}\n\nThe cartridge's current save is backed up first.";
+                    }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        ControlHint {
+                            label: "Cancel";
+                            button: "b";
+                        }
+
+                        ControlHint {
+                            label: "Restore";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+
+            // Result of an operation
+            if Backend.cart-tool-view == 3: FocusScope {
+                init => {
+                    self.focus();
+                }
+                key-pressed(event) => {
+                    if event.text == "a" || event.text == "b" {
+                        // Back to the menu (reads the cartridge again if needed)
+                        Backend.cart-tool-action(999);
+                        accept
+                    } else {
+                        reject
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    padding: 16px;
+                    spacing: 12px;
+
+                    Text {
+                        horizontal-alignment: center;
+                        font-weight: 800;
+                        text: Backend.cart-tool-result-ok ? "Done" : "Problem";
+                    }
+
+                    Text {
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        text: Backend.cart-tool-result;
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+
+                        ControlHint {
+                            label: "OK";
+                            button: "a";
+                        }
+                    }
+                }
+            }
+        }
+
+        // Mount SD card over USB
+        if selected-tool == 1: FocusScope {
             init => {
                 self.focus();
                 if Backend.sdcard-mounted {
@@ -93,7 +353,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Cartridge backup / restore
-        if selected-tool == 1: FocusScope {
+        if selected-tool == 2: FocusScope {
             init => {
                 self.focus();
                 Backend.tools-start-cart-reader();
@@ -119,7 +379,7 @@ export component ToolsScreen inherits ScreenBase {
         }
 
         // Debug battery info
-        if selected-tool == 2: FocusScope {
+        if selected-tool == 3: FocusScope {
             private property <BatteryInfo> info;
             init => {
                 self.focus();

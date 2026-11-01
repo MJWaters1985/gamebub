@@ -132,6 +132,22 @@ export global Backend {
     callback tools-start-cart-reader();
     callback tools-end-cart-reader();
     callback tools-get-battery-info() -> BatteryInfo;
+
+    // Cartridge Manager. View: 0 busy, 1 menu, 2 save list, 3 result
+    in-out property <int> cart-tool-view: 0;
+    in property <string> cart-tool-title;
+    in property <string> cart-tool-details;
+    in property <[string]> cart-tool-actions;
+    in property <[string]> cart-tool-saves;
+    in-out property <string> cart-tool-busy-label;
+    // 0-100, or negative when progress isn't known
+    in-out property <float> cart-tool-progress: -1;
+    in property <string> cart-tool-result;
+    in property <bool> cart-tool-result-ok;
+    callback cart-tool-start();
+    callback cart-tool-action(int);
+    callback cart-tool-restore(int);
+    callback cart-tool-exit();
     callback core-list-fetch();
     callback core-run(string);
     callback core-file-select-selected(int);

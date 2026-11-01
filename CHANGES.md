@@ -54,6 +54,22 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 
 ## New features
 
+- **Cartridge Manager** (Tools → Cartridge Manager): work with physical cartridges on the
+  device, without a computer.
+  - **Identify**: shows the game's name (from a built-in database of about 6,000 Game Boy,
+    Game Boy Color and Game Boy Advance games, based on FlashGBX's No-Intro data), system,
+    ROM size, mapper and save type.
+  - **Dump ROM to SD card**: saves to `/roms/<system>/<name>.<ext>` (e.g.
+    `/roms/Game Boy Advance/Pokemon - Emerald Version (USA, Europe).gba`) and checks the dump
+    against the database.
+  - **Back up save**: the save becomes the dumped ROM's save (following the Save Files
+    setting; the previous one is kept as `.bak`), and a dated copy is kept in
+    `/saves/backups/<game>/`.
+  - **Restore save to cartridge**: pick the current save or a dated copy. The cartridge's
+    save is backed up first, and the written save is read back to verify it.
+  - Supports Game Boy cartridges without a mapper or with MBC1, MBC2, MBC3 or MBC5, and GBA
+    cartridges with SRAM/FRAM, Flash (64 or 128 KiB) or EEPROM (4 or 64 Kbit). Real-time
+    clock data isn't backed up yet.
 - **File browser.**
   - Natural, case-insensitive sorting
     ([#65](https://github.com/elipsitz/gamebub/issues/65)).
@@ -111,6 +127,8 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - Physical-cartridge and slow-ROM bus models (`SIM_PHYSICAL_CART`, `SIM_SLOW_CART`).
   - Linux build fixes.
 - `fpga/scripts/run_test_roms.py` runs test ROM suites against reference screenshots.
+- `firmware/handheld/scripts/gen_game_db.py` builds the Cartridge Manager's game database
+  (`res/gamedb.bin`) from FlashGBX's database files.
 - **Cartridge read log.** If `/sdcard/cartlog.enable` exists, the GBA core's log of
   physical cartridge header reads is written to `/sdcard/cartlog.bin` when the in-game
   menu opens. `fpga/scripts/parse_cart_log.py` compares it against a ROM dump.
@@ -118,4 +136,7 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 ## Credits
 
 The physical-cartridge read timing work and simulation model build on
-[ghogan42/gamebub](https://github.com/ghogan42/gamebub).
+[ghogan42/gamebub](https://github.com/ghogan42/gamebub). The Cartridge Manager uses the
+cartridge protocol, mapper and save memory handling of
+[FlashGBX](https://github.com/lesserkuma/FlashGBX) by Lesserkuma, and its game database
+(GPL-3.0).

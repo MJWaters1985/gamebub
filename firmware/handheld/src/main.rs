@@ -9,6 +9,7 @@ use crate::{
 
 mod bitstream;
 mod cart_backup;
+mod cart_tool;
 mod control;
 mod core;
 mod crash_handler;
