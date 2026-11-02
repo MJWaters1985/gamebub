@@ -99,8 +99,9 @@ export component LibraryScreen inherits ScreenBase {
                     spacing: 4px;
 
                     games := TextListView {
-                        horizontal-stretch: 3;
+                        horizontal-stretch: 1;
                         scroll-focused: true;
+                        item-padding: 10px;
                         model: Backend.library-games;
                         focus-item <=> Backend.library-game-index;
                         on-item-focused(i) => {
@@ -116,27 +117,34 @@ export component LibraryScreen inherits ScreenBase {
                     }
 
                     Rectangle {
-                        horizontal-stretch: 2;
+                        // Fixed width, and a scale that doesn't depend on the panel's size: the
+                        // box art's size feeds into the layout, so deriving the scale from the
+                        // panel's laid-out size can feed back on itself.
+                        width: 128px;
+                        horizontal-stretch: 0;
                         border-color: black;
                         border-width: 1px;
 
-                        // Whole-number scale that fits the panel: the renderer doesn't smooth
-                        // when scaling, so fractional scales double some pixels and not others.
-                        property <float> boxart-scale: max(1, floor(min(
-                            (self.width - 8px) / 1px / Backend.library-boxart-width,
-                            (self.height - 8px) / 1px / Backend.library-boxart-height)));
+                        // Whole-number scale that fits the panel's width: the renderer doesn't
+                        // smooth when scaling, so fractional scales double some pixels and not
+                        // others. Box art is at most 120 pixels tall, which fits at this scale.
+                        property <float> boxart-scale: max(1, floor((128 - 8) / Backend.library-boxart-width));
 
                         if Backend.library-has-boxart: VerticalLayout {
                             alignment: center;
                             spacing: 0px;
 
-                            for strip in Backend.library-boxart: HorizontalLayout {
+                            // Strips are the full box art width; show only this image's part.
+                            for strip[i] in Backend.library-boxart: HorizontalLayout {
                                 alignment: center;
+                                property <int> rows: min(strip.height, Backend.library-boxart-height - i * strip.height);
 
                                 Image {
                                     source: strip;
-                                    width: strip.width * boxart-scale * 1px;
-                                    height: strip.height * boxart-scale * 1px;
+                                    source-clip-width: Backend.library-boxart-width;
+                                    source-clip-height: rows;
+                                    width: Backend.library-boxart-width * boxart-scale * 1px;
+                                    height: rows * boxart-scale * 1px;
                                     image-fit: fill;
                                     image-rendering: pixelated;
                                 }

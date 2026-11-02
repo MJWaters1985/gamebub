@@ -158,14 +158,13 @@ export component ListViewBase inherits Rectangle {
     }
 }
 
-component TextListItem {
+// Text that scrolls a character at a time when it doesn't fit. Only the highlighted list item
+// uses it, so the other items stay a single text element (lists create all their items).
+component ScrollingText {
     in property <string> text;
-    // Scroll the text if it doesn't fit (for the highlighted item)
-    in property <bool> scroll: false;
-    // Room for the text, given by the list: using this item's own width would make the width
-    // depend on the text (a binding loop).
+    // Room for the text, given by the list: using this element's own width would make the
+    // width depend on the text (a binding loop).
     in property <length> text-width;
-    height: i-measure.min-height + 2px;
 
     // Measures the full width of the text (the shown copy is cut short)
     i-measure := Text {
@@ -174,29 +173,28 @@ component TextListItem {
         visible: false;
     }
 
-    // How far the text overflows the item
+    // How far the text overflows
     private property <length> excess: max(0px, i-measure.preferred-width - root.text-width);
-    private property <bool> scrolling: root.scroll && root.excess > 0px;
-    // Scrolling steps a character at a time and only draws what fits: drawing the whole name
-    // and clipping it needs more renderer memory than there is.
+    // Steps a character at a time and only draws what fits: drawing the whole name and clipping
+    // it needs more renderer memory than there is.
     private property <int> chars: TextUtil.length(root.text);
-    private property <int> last-step: root.scrolling
+    private property <int> last-step: root.excess > 0px
         ? ceil(root.excess / (i-measure.preferred-width / max(1, root.chars))) + 1
         : 0;
-    // When scrolling started, so each name starts from its beginning
+    // When scrolling started, so the text starts from its beginning
     private property <int> start: 0;
     // One character per tick (150 ms), pausing about 1 s (7 ticks) at each end.
-    private property <int> step: root.scrolling
+    private property <int> step: root.last-step > 0
         ? clamp(mod(TextUtil.tick - root.start, root.last-step + 14) - 7, 0, root.last-step)
         : 0;
 
-    changed scrolling => {
+    init => {
         root.start = TextUtil.tick;
     }
 
-    i-text := Text {
-        x: 2px;
-        width: root.width - 4px;
+    Text {
+        width: 100%;
+        height: 100%;
         text: root.step == 0 ? root.text : TextUtil.tail(root.text, root.step);
         vertical-alignment: center;
         horizontal-alignment: left;
@@ -204,10 +202,42 @@ component TextListItem {
     }
 }
 
+component TextListItem {
+    in property <string> text;
+    // Scroll the text if it doesn't fit (for the highlighted item)
+    in property <bool> scroll: false;
+    // Room for the text when scrolling
+    in property <length> text-width;
+    // Extra height
+    in property <length> extra-height: 0px;
+    height: i-text.min-height + 2px + root.extra-height;
+
+    i-text := Text {
+        x: 2px;
+        width: root.width - 4px;
+        text: root.text;
+        visible: !root.scroll;
+        vertical-alignment: center;
+        horizontal-alignment: left;
+        overflow: elide;
+    }
+
+    if root.scroll: ScrollingText {
+        x: 2px;
+        width: root.width - 4px;
+        height: root.height;
+        text: root.text;
+        text-width: root.text-width;
+    }
+}
+
 export component TextListView inherits ListViewBase {
     in property <[string]> model;
     // Scroll the highlighted item's text if it's too long to show
     in property <bool> scroll-focused: false;
+    // Extra height per item. Fewer items on screen means less text to draw per frame, and the
+    // software renderer needs a contiguous block that grows with the amount of text.
+    in property <length> item-padding: 0px;
     num-items: model.length;
 
     for item[index] in root.model: child-items := TextListItem {
@@ -215,5 +245,6 @@ export component TextListView inherits ListViewBase {
         scroll: root.scroll-focused && index == root.focus-item;
         // List width less its border, padding and scroll bar
         text-width: root.width - 12px;
+        extra-height: root.item-padding;
     }
 }
