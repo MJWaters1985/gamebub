@@ -31,6 +31,9 @@ const IDLE_TIMEOUT_SETUP: Duration = Duration::from_secs(60);
 /// How long before an automatic power off to warn the user.
 const AUTO_POWER_OFF_WARNING: Duration = Duration::from_secs(20);
 
+/// Number of frames drawn so far (a redraw releases images removed from the UI).
+pub static FRAMES_DRAWN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 /// Whether a game is running and has input focus (i.e. not paused in a menu).
 pub static GAME_FOCUSED: AtomicBool = AtomicBool::new(false);
 
@@ -266,6 +269,7 @@ impl UI {
 
             // Render UI if needed.
             self.window.draw_if_needed(|renderer| {
+                FRAMES_DRAWN.fetch_add(1, Ordering::Relaxed);
                 let mut device = Device::lock();
 
                 let render_start = Instant::now();

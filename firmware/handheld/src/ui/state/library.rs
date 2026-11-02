@@ -1,10 +1,11 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::atomic::Ordering};
 
 use super::super::slint::Backend;
 use slint::{ComponentHandle, Image, ModelRc, SharedString, VecModel};
 
 use crate::{
     device::Device,
+    ui::FRAMES_DRAWN,
     kvs,
     library::{self, Game, System},
     worker,
@@ -22,6 +23,9 @@ pub struct LibraryState {
     games: Vec<Game>,
     /// Box art buffers, reused from game to game
     strip_pool: library::StripPool,
+    /// Frame count when a full redraw was requested to release the box art (see
+    /// library_focus_game)
+    boxart_redraw_at: Option<u32>,
 }
 
 fn strings(v: impl IntoIterator<Item = String>) -> ModelRc<SharedString> {
@@ -137,6 +141,36 @@ impl UiState {
     fn library_focus_game(&mut self, index: usize) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
+        // The box art buffers are shared with the image on screen, which is only released when a
+        // redraw visits the box art (redraws of just the scrolling name don't); refilling them
+        // before that would copy them, using twice the memory. So once the highlight has stopped,
+        // clear the image, ask for a full redraw, and load after it.
+        if !self.library.strip_pool.is_empty() {
+            let frames = FRAMES_DRAWN.load(Ordering::Relaxed);
+            let wait = match self.library.boxart_redraw_at {
+                None => {
+                    backend.set_library_boxart(ModelRc::default());
+                    backend.set_library_has_boxart(false);
+                    crate::ui::send(crate::ui::Message::Redraw);
+                    self.library.boxart_redraw_at = Some(frames);
+                    true
+                }
+                // A partial redraw may come before the full one.
+                Some(at) => frames < at.wrapping_add(2),
+            };
+            if wait {
+                let root_ = self.root.clone();
+                slint::Timer::single_shot(std::time::Duration::from_millis(30), move || {
+                    if let Some(root) = root_.upgrade() {
+                        // The highlighted game, which may have changed since.
+                        let backend = root.global::<Backend>();
+                        backend.invoke_library_focus_game(backend.get_library_game_index());
+                    }
+                });
+                return;
+            }
+            self.library.boxart_redraw_at = None;
+        }
         // Release the previous image first, so two are never in memory at once.
         backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);

@@ -39,11 +39,20 @@ pub fn lookup(mode: CartMode, header: &[u8]) -> Option<GameEntry> {
     let digest = sha1(header);
     let key = &digest[..8];
     let records = &DATABASE[start..start + count * RECORD_SIZE];
-    let index = records
-        .chunks_exact(RECORD_SIZE)
-        .collect::<Vec<_>>()
-        .binary_search_by(|r| r[..8].cmp(key))
-        .ok()?;
+    // Binary search in place (collecting the records first would allocate ~48 KB).
+    let record = |i: usize| &records[i * RECORD_SIZE..(i + 1) * RECORD_SIZE];
+    let (mut lo, mut hi) = (0, count);
+    let index = loop {
+        if lo >= hi {
+            return None;
+        }
+        let mid = (lo + hi) / 2;
+        match record(mid)[..8].cmp(key) {
+            std::cmp::Ordering::Less => lo = mid + 1,
+            std::cmp::Ordering::Greater => hi = mid,
+            std::cmp::Ordering::Equal => break mid,
+        }
+    };
     let r = &records[index * RECORD_SIZE..(index + 1) * RECORD_SIZE];
     let field = |o: usize| u32::from_le_bytes(r[o..o + 4].try_into().unwrap());
     let name_offset = strings + field(16) as usize;

@@ -18,6 +18,9 @@ use crate::library::System;
 pub const THUMBNAIL_SIZE: u32 = 120;
 
 const LIBRETRO_THUMBNAILS: &str = "thumbnails.libretro.com";
+/// The same library on GitHub (one repository per system), used first: it stays up when
+/// thumbnails.libretro.com doesn't.
+const GITHUB_THUMBNAILS: &str = "raw.githubusercontent.com/libretro-thumbnails";
 const IMAGE_PROXY: &str = "http://images.weserv.nl";
 
 /// libretro playlist (folder) name for a system.
@@ -29,20 +32,37 @@ fn libretro_system(system: &System) -> &'static str {
     }
 }
 
-/// URL of a game's box art (from the libretro thumbnail library) as a THUMBNAIL_SIZE JPEG.
-/// Game names are No-Intro names;
+/// URLs of a game's box art (from the libretro thumbnail library: GitHub mirror, then
+/// libretro's server) as a THUMBNAIL_SIZE JPEG. Game names are No-Intro names;
 /// libretro replaces &*/:`<>?\| with _ in file names.
-pub fn thumbnail_url(system: &System, game_name: &str) -> String {
+pub fn thumbnail_urls(system: &System, game_name: &str) -> [String; 2] {
     let file_name: String = game_name
         .chars()
         .map(|c| if "&*/:`<>?\\|".contains(c) { '_' } else { c })
         .collect();
-    format!(
-        "{IMAGE_PROXY}/?url={LIBRETRO_THUMBNAILS}/{}/Named_Boxarts/{}.png\
-         &w={THUMBNAIL_SIZE}&h={THUMBNAIL_SIZE}&fit=inside&output=jpg&q=85",
-        percent_encode(libretro_system(system)),
-        percent_encode(&file_name)
-    )
+    let system_name = libretro_system(system);
+    let repository = system_name.replace(' ', "_");
+    let proxied = |base: String| {
+        format!(
+            "{IMAGE_PROXY}/?url={base}/Named_Boxarts/{}.png\
+             &w={THUMBNAIL_SIZE}&h={THUMBNAIL_SIZE}&fit=inside&output=jpg&q=85",
+            percent_encode(&file_name)
+        )
+    };
+    [
+        proxied(format!("{GITHUB_THUMBNAILS}/{}/master", percent_encode(&repository))),
+        proxied(format!("{LIBRETRO_THUMBNAILS}/{}", percent_encode(system_name))),
+    ]
+}
+
+/// Game Boy for Game Boy Color, and the other way round.
+fn other_game_boy_system(system: &System) -> Option<System> {
+    let other = match system.folder {
+        "Game Boy" => "Game Boy Color",
+        "Game Boy Color" => "Game Boy",
+        _ => return None,
+    };
+    crate::library::SYSTEMS.iter().find(|s| s.folder == other).copied()
 }
 
 fn percent_encode(s: &str) -> String {
@@ -238,7 +258,20 @@ pub fn fetch(games: &[(System, String)], progress: &mut dyn FnMut(&str, f32)) ->
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir).context("Couldn't create the box art folder")?;
             }
-            match wifi.download(&thumbnail_url(system, name), &path) {
+            // Game Boy games with Color enhancements (e.g. Pokemon Yellow) are filed as Game Boy
+            // Color by their header, but are Game Boy games in the thumbnail library (and the
+            // other way round): try the other system's folder if needed.
+            let mut found = Ok(None);
+            let systems = std::iter::once(*system).chain(other_game_boy_system(system));
+            'search: for system in systems {
+                for url in thumbnail_urls(&system, name) {
+                    found = wifi.download(&url, &path);
+                    if matches!(found, Ok(Some(_))) {
+                        break 'search;
+                    }
+                }
+            }
+            match found {
                 Ok(Some(_)) => {
                     downloaded.push((*system, name.clone(), path));
                     errors_in_a_row = 0;

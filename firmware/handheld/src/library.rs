@@ -129,6 +129,11 @@ pub struct StripPool {
 }
 
 impl StripPool {
+    /// Whether the buffers haven't been allocated yet.
+    pub fn is_empty(&self) -> bool {
+        self.strips.is_empty()
+    }
+
     /// Free the buffers (when leaving the list).
     pub fn clear(&mut self) {
         *self = StripPool::default();

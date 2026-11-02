@@ -130,9 +130,15 @@ export component LibraryScreen inherits ScreenBase {
                         // others. Box art is at most 120 pixels tall, which fits at this scale.
                         property <float> boxart-scale: max(1, floor((128 - 8) / Backend.library-boxart-width));
 
-                        if Backend.library-has-boxart: VerticalLayout {
-                            alignment: center;
+                        // Not inside an `if`: a hidden `if` stops updating its contents, so the
+                        // previous image would stay referenced (and its buffers copied on the
+                        // next load) until it's shown again. An empty model shows nothing; the
+                        // stretchy spacers keep the column from collapsing when it's empty, and
+                        // center the image when it isn't.
+                        VerticalLayout {
                             spacing: 0px;
+
+                            Rectangle { }
 
                             // Strips are the full box art width; show only this image's part.
                             for strip[i] in Backend.library-boxart: HorizontalLayout {
@@ -149,6 +155,8 @@ export component LibraryScreen inherits ScreenBase {
                                     image-rendering: pixelated;
                                 }
                             }
+
+                            Rectangle { }
                         }
 
                         if Backend.library-has-boxart && Backend.library-boxart-reduced: Text {
