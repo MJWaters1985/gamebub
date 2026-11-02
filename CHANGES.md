@@ -70,6 +70,7 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   the right core, without the file browser. Remembers the last system and game.
   - Names are shown without the trailing No-Intro tags ("Pokemon - Gold Version"); a long
     name scrolls when highlighted.
+  - L and R move the highlight up or down one screenful.
   - GBA box art is shown at 120 px; square Game Boy / Game Boy Color box art is shrunk to
     96x96 (by averaging) to fit in memory with long lists.
   - Built to fit large libraries in the ESP32-S3's memory: about 10 rows on screen, box art

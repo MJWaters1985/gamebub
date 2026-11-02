@@ -101,6 +101,7 @@ export component LibraryScreen inherits ScreenBase {
                     games := TextListView {
                         horizontal-stretch: 1;
                         scroll-focused: true;
+                        page-keys: true;
                         item-padding: 10px;
                         model: Backend.library-games;
                         focus-item <=> Backend.library-game-index;

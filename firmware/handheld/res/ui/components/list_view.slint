@@ -7,6 +7,8 @@ export component ListViewBase inherits Rectangle {
     in-out property <int> focus-item: 0;
     in-out property <bool> item-selected: false;
     in property <bool> disabled: false;
+    // L / R move the highlight up / down one screenful
+    in property <bool> page-keys: false;
 
     private property <bool> has-scrollbar: area.viewport-height > area.height;
     private property <length> scrollbar-width: 2px;
@@ -80,6 +82,17 @@ export component ListViewBase inherits Rectangle {
         }
     }
 
+    protected function focus-page(direction: int) {
+        if (!root.item-selected && root.num-items > 0) {
+            // One screenful of items
+            root.focus-item = clamp(
+                root.focus-item + direction * max(1, floor(area.height / root.item-height)),
+                0, root.num-items - 1);
+            fix-focus-item();
+            on-item-focused(root.focus-item);
+        }
+    }
+
     protected function select-focus-item() {
         root.item-selected = true;
         root.on-item-selected(root.focus-item);
@@ -127,6 +140,12 @@ export component ListViewBase inherits Rectangle {
                 return accept;
             } else if (event.text == Key.DownArrow) {
                 root.focus-down();
+                return accept;
+            } else if (page-keys && event.text == "l") {
+                root.focus-page(-1);
+                return accept;
+            } else if (page-keys && event.text == "r") {
+                root.focus-page(1);
                 return accept;
             } else if (event.text == "a" && !event.repeat) {
                 if root.item-selected {
