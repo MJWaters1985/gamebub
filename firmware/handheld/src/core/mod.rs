@@ -35,10 +35,6 @@ static CORE_MANAGER: LazyLock<Mutex<CoreManager>> =
 /// Maximum number of files to show at once (larger directories are paged).
 const FILE_LIST_MAX: usize = 100;
 
-/// Time to let a physical cartridge power up before the core starts reading it.
-/// Some cartridges return bad data for a while after power is applied.
-const CART_POWER_SETTLE: Duration = Duration::from_millis(300);
-
 /// Directory for save files, when they're not stored next to the ROM.
 const DIR_SAVES: &str = "/sdcard/saves/";
 
@@ -509,14 +505,11 @@ impl CoreManager {
         self.poll_core_status(command::STATUS_SETUP, SETUP_TIMEOUT)?;
         ui::send(ui::Message::EnterGame);
 
-        let cart_power_time = if self.run_cartridge {
+        if self.run_cartridge {
             let mut device = Device::lock();
             // Power turned off in reset_state.
             device.set_cart_power(true);
-            Some(Instant::now())
-        } else {
-            None
-        };
+        }
 
         self.load_files()?;
 
@@ -524,14 +517,6 @@ impl CoreManager {
             core_handler
                 .on_before_run()
                 .map_err(|err| CoreError::Other(err))?;
-        }
-
-        // Give the cartridge time to power up before the core reads it.
-        if let Some(cart_power_time) = cart_power_time {
-            let elapsed = cart_power_time.elapsed();
-            if elapsed < CART_POWER_SETTLE {
-                std::thread::sleep(CART_POWER_SETTLE - elapsed);
-            }
         }
 
         // Tell the core we're finished setting up.

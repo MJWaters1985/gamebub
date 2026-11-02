@@ -23,8 +23,6 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   Pokémon Ruby, Lunar Legend and Donkey Kong Country.
 - **Address lines A16–A23** stay driven for the whole cartridge access, like on a GBA.
   Previously they floated for half a cycle at the end of each access.
-- **Power-up delay.** The core waits until the cartridge has been powered for 300 ms
-  before starting, so the BIOS's first reads don't happen during power-up.
 
 ### Game Boy / Game Boy Color core
 
@@ -69,8 +67,13 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 - **Run ROM** on the home screen (between Run Cartridge and Cores): pick a system, then a
   game from `/roms/Game Boy`, `/roms/Game Boy Color` or `/roms/Game Boy Advance`, sorted by
   name, with its box art (from `/boxart/<system>/<game>.thumb`). Games start directly with
-  the right core, without the file browser. Remembers the last system and game. A long name
-  scrolls when highlighted.
+  the right core, without the file browser. Remembers the last system and game.
+  - Names are shown without the trailing No-Intro tags ("Pokemon - Gold Version"); a long
+    name scrolls when highlighted.
+  - GBA box art is shown at 120 px; square Game Boy / Game Boy Color box art is shrunk to
+    96x96 (by averaging) to fit in memory with long lists.
+  - Built to fit large libraries in the ESP32-S3's memory: about 10 rows on screen, box art
+    held in buffers allocated once per list, and a fixed-width art panel.
 - **Cartridge Manager** (Tools → Cartridge Manager): work with physical cartridges on the
   device, without a computer.
   - **Identify**: shows the game's name (from a built-in database of about 6,000 Game Boy,
