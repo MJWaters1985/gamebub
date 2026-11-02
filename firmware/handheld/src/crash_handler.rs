@@ -18,7 +18,14 @@ struct CrashReport {
     crash: bool,
     backtrace: ArrayVec<usize, 64>,
     message: ArrayString<512>,
+    /// The last memory allocation that failed, with the heap's state at the time.
+    alloc_failure: ArrayString<160>,
+    /// Test builds: recent events with the heap's state (a ring, oldest at `next_event`).
+    events: [ArrayString<80>; EVENTS],
+    next_event: usize,
 }
+
+const EVENTS: usize = 12;
 
 #[link_section = ".rtc_noinit"]
 static mut REPORT: MaybeUninit<CrashReport> = MaybeUninit::uninit();
@@ -67,8 +74,54 @@ fn get_location<'a>(info: &'a PanicHookInfo<'_>) -> &'a dyn Display {
     }
 }
 
+/// Record a failed memory allocation (the crash report shows the last one).
+unsafe extern "C" fn alloc_failed(size: usize, caps: u32, _function: *const core::ffi::c_char) {
+    use esp_idf_svc::sys::*;
+    let report = REPORT.assume_init_mut();
+    report.alloc_failure.clear();
+    let _ = write!(
+        report.alloc_failure,
+        "Out of memory: {size} bytes (caps {caps:#x}); free {}, largest block {}, lowest free {}",
+        heap_caps_get_free_size(MALLOC_CAP_8BIT),
+        heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+        heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT),
+    );
+}
+
+/// Test builds: note an event and the heap's state in the crash report.
+pub fn note(event: &dyn Display) {
+    if !cfg!(diagnostics) {
+        return;
+    }
+    use esp_idf_svc::sys::*;
+    let report = unsafe { REPORT.assume_init_mut() };
+    let slot = &mut report.events[report.next_event % EVENTS];
+    slot.clear();
+    let _ = unsafe {
+        write!(
+            slot,
+            "{:7.1}s {event}: free {}, largest {}",
+            esp_timer_get_time() as f64 / 1e6,
+            heap_caps_get_free_size(MALLOC_CAP_8BIT),
+            heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+        )
+    };
+    report.next_event = (report.next_event + 1) % EVENTS;
+}
+
 /// Setup crash and panic handlers.
 pub fn setup() {
+    // The report is kept across a crash's restart, and is otherwise uninitialized: start the
+    // fields written before the SD card is read with nothing in them.
+    let report = unsafe { REPORT.assume_init_mut() };
+    if report.magic != MAGIC_NUMBER {
+        report.alloc_failure.clear();
+        report.events.iter_mut().for_each(|e| e.clear());
+        report.next_event = 0;
+    }
+    unsafe {
+        esp_idf_svc::sys::heap_caps_register_failed_alloc_callback(Some(alloc_failed));
+    }
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let report = unsafe { REPORT.assume_init_mut() };
@@ -102,6 +155,18 @@ fn write_crash(crash: &CrashReport) -> std::io::Result<()> {
     writeln!(file)?;
 
     writeln!(file, "Message:\n{}\n", &crash.message)?;
+    if !crash.alloc_failure.is_empty() {
+        writeln!(file, "{}\n", &crash.alloc_failure)?;
+    }
+    let events = (0..EVENTS).map(|i| &crash.events[(crash.next_event + i) % EVENTS]);
+    let events: Vec<_> = events.filter(|e| !e.is_empty()).collect();
+    if !events.is_empty() {
+        writeln!(file, "Recent events (memory in bytes):")?;
+        for event in events {
+            writeln!(file, "  {event}")?;
+        }
+        writeln!(file)?;
+    }
 
     writeln!(file, "Backtrace:")?;
     for (i, &pc) in crash.backtrace.iter().enumerate() {

@@ -14,6 +14,11 @@ export component ListViewBase inherits Rectangle {
     private property <length> scrollbar-width: 2px;
     private property <length> item-height: area.viewport-height / self.num-items;
     private property <int> into-view-item: 0;
+    // For lists that only create the items on screen: the visible height, how far the list
+    // is scrolled, and the height of a line of text.
+    out property <length> view-height: area.height;
+    out property <length> scroll-y: -area.viewport-y;
+    out property <length> line-height: i-line-measure.preferred-height;
     private property <length> into-view-item-y: root.item-y(root.into-view-item);
     callback on-item-selected(/* selected-item */ int);
     callback on-item-focused(/* focused-item*/ int);
@@ -107,6 +112,11 @@ export component ListViewBase inherits Rectangle {
     border-width: 1px;
     border-color: black;
 
+    i-line-measure := Text {
+        text: "X";
+        visible: false;
+    }
+
     i-focus-scope := FocusScope {
         area := Flickable {
             x: 2px;
@@ -178,7 +188,7 @@ export component ListViewBase inherits Rectangle {
 }
 
 // Text that scrolls a character at a time when it doesn't fit. Only the highlighted list item
-// uses it, so the other items stay a single text element (lists create all their items).
+// uses it, so the other items stay a single text element.
 component ScrollingText {
     in property <string> text;
     // Room for the text, given by the list: using this element's own width would make the
@@ -259,11 +269,27 @@ export component TextListView inherits ListViewBase {
     in property <length> item-padding: 0px;
     num-items: model.length;
 
-    for item[index] in root.model: child-items := TextListItem {
-        text: item;
-        scroll: root.scroll-focused && index == root.focus-item;
+    // Only the items on screen (and one more) are created, and they show whichever entries are
+    // scrolled into view: creating an item for every entry runs out of memory with long lists
+    // (about 30 games). Spacers above and below keep the list's full height for scrolling.
+    private property <length> row-height: root.line-height + 2px + root.item-padding;
+    private property <int> window: min(root.num-items, ceil(root.view-height / root.row-height) + 1);
+    private property <int> first: clamp(floor(root.scroll-y / root.row-height), 0, max(0, root.num-items - root.window));
+
+    Rectangle {
+        height: root.first * root.row-height;
+    }
+
+    for i in root.window: TextListItem {
+        height: root.row-height;
+        text: root.model[root.first + i];
+        scroll: root.scroll-focused && root.first + i == root.focus-item;
         // List width less its border, padding and scroll bar
         text-width: root.width - 12px;
         extra-height: root.item-padding;
+    }
+
+    Rectangle {
+        height: (root.num-items - root.first - root.window) * root.row-height;
     }
 }

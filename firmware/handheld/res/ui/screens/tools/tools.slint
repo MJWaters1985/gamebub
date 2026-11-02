@@ -61,10 +61,8 @@ export component ToolsScreen inherits ScreenBase {
             }
         }
 
-        // Cartridge Manager: dump ROMs and back up / restore saves on the device
+        // Cartridge Manager: dump ROMs and copy saves on the device
         if selected-tool == 0: FocusScope {
-            // Index of the save picked for restoring (confirmation pending), or -1
-            private property <int> confirm-save: -1;
 
             init => {
                 self.focus();
@@ -126,7 +124,7 @@ export component ToolsScreen inherits ScreenBase {
             }
 
             // Menu: cartridge details and actions
-            if Backend.cart-tool-view == 1 && confirm-save < 0: FocusScope {
+            if Backend.cart-tool-view == 1: FocusScope {
                 init => {
                     actions.focus();
                 }
@@ -179,65 +177,47 @@ export component ToolsScreen inherits ScreenBase {
                 }
             }
 
-            // Save list for restoring
-            if Backend.cart-tool-view == 2 && confirm-save < 0: FocusScope {
+            // Confirm before overwriting a save: hold A for 3 seconds
+            if Backend.cart-tool-view == 2: FocusScope {
+                // How long A has been held
+                private property <duration> held: 0ms;
+                private property <bool> holding: false;
+
                 init => {
-                    saves.focus();
+                    self.focus();
                 }
+
+                Timer {
+                    interval: 50ms;
+                    running: holding;
+                    triggered => {
+                        held += 50ms;
+                        if held >= 3s {
+                            holding = false;
+                            held = 0ms;
+                            Backend.cart-tool-confirm();
+                        }
+                    }
+                }
+
                 key-pressed(event) => {
-                    if event.text == "b" {
-                        Backend.cart-tool-view = 1;
+                    if event.text == "a" {
+                        holding = true;
+                        accept
+                    } else if event.text == "b" && !event.repeat {
+                        holding = false;
+                        held = 0ms;
+                        // Back to the menu
+                        Backend.cart-tool-action(999);
                         accept
                     } else {
                         reject
                     }
                 }
-
-                VerticalLayout {
-                    padding-left: 8px;
-                    padding-right: 8px;
-                    spacing: 6px;
-
-                    Text {
-                        font-weight: 800;
-                        text: "Restore which save?";
-                    }
-
-                    saves := TextListView {
-                        model: Backend.cart-tool-saves;
-                        on-item-selected(i) => {
-                            confirm-save = i;
-                        }
-                    }
-
-                    HorizontalLayout {
-                        alignment: space-between;
-
-                        ControlHint {
-                            label: "Back";
-                            button: "b";
-                        }
-
-                        ControlHint {
-                            label: "Restore";
-                            button: "a";
-                        }
-                    }
-                }
-            }
-
-            // Confirm before writing to the cartridge
-            if confirm-save >= 0: FocusScope {
-                init => {
-                    self.focus();
-                }
-                key-pressed(event) => {
+                key-released(event) => {
                     if event.text == "a" {
-                        Backend.cart-tool-restore(confirm-save);
-                        confirm-save = -1;
-                        accept
-                    } else if event.text == "b" {
-                        confirm-save = -1;
+                        holding = false;
+                        held = 0ms;
                         accept
                     } else {
                         reject
@@ -252,13 +232,27 @@ export component ToolsScreen inherits ScreenBase {
                     Text {
                         horizontal-alignment: center;
                         font-weight: 800;
-                        text: "Overwrite the save on the cartridge?";
+                        text: Backend.cart-tool-confirm-title;
                     }
 
                     Text {
                         horizontal-alignment: center;
                         wrap: word-wrap;
-                        text: "\{Backend.cart-tool-saves[confirm-save]}\n\nThe cartridge's current save is backed up first.";
+                        text: Backend.cart-tool-confirm-text + "\n\nHold A for 3 seconds to continue.";
+                    }
+
+                    Rectangle {
+                        height: 12px;
+                        border-color: black;
+                        border-width: 1px;
+
+                        Rectangle {
+                            x: 2px;
+                            y: 2px;
+                            height: parent.height - 4px;
+                            width: (parent.width - 4px) * min(1, held / 3s);
+                            background: black;
+                        }
                     }
 
                     HorizontalLayout {
@@ -270,7 +264,7 @@ export component ToolsScreen inherits ScreenBase {
                         }
 
                         ControlHint {
-                            label: "Restore";
+                            label: "Hold to continue";
                             button: "a";
                         }
                     }
@@ -448,7 +442,7 @@ export component ToolsScreen inherits ScreenBase {
                     }
 
                     choices := TextListView {
-                        model: ["Create missing folders (keeps files)", "Check ROMs (reads only)", "Erase and format card"];
+                        model: ["Create missing folders (keeps files)", "Check ROMs (reads only)", "Remove macOS files", "Erase and format card"];
                         on-item-selected(i) => {
                             if i == 0 {
                                 view = 2;
@@ -458,6 +452,10 @@ export component ToolsScreen inherits ScreenBase {
                                 view = 2;
                                 Backend.task-done = false;
                                 Backend.sd-check();
+                            } else if i == 2 {
+                                view = 2;
+                                Backend.task-done = false;
+                                Backend.sd-clean-mac();
                             } else {
                                 held = 0ms;
                                 view = 1;
@@ -522,7 +520,7 @@ export component ToolsScreen inherits ScreenBase {
                     Text {
                         horizontal-alignment: center;
                         wrap: word-wrap;
-                        text: "Everything on the card is deleted: ROMs, saves, save backups, box art and screenshots. BIOS files in /system are kept.\n\nHold A for 3 seconds to erase.";
+                        text: "Everything on the card is deleted: ROMs, saves, box art and screenshots. BIOS files in /system are kept.\n\nHold A for 3 seconds to erase.";
                     }
 
                     Rectangle {

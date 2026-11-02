@@ -192,13 +192,17 @@ export global Backend {
     callback sd-setup(bool);
     // Tools > Set Up SD Card > Check ROMs (reads only)
     callback sd-check();
+    // Tools > Set Up SD Card > Remove macOS files
+    callback sd-clean-mac();
 
-    // Cartridge Manager. View: 0 busy, 1 menu, 2 save list, 3 result
+    // Cartridge Manager. View: 0 busy, 1 menu, 2 confirm overwriting a save, 3 result
     in-out property <int> cart-tool-view: 0;
     in property <string> cart-tool-title;
     in property <string> cart-tool-details;
     in property <[string]> cart-tool-actions;
-    in property <[string]> cart-tool-saves;
+    // Cartridge Manager: what's about to be overwritten (view 2)
+    in property <string> cart-tool-confirm-title;
+    in property <string> cart-tool-confirm-text;
     in-out property <string> cart-tool-busy-label;
     // 0-100, or negative when progress isn't known
     in-out property <float> cart-tool-progress: -1;
@@ -206,7 +210,7 @@ export global Backend {
     in property <bool> cart-tool-result-ok;
     callback cart-tool-start();
     callback cart-tool-action(int);
-    callback cart-tool-restore(int);
+    callback cart-tool-confirm();
     callback cart-tool-exit();
     callback core-list-fetch();
     callback core-run(string);

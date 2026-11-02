@@ -17,11 +17,13 @@ Highlights:
 
 - **Run ROM**: browse your games by system, with box art, and start them directly.
 - **Wi-Fi**: download box art for your games and set the clock from the internet.
-- **Cartridge Manager**: identify cartridges, dump ROMs to the SD card, back up or
-  restore saves, and set cartridge clocks (e.g. Pokémon Emerald), all on the device.
+- **Cartridge Manager**: identify cartridges, dump ROMs to the SD card, copy saves between
+  the cartridge and the SD card, and set cartridge clocks (e.g. Pokémon Emerald), all on the
+  device.
 - **Time zone** setting with automatic daylight saving time.
-- **Set Up SD Card**: create the folders Game Bub uses, check ROMs, or erase and format a
-  card (including exFAT cards Game Bub can't read).
+- **Set Up SD Card**: create the folders Game Bub uses, check ROMs, remove the hidden files
+  macOS leaves behind, or erase and format a card (including exFAT cards Game Bub can't
+  read).
 - **More physical GBA cartridges work**: fixed cartridge read timing for slow and large ROMs
   (e.g. Super Mario Advance 2, Pokémon Emerald, Lunar Legend, Donkey Kong Country).
 - **Game Boy core fixes**: Kirby's Dream Land 2 no longer hangs at a white screen, the HALT

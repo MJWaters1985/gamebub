@@ -71,10 +71,14 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - Names are shown without the trailing No-Intro tags ("Pokemon - Gold Version"); a long
     name scrolls when highlighted.
   - L and R move the highlight up or down one screenful.
-  - GBA box art is shown at 120 px; square Game Boy / Game Boy Color box art is shrunk to
-    96x96 (by averaging) to fit in memory with long lists.
+  - Box art is shown at up to 120x120 (e.g. 120x80 for landscape GBA covers), the size of the
+    downloaded thumbnails; with too little free memory it's shrunk (by averaging) and marked
+    "Reduced".
   - Built to fit large libraries in the ESP32-S3's memory: about 10 rows on screen, box art
     held in buffers allocated once per list, and a fixed-width art panel.
+- **Long lists.** Text lists in the menus only create the rows on screen, filling them in as
+  the list scrolls. Creating a row for every entry ran out of memory once a list had about
+  30 entries (Run ROM crashed opening a system with more games).
 - **Cartridge Manager** (Tools → Cartridge Manager): work with physical cartridges on the
   device, without a computer.
   - **Identify**: shows the game's name (from a built-in database of about 6,000 Game Boy,
@@ -83,11 +87,22 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - **Dump ROM to SD card**: saves to `/roms/<system>/<name>.<ext>` (e.g.
     `/roms/Game Boy Advance/Pokemon - Emerald Version (USA, Europe).gba`) and checks the dump
     against the database.
-  - **Back up save**: the save becomes the dumped ROM's save (following the Save Files
-    setting; the previous one is kept as `.bak`), and a dated copy is kept in
-    `/saves/backups/<game>/`.
-  - **Restore save to cartridge**: pick the current save or a dated copy. The cartridge's
-    save is backed up first, and the written save is read back to verify it.
+  - **ROM on SD card**: finds the cartridge's ROM on the card: the file Dump ROM writes, or
+    a ROM of the same size and header in the system's folder (for Game Boy cartridges, the
+    Game Boy and Game Boy Color folders), whatever its file name.
+  - **Save: Cartridge to SD Card**: the cartridge save becomes the save of that ROM
+    (following the Save Files setting; the previous one is kept as `.bak`). With no ROM on
+    the card, it becomes the save of the ROM Dump ROM would write.
+  - **Save: SD Card to Cartridge**: writes that save to the cartridge and reads it back to
+    verify it.
+  - Both ask first, with a warning and hold A for 3 seconds, only when they'd replace a
+    save: one already on the SD card, or a cartridge whose save memory isn't empty.
+  - Earlier versions also kept dated save copies in `/saves/backups/<game>/` and had
+    separate Back up / Restore actions. They were removed because the different save
+    options were confusing; copies already on the card are left alone.
+  - Before each action, the cartridge is checked against the one that was read (the slot's
+    GB / GBA switch, then its header). If it was swapped, nothing is done and the new
+    cartridge is read.
   - Supports Game Boy cartridges without a mapper or with MBC1, MBC2, MBC3 or MBC5, and GBA
     cartridges with SRAM/FRAM, Flash (64 or 128 KiB) or EEPROM (4 or 64 Kbit). Real-time
     clock data isn't backed up yet.
@@ -99,18 +114,22 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
     - Game Boy MBC3 (e.g. Pokémon Gold, Silver and Crystal): sets the time of day and keeps
       the day counter, since these games keep their own offset from it, so the in-game time
       still needs resetting in the game (in Pokémon Gold / Silver: Down + Select + B on the
-      title screen). The save is backed up first, because the clock is written through the
-      save memory area. Tested with Pokémon Gold.
+      title screen). Tested with Pokémon Gold.
     - The clock is read back after setting it. Access follows FlashGBX.
 - **Time Zone** (Settings → General). Choose a time zone (or a fixed UTC offset); daylight
   saving time changes automatically. The device clock still keeps UTC; local time is used
-  for Date and Time in Settings, the clock of GBA games without a saved clock, save backup
-  names, file times on the SD card and the clock sync message.
+  for Date and Time in Settings, the clock of GBA games without a saved clock, file times on
+  the SD card and the clock sync message.
 - **Set Up SD Card** (Tools). Game Bub reads FAT32 (or FAT16) cards, not exFAT.
-  - **Create missing folders**: `/roms/<system>`, `/boxart/<system>`, `/saves`,
-    `/saves/backups`, `/system` and `/settings`. Existing files are kept.
+  - **Create missing folders**: `/roms/<system>`, `/boxart/<system>`, `/saves`, `/system`
+    and `/settings`. Existing files are kept.
   - **Check ROMs**: reads every ROM in `/roms` and compares it with the database, to find
     damaged files or an unreliable card. Only reads.
+  - **Remove macOS files**: deletes the hidden files macOS leaves on the card: `._` files
+    (one next to every file copied from a Mac), `.DS_Store`, `.apdisk`, and the folders
+    `.Spotlight-V100`, `.fseventsd`, `.Trashes`, `.TemporaryItems`,
+    `.DocumentRevisions-V100` and `__MACOSX` (from unzipping on a Mac). Says how many files
+    it removed and how much space that freed.
   - **Erase and format card** (hold A for 3 seconds): clears the old partition table
     (including GPT and its backup copy), writes an MBR with one FAT32 partition starting at
     4 MiB (the standard alignment) with 32 KiB clusters, then creates the folders. Custom BIOS files in `/system`

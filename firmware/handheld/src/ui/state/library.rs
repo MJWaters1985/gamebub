@@ -118,6 +118,7 @@ impl UiState {
         backend.set_library_has_boxart(false);
         self.library.strip_pool.clear();
         self.library.games = system.games();
+        crate::crash_handler::note(&format_args!("Run ROM: {} ({} games)", system.folder, self.library.games.len()));
         self.library.system = Some(system);
         kvs::keys::LIBRARY_LAST_SYSTEM.set(&system.folder.to_string());
 
@@ -178,14 +179,14 @@ impl UiState {
             (Some(system), Some(game)) => library::load_thumbnail(
                 &system.thumbnail_path(&game.name),
                 &mut self.library.strip_pool,
-                // Game Boy box art is square (the largest), and those lists are often long:
-                // full-size art and a screen full of names don't fit in memory together.
-                if system.folder == "Game Boy Advance" { library::BOXART_SIZE } else { library::BOXART_SIZE_SQUARE },
+                library::BOXART_SIZE,
+                library::BOXART_SIZE,
             ),
             _ => None,
         };
         match thumbnail {
             Some(Ok(thumbnail)) => {
+                crate::crash_handler::note(&format_args!("box art {}x{} loaded", thumbnail.width, thumbnail.height));
                 let strips: Vec<Image> = thumbnail.strips.into_iter().map(Image::from_rgb8).collect();
                 backend.set_library_boxart_width(thumbnail.width as i32);
                 backend.set_library_boxart_height(thumbnail.height as i32);

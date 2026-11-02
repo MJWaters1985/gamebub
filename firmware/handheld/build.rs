@@ -44,5 +44,12 @@ fn main() {
         if dirty { "-dirty" } else { "" }
     );
 
+    // Builds with uncommitted changes are test builds: they record extra diagnostics in the
+    // crash report (see crash_handler).
+    println!("cargo:rustc-check-cfg=cfg(diagnostics)");
+    if dirty {
+        println!("cargo:rustc-cfg=diagnostics");
+    }
+
     println!("cargo:rustc-link-arg=-Wl,--wrap=esp_panic_handler");
 }

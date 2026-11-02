@@ -1,4 +1,5 @@
-//! Tools > Set Up SD Card: create the folders Game Bub uses, or erase and format the card first.
+//! Tools > Set Up SD Card: create the folders Game Bub uses, check ROMs, remove the hidden files
+//! macOS leaves behind, or erase and format the card first.
 
 use std::path::Path;
 
@@ -17,7 +18,7 @@ const BIOS_FILES: &[&str] =
     &["gameboy.bios-dmg.bin", "gameboy.bios-cgb.bin", "gba.bios.bin", "gba.bios-fast.bin"];
 
 /// Folders Game Bub uses, besides one per system under /roms and /boxart.
-const FOLDERS: &[&str] = &["roms", "saves", "saves/backups", "boxart", "system", "settings"];
+const FOLDERS: &[&str] = &["roms", "saves", "boxart", "system", "settings"];
 
 /// Why the card isn't usable, for the Set Up SD Card screen (empty if it is).
 pub fn status() -> String {
@@ -101,6 +102,115 @@ fn check_roms() -> anyhow::Result<(bool, String)> {
         message += &format!("\n\nRead back wrong:\n{}", bad.join("\n"));
     }
     Ok((bad.is_empty(), message))
+}
+
+/// Remove the hidden files macOS leaves on the card, in the background.
+pub fn start_mac_cleanup() {
+    task("Removing macOS files...", None);
+    crate::jobs::run(|| match remove_mac_files() {
+        Ok(message) => task("", Some((true, message))),
+        Err(e) => task("", Some((false, format!("{e:#}")))),
+    });
+}
+
+/// Folders macOS creates (Spotlight index, file system events, trash, ZIP resource forks).
+const MAC_FOLDERS: &[&str] = &[
+    ".Spotlight-V100",
+    ".fseventsd",
+    ".Trashes",
+    ".TemporaryItems",
+    ".DocumentRevisions-V100",
+    "__MACOSX",
+];
+
+/// Whether a file or folder is one macOS leaves behind: `._` resource fork files (one next to
+/// every file copied from a Mac), `.DS_Store`, `.apdisk` and the folders above.
+fn is_mac_file(name: &str, is_dir: bool) -> bool {
+    if is_dir {
+        MAC_FOLDERS.contains(&name)
+    } else {
+        name.starts_with("._") || name == ".DS_Store" || name == ".apdisk"
+    }
+}
+
+#[derive(Default)]
+struct Removed {
+    files: u32,
+    bytes: u64,
+}
+
+fn remove_mac_files() -> anyhow::Result<String> {
+    if !Path::new(ROOT).exists() {
+        anyhow::bail!("There's no SD card, or it isn't formatted.");
+    }
+    let mut removed = Removed::default();
+    clean_folder(Path::new(ROOT), &mut removed, false)?;
+    Ok(match removed.files {
+        0 => "There were no macOS files on the card.".into(),
+        n => format!(
+            "Removed {n} macOS file{} ({}).",
+            if n == 1 { "" } else { "s" },
+            describe_size(removed.bytes)
+        ),
+    })
+}
+
+/// Remove the macOS files in a folder and its subfolders, or everything in it if `all` is set.
+/// Works in small batches, so folders with thousands of files don't need much memory.
+fn clean_folder(dir: &Path, removed: &mut Removed, all: bool) -> anyhow::Result<()> {
+    const BATCH: usize = 32;
+    let shown = dir.strip_prefix(ROOT).unwrap_or(dir).display().to_string();
+    task(&format!("Removing macOS files...\n/{shown}"), None);
+
+    // Delete in batches, reading the folder again after each one: deleting while reading
+    // a folder isn't safe on FAT.
+    let mut subfolders = vec![];
+    loop {
+        let mut batch: Vec<(std::path::PathBuf, bool)> = Vec::with_capacity(BATCH);
+        subfolders.clear();
+        for entry in std::fs::read_dir(dir).with_context(|| format!("Couldn't read /{shown}"))? {
+            let entry = entry.with_context(|| format!("Couldn't read /{shown}"))?;
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if all || is_mac_file(&name, is_dir) {
+                batch.push((entry.path(), is_dir));
+                if batch.len() == BATCH {
+                    break;
+                }
+            } else if is_dir {
+                subfolders.push(entry.path());
+            }
+        }
+        if batch.is_empty() {
+            break;
+        }
+        for (path, is_dir) in batch {
+            if is_dir {
+                clean_folder(&path, removed, true)?;
+                std::fs::remove_dir(&path)
+                    .with_context(|| format!("Couldn't remove {}", path.display()))?;
+            } else {
+                let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("Couldn't remove {}", path.display()))?;
+                removed.files += 1;
+                removed.bytes += size;
+            }
+        }
+    }
+    for folder in subfolders {
+        clean_folder(&folder, removed, false)?;
+    }
+    Ok(())
+}
+
+fn describe_size(bytes: u64) -> String {
+    match bytes {
+        b if b >= 1_000_000 => format!("{:.1} MB", b as f64 / 1e6),
+        b if b >= 1_000 => format!("{} KB", b / 1_000),
+        b => format!("{b} bytes"),
+    }
 }
 
 /// Set up the SD card in the background, erasing it first if `erase` is set.

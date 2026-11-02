@@ -139,6 +139,7 @@ impl UiState {
         backend.on_screen_enter(move |screen| {
             // Called when a new screen is entered, before the new frame is rendered.
             log::info!("Screen enter: {:?}", screen);
+            crate::crash_handler::note(&format_args!("screen {screen:?}"));
             match screen {
                 ScreenId::Settings => state_.borrow_mut().on_settings_enter(),
                 _ => {}

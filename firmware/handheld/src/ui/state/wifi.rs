@@ -55,6 +55,7 @@ impl UiState {
         backend.on_boxart_download_all(|| wifi_setup::download_library_boxart());
         backend.on_sd_setup(|erase| crate::sd_setup::start(erase));
         backend.on_sd_check(|| crate::sd_setup::start_check());
+        backend.on_sd_clean_mac(|| crate::sd_setup::start_mac_cleanup());
     }
 
     fn wifi_show_menu(&mut self) {

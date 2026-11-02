@@ -1,4 +1,4 @@
-//! Cartridge identification, ROM dumping and save backup / restore.
+//! Cartridge identification, ROM dumping and copying saves to and from the SD card.
 //!
 //! Mapper and save memory handling follows FlashGBX (https://github.com/lesserkuma/FlashGBX).
 
@@ -15,7 +15,6 @@ use crate::bitstream::gba::save_type_detector::SaveTypeDetector;
 use crate::bitstream::gba::SaveType as DetectedSaveType;
 
 pub const DIR_ROMS: &str = "/sdcard/roms";
-pub const DIR_SAVE_BACKUPS: &str = "/sdcard/saves/backups";
 
 /// Progress callback: fraction done (0 to 1).
 pub type Progress<'a> = &'a mut dyn FnMut(f32);
@@ -161,8 +160,54 @@ impl CartInfo {
             .join(format!("{}.{}", self.name(), self.system.extension()))
     }
 
-    pub fn save_backup_dir(&self) -> PathBuf {
-        Path::new(DIR_SAVE_BACKUPS).join(self.name())
+    /// Find this cartridge's ROM on the SD card: the file Dump ROM writes, or else a ROM in the
+    /// system's folder (or the other Game Boy folder) with the same size and header.
+    pub fn find_rom_on_sd(&self) -> Option<PathBuf> {
+        let dumped = self.rom_path();
+        if dumped.is_file() {
+            return Some(dumped);
+        }
+        let header = match self.mode {
+            CartMode::Dmg => 0x134..0x150,
+            CartMode::Agb => 0xA0..0xC0,
+        };
+        let folders: &[System] = match self.system {
+            System::GameBoyAdvance => &[System::GameBoyAdvance],
+            System::GameBoy => &[System::GameBoy, System::GameBoyColor],
+            System::GameBoyColor => &[System::GameBoyColor, System::GameBoy],
+        };
+        let extensions: &[&str] = match self.system {
+            System::GameBoyAdvance => &["gba"],
+            _ => &["gb", "gbc"],
+        };
+        for system in folders {
+            let Ok(entries) = std::fs::read_dir(Path::new(DIR_ROMS).join(system.folder())) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                let extension = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+                if name.starts_with("._")
+                    || !extension.is_some_and(|e| extensions.contains(&e.as_str()))
+                {
+                    continue;
+                }
+                // Only open files of the right size.
+                if entry.metadata().map(|m| m.len()).ok() != Some(self.rom_size as u64) {
+                    continue;
+                }
+                let path = entry.path();
+                let mut bytes = [0u8; 0x150];
+                let matches = File::open(&path)
+                    .and_then(|mut f| std::io::Read::read_exact(&mut f, &mut bytes[..header.end]).map(|_| ()))
+                    .is_ok_and(|_| bytes[header.clone()] == self.header[header.clone()]);
+                if matches {
+                    return Some(path);
+                }
+            }
+        }
+        None
     }
 
     pub fn has_save(&self) -> bool {
@@ -178,6 +223,25 @@ impl CartInfo {
     pub fn game_code(&self) -> [u8; 4] {
         self.header[0xAC..0xB0].try_into().unwrap()
     }
+}
+
+/// Whether the inserted cartridge is still the one `info` describes: same kind of cartridge
+/// (the slot's GB / GBA switch), then the same header after a power cycle. Any read error counts
+/// as a change.
+pub fn is_same_cartridge(link: &mut Link, info: &CartInfo) -> bool {
+    // Check the switch first, so a GBA cartridge is never powered at Game Boy voltage.
+    if !matches!(link.cart_mode_switch(), Ok(mode) if mode == info.mode) {
+        return false;
+    }
+    if link.power_cycle().is_err() {
+        return false;
+    }
+    let mut header = vec![0u8; info.header.len()];
+    let read = match info.mode {
+        CartMode::Dmg => link.dmg_read_rom(0, &mut header),
+        CartMode::Agb => link.agb_read_rom(0, &mut header),
+    };
+    read.is_ok() && header == info.header
 }
 
 /// Replace characters that FAT doesn't allow in file names.
@@ -708,7 +772,7 @@ pub fn write_save(
         expected.resize(data.len(), 0);
         source.next(&mut expected)?;
         if data != expected.as_slice() {
-            bail!("The save didn't verify after writing.\nThe previous save is in the backups folder.");
+            bail!("The save didn't verify after writing.\nTry again, or copy the save to the SD card first to see what's on the cartridge.");
         }
         Ok(())
     })
@@ -716,108 +780,33 @@ pub fn write_save(
 
 // ---- Save files ----
 
-/// Timestamp for backup file names, e.g. "2026-11-01 10-42".
-fn timestamp() -> String {
-    let now = crate::device::Device::lock().get_local_datetime();
-    format!(
-        "{:04}-{:02}-{:02} {:02}-{:02}-{:02}",
-        now.year(),
-        now.month() as u8,
-        now.day(),
-        now.hour(),
-        now.minute(),
-        now.second()
-    )
-}
-
-/// Path for a new dated save copy in /saves/backups/<game>/.
-pub fn new_backup_path(info: &CartInfo, note: &str) -> anyhow::Result<PathBuf> {
-    let dir = info.save_backup_dir();
-    std::fs::create_dir_all(&dir).context("Couldn't create the backup folder")?;
-    let name = if note.is_empty() {
-        format!("{}.sav", timestamp())
-    } else {
-        format!("{} {}.sav", timestamp(), note)
-    };
-    Ok(dir.join(name))
-}
-
-/// Read the cartridge save into a dated backup, and optionally make it the ROM's live save
-/// (keeping the previous live save as .bak). Returns (backup path, live save path).
-pub fn backup_save(
-    link: &mut Link,
-    info: &CartInfo,
-    note: &str,
-    live: bool,
-    progress: Progress,
-) -> anyhow::Result<(PathBuf, Option<PathBuf>)> {
-    let backup_path = new_backup_path(info, note)?;
-    let live_path = live.then(|| crate::core::save_path_for_rom(&info.rom_path()));
-    let live_temp = live_path.as_ref().map(|p| crate::core::temp_path(p));
-    if let Some(dir) = live_path.as_ref().and_then(|p| p.parent()) {
+/// Read the cartridge save into a save file on the SD card, replacing it (the previous one is
+/// kept as .bak).
+pub fn copy_save_to_sd(link: &mut Link, info: &CartInfo, path: &Path, progress: Progress) -> anyhow::Result<()> {
+    if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).context("Couldn't create the save folder")?;
     }
-
-    let mut files = vec![File::create(&backup_path)
-        .with_context(|| format!("Couldn't create {}", backup_path.display()))?];
-    if let Some(temp) = &live_temp {
-        files.push(File::create(temp).with_context(|| format!("Couldn't create {}", temp.display()))?);
-    }
+    let temp = crate::core::temp_path(path);
+    let mut file = File::create(&temp).with_context(|| format!("Couldn't create {}", temp.display()))?;
     let result = read_save(link, info, info.save, progress, &mut |data| {
-        for file in files.iter_mut() {
-            file.write_all(data).context("Couldn't write the save file")?;
-        }
-        Ok(())
+        file.write_all(data).context("Couldn't write the save file")
     })
-    .and_then(|_| {
-        for file in files.iter_mut() {
-            file.sync_all().context("Couldn't write the save file")?;
-        }
-        Ok(())
-    });
-    drop(files);
+    .and_then(|_| file.sync_all().context("Couldn't write the save file"));
+    drop(file);
     if let Err(e) = result {
-        let _ = std::fs::remove_file(&backup_path);
-        if let Some(temp) = &live_temp {
-            let _ = std::fs::remove_file(temp);
-        }
+        let _ = std::fs::remove_file(&temp);
         return Err(e);
     }
-    if let (Some(temp), Some(path)) = (&live_temp, &live_path) {
-        crate::core::replace_file(temp, path).context("Couldn't save the save file")?;
-    }
-    Ok((backup_path, live_path))
+    crate::core::replace_file(&temp, path).context("Couldn't save the save file")
 }
 
-/// A save file that can be restored to the cartridge.
-#[derive(Clone, Debug)]
-pub struct SaveFile {
-    pub label: String,
-    pub path: PathBuf,
-}
-
-/// Saves available to restore: the live save, then dated backups (newest first).
-pub fn list_saves(info: &CartInfo) -> Vec<SaveFile> {
-    let mut saves = vec![];
-    let live = crate::core::save_path_for_rom(&info.rom_path());
-    if live.is_file() {
-        saves.push(SaveFile {
-            label: "Current save on SD card".to_string(),
-            path: live,
-        });
-    }
-    let mut backups: Vec<SaveFile> = std::fs::read_dir(info.save_backup_dir())
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            let name = path.file_name()?.to_string_lossy().to_string();
-            let label = name.strip_suffix(".sav").or_else(|| name.strip_suffix(".SAV"))?.to_string();
-            Some(SaveFile { label, path })
-        })
-        .collect();
-    backups.sort_by(|a, b| b.label.cmp(&a.label));
-    saves.extend(backups);
-    saves
+/// Whether the cartridge's save memory is empty (all 0xFF or all 0x00).
+pub fn save_is_blank(link: &mut Link, info: &CartInfo, progress: Progress) -> anyhow::Result<bool> {
+    let (mut all_ff, mut all_00) = (true, true);
+    read_save(link, info, info.save, progress, &mut |data| {
+        all_ff &= data.iter().all(|&b| b == 0xFF);
+        all_00 &= data.iter().all(|&b| b == 0x00);
+        Ok(())
+    })?;
+    Ok(all_ff || all_00)
 }

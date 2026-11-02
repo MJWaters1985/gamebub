@@ -50,9 +50,7 @@ impl UiState {
         backend.on_cart_tool_action(|i| {
             crate::cart_tool::request(crate::cart_tool::Request::Action(i.max(0) as usize))
         });
-        backend.on_cart_tool_restore(|i| {
-            crate::cart_tool::request(crate::cart_tool::Request::Restore(i.max(0) as usize))
-        });
+        backend.on_cart_tool_confirm(|| crate::cart_tool::request(crate::cart_tool::Request::Confirm));
         backend.on_cart_tool_exit(|| crate::cart_tool::request(crate::cart_tool::Request::Exit));
 
         backend.on_tools_get_battery_info(move || {
@@ -91,8 +89,9 @@ impl UiState {
                 backend.set_cart_tool_actions(strings(actions));
                 backend.set_cart_tool_view(1);
             }
-            Update::Saves(saves) => {
-                backend.set_cart_tool_saves(strings(saves));
+            Update::Confirm { title, text } => {
+                backend.set_cart_tool_confirm_title(title.into());
+                backend.set_cart_tool_confirm_text(text.into());
                 backend.set_cart_tool_view(2);
             }
             Update::Result { ok, message } => {

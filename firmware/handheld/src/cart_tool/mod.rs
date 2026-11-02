@@ -1,10 +1,10 @@
-//! Cartridge Manager: identify the inserted cartridge, dump its ROM to the SD card, and back
-//! up / restore its save, all on the device.
+//! Cartridge Manager: identify the inserted cartridge, dump its ROM to the SD card, and copy
+//! its save to or from the SD card, all on the device.
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 
-use cart::{CartInfo, SaveFile, SaveKind};
+use cart::{CartInfo, SaveKind};
 use link::Link;
 
 use crate::ui;
@@ -19,8 +19,8 @@ mod link;
 pub enum Request {
     /// Run the menu action at this index.
     Action(usize),
-    /// Restore the save at this index of the last save list.
-    Restore(usize),
+    /// Go ahead with the action that asked for confirmation (`Update::Confirm`).
+    Confirm,
     /// Power off the cartridge and stop.
     Exit,
 }
@@ -32,8 +32,8 @@ pub enum Update {
     Busy { label: String, progress: f32 },
     /// Cartridge details and the actions available.
     Menu { title: String, details: String, actions: Vec<String> },
-    /// Saves that can be restored.
-    Saves(Vec<String>),
+    /// Ask before overwriting a save (hold A to go ahead).
+    Confirm { title: String, text: String },
     /// An operation finished.
     Result { ok: bool, message: String },
 }
@@ -41,8 +41,8 @@ pub enum Update {
 #[derive(Copy, Clone, Debug)]
 enum Action {
     DumpRom,
-    BackupSave,
-    RestoreSave,
+    SaveToSd,
+    SaveToCart,
     SetClock,
     ReadAgain,
 }
@@ -51,8 +51,8 @@ impl Action {
     fn label(self) -> &'static str {
         match self {
             Self::DumpRom => "Dump ROM to SD card",
-            Self::BackupSave => "Back up save",
-            Self::RestoreSave => "Restore save to cartridge",
+            Self::SaveToSd => "Save: Cartridge to SD Card",
+            Self::SaveToCart => "Save: SD Card to Cartridge",
             Self::SetClock => "Set cartridge clock to now",
             Self::ReadAgain => "Read cartridge again",
         }
@@ -94,14 +94,17 @@ struct Worker {
     link: Option<Link>,
     info: Option<CartInfo>,
     actions: Vec<Action>,
-    saves: Vec<SaveFile>,
     /// Cartridge clock, if the cartridge has one (or an error reading it).
     clock: Option<Result<clock::Clock, String>>,
+    /// This cartridge's ROM on the SD card, if there is one.
+    rom: Option<std::path::PathBuf>,
+    /// Action waiting for the user's confirmation.
+    pending: Option<Action>,
 }
 
 impl Worker {
     fn new() -> Self {
-        Worker { link: None, info: None, actions: vec![], saves: vec![], clock: None }
+        Worker { link: None, info: None, actions: vec![], clock: None, rom: None, pending: None }
     }
 
     fn run(mut self, rx: Receiver<Request>) {
@@ -111,13 +114,13 @@ impl Worker {
                 Request::Exit => break,
                 Request::Action(i) => match self.actions.get(i).copied() {
                     Some(Action::DumpRom) => self.dump_rom(),
-                    Some(Action::BackupSave) => self.backup_save(),
-                    Some(Action::RestoreSave) => self.list_saves(),
+                    Some(Action::SaveToSd) => self.save_to_sd(false),
+                    Some(Action::SaveToCart) => self.save_to_cart(false),
                     Some(Action::SetClock) => self.set_clock(),
                     Some(Action::ReadAgain) => self.identify(),
                     None => self.show_menu(),
                 },
-                Request::Restore(i) => self.restore_save(i),
+                Request::Confirm => self.confirmed(),
             }
         }
         if let Some(link) = self.link.take() {
@@ -134,25 +137,15 @@ impl Worker {
         busy("Reading cartridge...", -1.0);
         self.info = None;
         self.clock = None;
+        self.rom = None;
         if self.link.is_none() {
             match Link::open() {
                 Ok(link) => self.link = Some(link),
                 Err(e) => return self.fail(e.context("Couldn't start the cartridge reader")),
             }
         }
-        let link = self.link.as_mut().unwrap();
-        // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
-        let _ = link.power_cycle();
-        match cart::identify(link) {
-            Ok(info) => {
-                log::info!("Cartridge: {info:?}");
-                if clock::expected(&info) {
-                    busy("Reading the cartridge clock...", -1.0);
-                    self.clock = Some(clock::read(link, &info).map_err(|e| format!("{e:#}")));
-                }
-                self.info = Some(info);
-                self.show_menu();
-            }
+        match self.read_cartridge() {
+            Ok(()) => self.show_menu(),
             Err(e) => {
                 self.actions = vec![Action::ReadAgain];
                 send(Update::Menu {
@@ -162,6 +155,51 @@ impl Worker {
                 });
             }
         }
+    }
+
+    /// Identify the inserted cartridge (the link must be open).
+    fn read_cartridge(&mut self) -> anyhow::Result<()> {
+        self.info = None;
+        self.clock = None;
+        self.rom = None;
+        let link = self.link.as_mut().unwrap();
+        // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
+        let _ = link.power_cycle();
+        let info = cart::identify(link)?;
+        log::info!("Cartridge: {info:?}");
+        if clock::expected(&info) {
+            busy("Reading the cartridge clock...", -1.0);
+            self.clock = Some(clock::read(link, &info).map_err(|e| format!("{e:#}")));
+        }
+        busy("Looking for the ROM on the SD card...", -1.0);
+        self.rom = info.find_rom_on_sd();
+        self.info = Some(info);
+        Ok(())
+    }
+
+    /// Check that the cartridge hasn't been swapped since it was read. If it has, read the new
+    /// one, tell the user nothing was done, and return false.
+    fn check_cartridge(&mut self) -> bool {
+        let (Some(link), Some(info)) = (self.link.as_mut(), self.info.as_ref()) else {
+            self.identify();
+            return false;
+        };
+        busy("Checking the cartridge...", -1.0);
+        if cart::is_same_cartridge(link, info) {
+            return true;
+        }
+        log::warn!("Cartridge Manager: the cartridge changed since it was read");
+        let now = match self.read_cartridge() {
+            Ok(()) => format!("Now inserted: {}", self.info.as_ref().unwrap().name()),
+            Err(e) => format!("No cartridge could be read now: {e:#}"),
+        };
+        send(Update::Result {
+            ok: false,
+            message: format!(
+                "The cartridge was changed since it was read, so nothing was done.\n\n{now}\n\nCheck the details and choose again."
+            ),
+        });
+        false
     }
 
     fn show_menu(&mut self) {
@@ -185,15 +223,15 @@ impl Worker {
             Some(Err(e)) => details.push(format!("Clock: couldn't be read ({e})")),
             None => {}
         }
-        let rom_path = info.rom_path();
-        if rom_path.exists() {
-            details.push("ROM already on SD card".to_string());
-        }
+        details.push(match &self.rom {
+            Some(rom) => format!("ROM on SD card: {}", display_path(rom)),
+            None => "No matching ROM on SD card".to_string(),
+        });
 
         self.actions = vec![Action::DumpRom];
         if info.has_save() || info.save_guessed {
-            self.actions.push(Action::BackupSave);
-            self.actions.push(Action::RestoreSave);
+            self.actions.push(Action::SaveToSd);
+            self.actions.push(Action::SaveToCart);
         }
         if self.clock.is_some() {
             self.actions.push(Action::SetClock);
@@ -207,6 +245,9 @@ impl Worker {
     }
 
     fn dump_rom(&mut self) {
+        if !self.check_cartridge() {
+            return;
+        }
         let (Some(link), Some(info)) = (self.link.as_mut(), self.info.as_mut()) else {
             return self.identify();
         };
@@ -217,6 +258,7 @@ impl Worker {
                     info.save = save;
                     info.save_guessed = false;
                 }
+                self.rom = Some(result.path.clone());
                 let check = match result.verified {
                     Some(true) => "Verified: matches a known good dump.",
                     Some(false) if info.db.is_some() => {
@@ -257,101 +299,125 @@ impl Worker {
         Ok(())
     }
 
-    fn backup_save(&mut self) {
+    /// The save file on the SD card for this cartridge: the matching ROM's save, or the save
+    /// of the ROM Dump ROM would create.
+    fn sd_save_path(&self) -> Option<std::path::PathBuf> {
+        let info = self.info.as_ref()?;
+        let rom = self.rom.clone().unwrap_or_else(|| info.rom_path());
+        Some(crate::core::save_path_for_rom(&rom))
+    }
+
+    /// Copy the cartridge save to the SD card, asking first if that replaces a save there.
+    fn save_to_sd(&mut self, confirmed: bool) {
+        if !self.check_cartridge() {
+            return;
+        }
         if let Err(e) = self.ensure_save_type() {
             return self.fail(e);
+        }
+        let path = self.sd_save_path().unwrap();
+        if !confirmed && path.is_file() {
+            self.pending = Some(Action::SaveToSd);
+            return send(Update::Confirm {
+                title: "Replace the save on the SD card?".into(),
+                text: format!(
+                    "{}\n\nIt's replaced by the cartridge's save (the old one is kept as .bak).",
+                    display_path(&path)
+                ),
+            });
         }
         let (link, info) = (self.link.as_mut().unwrap(), self.info.as_ref().unwrap());
-        busy("Backing up save...", 0.0);
-        match cart::backup_save(link, info, "", true, &mut |p| busy("Backing up save...", p)) {
-            Ok((backup, live)) => send(Update::Result {
+        busy("Copying save to the SD card...", 0.0);
+        match cart::copy_save_to_sd(link, info, &path, &mut |p| busy("Copying save to the SD card...", p)) {
+            Ok(()) => send(Update::Result {
                 ok: true,
-                message: format!(
-                    "Save backed up.\n\nGame save: {}\nCopy: {}",
-                    live.as_deref().map(display_path).unwrap_or_default(),
-                    display_path(&backup)
-                ),
+                message: format!("Save copied to the SD card.\n\n{}", display_path(&path)),
             }),
             Err(e) => self.fail(e),
         }
     }
 
-    fn list_saves(&mut self) {
+    /// Copy the SD card's save to the cartridge, asking first unless the cartridge's save memory
+    /// is empty.
+    fn save_to_cart(&mut self, confirmed: bool) {
+        if !self.check_cartridge() {
+            return;
+        }
         if let Err(e) = self.ensure_save_type() {
             return self.fail(e);
         }
-        self.saves = cart::list_saves(self.info.as_ref().unwrap());
-        if self.saves.is_empty() {
-            send(Update::Result {
+        let path = self.sd_save_path().unwrap();
+        if !path.is_file() {
+            return send(Update::Result {
                 ok: false,
-                message: "There are no saves for this game on the SD card yet.\nBack up the save first."
-                    .into(),
+                message: format!(
+                    "There's no save for this game on the SD card yet, so nothing was written.\n\n{}",
+                    display_path(&path)
+                ),
             });
-        } else {
-            send(Update::Saves(self.saves.iter().map(|s| s.label.clone()).collect()));
         }
-    }
-
-    fn restore_save(&mut self, index: usize) {
-        let (Some(link), Some(info)) = (self.link.as_mut(), self.info.as_ref()) else {
-            return self.identify();
-        };
-        let Some(save) = self.saves.get(index).cloned() else {
-            return self.show_menu();
-        };
-        let result = (|| -> anyhow::Result<std::path::PathBuf> {
-            // Keep what's on the cartridge now, in case this was a mistake.
-            busy("Backing up the cartridge save...", 0.0);
-            let (backup, _) = cart::backup_save(link, info, "(before restore)", false, &mut |p| {
-                busy("Backing up the cartridge save...", p)
-            })?;
-            busy("Restoring save...", 0.0);
-            cart::write_save(link, info, info.save, &save.path, &mut |p| busy("Restoring save...", p))?;
-            Ok(backup)
-        })();
-        match result {
-            Ok(backup) => send(Update::Result {
+        let (link, info) = (self.link.as_mut().unwrap(), self.info.as_ref().unwrap());
+        if !confirmed {
+            busy("Checking the cartridge save...", 0.0);
+            match cart::save_is_blank(link, info, &mut |p| busy("Checking the cartridge save...", p)) {
+                Ok(true) => {}
+                Ok(false) => {
+                    self.pending = Some(Action::SaveToCart);
+                    return send(Update::Confirm {
+                        title: "Overwrite the save on the cartridge?".into(),
+                        text: format!(
+                            "From the SD card:\n{}\n\nThe cartridge's current save is lost.",
+                            display_path(&path)
+                        ),
+                    });
+                }
+                Err(e) => return self.fail(e),
+            }
+        }
+        busy("Writing save to the cartridge...", 0.0);
+        match cart::write_save(link, info, info.save, &path, &mut |p| {
+            busy("Writing save to the cartridge...", p)
+        }) {
+            Ok(()) => send(Update::Result {
                 ok: true,
                 message: format!(
-                    "Save restored and verified.\n\nThe cartridge's previous save was kept as\n{}",
-                    display_path(&backup)
+                    "Save written to the cartridge and verified.\n\nFrom: {}",
+                    display_path(&path)
                 ),
             }),
             Err(e) => self.fail(e),
+        }
+    }
+
+    /// Go ahead with the action the user confirmed.
+    fn confirmed(&mut self) {
+        match self.pending.take() {
+            Some(Action::SaveToSd) => self.save_to_sd(true),
+            Some(Action::SaveToCart) => self.save_to_cart(true),
+            _ => self.show_menu(),
         }
     }
 }
 
 impl Worker {
     fn set_clock(&mut self) {
+        if !self.check_cartridge() {
+            return;
+        }
         let (Some(link), Some(info)) = (self.link.as_mut(), self.info.as_ref()) else {
             return self.identify();
         };
-        let result = (|| -> anyhow::Result<(clock::Clock, Option<std::path::PathBuf>)> {
-            // The MBC3 clock is written through the save RAM area: keep a copy of the save in
-            // case a write goes astray.
-            let backup = if info.mode == link::CartMode::Dmg && info.has_save() {
-                busy("Backing up the save...", 0.0);
-                let (backup, _) = cart::backup_save(link, info, "(before clock set)", false, &mut |p| {
-                    busy("Backing up the save...", p)
-                })?;
-                Some(backup)
-            } else {
-                None
-            };
+        let result = (|| -> anyhow::Result<clock::Clock> {
             busy("Setting the cartridge clock...", -1.0);
             let now = crate::device::Device::lock().get_local_datetime();
-            Ok((clock::set(link, info, now)?, backup))
+            clock::set(link, info, now)
         })();
         match result {
-            Ok((clock, backup)) => {
+            Ok(clock) => {
                 let mut message = format!("Cartridge clock set.\n{}", clock.describe());
                 if matches!(clock, clock::Clock::Mbc3 { .. }) {
                     message += "\n\nGame Boy clocks count days, not dates: the game keeps its own offset, \
                         so its in-game clock may still need setting in the game.";
-                }
-                if let Some(backup) = backup {
-                    message += &format!("\n\nSave backed up first to\n{}", display_path(&backup));
                 }
                 self.clock = Some(Ok(clock));
                 send(Update::Result { ok: true, message });

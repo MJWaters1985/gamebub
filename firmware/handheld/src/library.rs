@@ -111,11 +111,9 @@ pub struct LoadedThumbnail {
     pub strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
 }
 
-/// Box art size for wide (GBA) box art: the size Download Box Art makes thumbnails at.
+/// Box art size in Run ROM (width and height at most): the size of the thumbnails Download Box
+/// Art makes, so they're shown 1:1.
 pub const BOXART_SIZE: usize = 120;
-/// Box art size for square (GB / GBC) box art: full-size square art and a screen of names
-/// don't fit in memory together, and 96x96 uses about as much as full-size GBA art.
-pub const BOXART_SIZE_SQUARE: usize = 96;
 
 /// Pixel buffers for box art, allocated once and reused for every game until leaving the list.
 /// Allocating and freeing them per game fragments the heap until the renderer can't get the
@@ -124,8 +122,10 @@ pub const BOXART_SIZE_SQUARE: usize = 96;
 pub struct StripPool {
     /// Strips of STRIP_ROWS rows, `size` pixels wide
     strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
-    /// Largest width and height of an image (0 = not allocated)
+    /// Largest width of an image (0 = not allocated)
     size: usize,
+    /// Largest height of an image
+    rows: usize,
 }
 
 impl StripPool {
@@ -139,14 +139,14 @@ impl StripPool {
         *self = StripPool::default();
     }
 
-    /// Allocate buffers for `size`, or half or a third of it if memory is short.
-    fn allocate(&mut self, size: usize) -> bool {
+    /// Allocate buffers for `size` x `rows`, or half or a third of it if memory is short.
+    fn allocate(&mut self, size: usize, rows: usize) -> bool {
         let free = unsafe { esp_idf_svc::sys::heap_caps_get_free_size(esp_idf_svc::sys::MALLOC_CAP_8BIT) };
-        for size in [size, size / 2, size / 3] {
-            if size * size * 3 + THUMBNAIL_HEADROOM > free {
+        for (size, rows) in [(size, rows), (size / 2, rows / 2), (size / 3, rows / 3)] {
+            if size * rows * 3 + THUMBNAIL_HEADROOM > free {
                 continue;
             }
-            let strips: Vec<_> = (0..size.div_ceil(STRIP_ROWS))
+            let strips: Vec<_> = (0..rows.div_ceil(STRIP_ROWS))
                 .map(|_| SharedPixelBuffer::<Rgb8Pixel>::new(size as u32, STRIP_ROWS as u32))
                 .collect();
             // The renderer needs a block of a few KB per frame for its list of things to draw
@@ -155,10 +155,10 @@ impl StripPool {
                 esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT)
             };
             if largest_after >= RENDER_HEADROOM {
-                *self = StripPool { strips, size };
+                *self = StripPool { strips, size, rows };
                 return true;
             }
-            log::warn!("Box art at {size}x{size} leaves too little memory (largest block {largest_after})");
+            log::warn!("Box art at {size}x{rows} leaves too little memory (largest block {largest_after})");
         }
         log::warn!("Not enough memory for box art (free {free})");
         false
@@ -167,14 +167,15 @@ impl StripPool {
 
 /// Load a thumbnail file: b"BBX1", u16 width, u16 height (little endian), then RGB888 rows.
 ///
-/// The image is read into the strips of `pool` (allocated for `size` on first use), shrunk to
-/// fit by averaging. The thumbnail's strips share the pool's buffers, so release them before
+/// The image is read into the strips of `pool` (allocated for `size` x `rows` on first use),
+/// shrunk to fit by averaging. The thumbnail's strips share the pool's buffers, so release them before
 /// loading the next one; each strip is the pool's width, so show only `width` columns and
 /// `height` rows in total. Returns None if the file is missing or invalid.
 pub fn load_thumbnail(
     path: &Path,
     pool: &mut StripPool,
     size: usize,
+    rows: usize,
 ) -> Option<Result<LoadedThumbnail, LowMemory>> {
     let mut file = std::io::BufReader::with_capacity(2048, std::fs::File::open(path).ok()?);
     let mut header = [0u8; 8];
@@ -187,13 +188,16 @@ pub fn load_thumbnail(
     if width == 0 || height == 0 || width > MAX_THUMBNAIL as usize || height > MAX_THUMBNAIL as usize {
         return None;
     }
-    if pool.strips.is_empty() && !pool.allocate(size) {
+    if pool.strips.is_empty() && !pool.allocate(size, rows) {
         let free = unsafe { esp_idf_svc::sys::heap_caps_get_free_size(esp_idf_svc::sys::MALLOC_CAP_8BIT) };
         return Some(Err(LowMemory { largest_free: free }));
     }
-    // Scale by cap / den (never up).
-    let cap = pool.size;
-    let den = width.max(height).max(cap);
+    // Scale by cap / den (never up), to fit the pool's width and height.
+    let (cap, den) = if width * pool.rows >= height * pool.size {
+        (pool.size, width.max(pool.size))
+    } else {
+        (pool.rows, height.max(pool.rows))
+    };
     let (out_width, out_height) = ((width * cap / den).max(1), (height * cap / den).max(1));
     let used = out_height.div_ceil(STRIP_ROWS);
 
@@ -237,7 +241,7 @@ pub fn load_thumbnail(
         width: out_width as u32,
         height: out_height as u32,
         // Smaller than intended, for lack of memory
-        reduced: cap < size,
+        reduced: pool.size < size,
         strips: pool.strips[..used].to_vec(),
     }))
 }
