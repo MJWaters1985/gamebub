@@ -111,33 +111,33 @@ pub struct LoadedThumbnail {
     pub strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
 }
 
-/// Size of the box art buffers: the size Download Box Art makes thumbnails at. Larger
-/// thumbnails are shrunk to fit.
-const POOL_SIZE: usize = 120;
+/// Box art size for wide (GBA) box art: the size Download Box Art makes thumbnails at.
+pub const BOXART_SIZE: usize = 120;
+/// Box art size for square (GB / GBC) box art: full-size square art and a screen of names
+/// don't fit in memory together, and 96x96 uses about as much as full-size GBA art.
+pub const BOXART_SIZE_SQUARE: usize = 96;
 
-/// Pixel buffers for box art, allocated once for the largest thumbnail and reused for every
-/// game until leaving Run ROM. Allocating and freeing them per game fragments the heap until
-/// the renderer can't get the block it needs.
+/// Pixel buffers for box art, allocated once and reused for every game until leaving the list.
+/// Allocating and freeing them per game fragments the heap until the renderer can't get the
+/// block it needs.
 #[derive(Default)]
 pub struct StripPool {
-    /// Strips of STRIP_ROWS rows, POOL_SIZE / step pixels wide
+    /// Strips of STRIP_ROWS rows, `size` pixels wide
     strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
-    /// Every `step`th pixel is kept (1 = full size)
-    step: usize,
+    /// Largest width and height of an image (0 = not allocated)
+    size: usize,
 }
 
 impl StripPool {
-    /// Free the buffers (when leaving Run ROM).
+    /// Free the buffers (when leaving the list).
     pub fn clear(&mut self) {
         *self = StripPool::default();
     }
 
-    /// Allocate buffers for the largest thumbnail size (no larger than 1/`min_step`) that leaves
-    /// enough memory.
-    fn allocate(&mut self, min_step: usize) -> bool {
+    /// Allocate buffers for `size`, or half or a third of it if memory is short.
+    fn allocate(&mut self, size: usize) -> bool {
         let free = unsafe { esp_idf_svc::sys::heap_caps_get_free_size(esp_idf_svc::sys::MALLOC_CAP_8BIT) };
-        for step in min_step..=3 {
-            let size = POOL_SIZE / step;
+        for size in [size, size / 2, size / 3] {
             if size * size * 3 + THUMBNAIL_HEADROOM > free {
                 continue;
             }
@@ -150,10 +150,10 @@ impl StripPool {
                 esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT)
             };
             if largest_after >= RENDER_HEADROOM {
-                *self = StripPool { strips, step };
+                *self = StripPool { strips, size };
                 return true;
             }
-            log::warn!("Box art at 1/{step} size leaves too little memory (largest block {largest_after})");
+            log::warn!("Box art at {size}x{size} leaves too little memory (largest block {largest_after})");
         }
         log::warn!("Not enough memory for box art (free {free})");
         false
@@ -162,15 +162,14 @@ impl StripPool {
 
 /// Load a thumbnail file: b"BBX1", u16 width, u16 height (little endian), then RGB888 rows.
 ///
-/// The image is read into the strips of `pool` (allocated on first use), shrunk if the pool is
-/// for a smaller size (every 2nd or 3rd pixel). The thumbnail's strips share the pool's
-/// buffers, so release them before loading the next one; each strip is the pool's width, so
-/// show only `width` columns and `height` rows in total. Returns None if the file is missing
-/// or invalid.
+/// The image is read into the strips of `pool` (allocated for `size` on first use), shrunk to
+/// fit by averaging. The thumbnail's strips share the pool's buffers, so release them before
+/// loading the next one; each strip is the pool's width, so show only `width` columns and
+/// `height` rows in total. Returns None if the file is missing or invalid.
 pub fn load_thumbnail(
     path: &Path,
     pool: &mut StripPool,
-    min_step: usize,
+    size: usize,
 ) -> Option<Result<LoadedThumbnail, LowMemory>> {
     let mut file = std::io::BufReader::with_capacity(2048, std::fs::File::open(path).ok()?);
     let mut header = [0u8; 8];
@@ -183,41 +182,57 @@ pub fn load_thumbnail(
     if width == 0 || height == 0 || width > MAX_THUMBNAIL as usize || height > MAX_THUMBNAIL as usize {
         return None;
     }
-    if pool.strips.is_empty() && !pool.allocate(min_step) {
+    if pool.strips.is_empty() && !pool.allocate(size) {
         let free = unsafe { esp_idf_svc::sys::heap_caps_get_free_size(esp_idf_svc::sys::MALLOC_CAP_8BIT) };
         return Some(Err(LowMemory { largest_free: free }));
     }
-    // Shrink to fit the buffers.
-    let capacity = POOL_SIZE / pool.step;
-    let mut step = pool.step;
-    while width / step > capacity || height / step > capacity {
-        step += 1;
-    }
-    let (out_width, out_height) = (width / step, height / step);
+    // Scale by cap / den (never up).
+    let cap = pool.size;
+    let den = width.max(height).max(cap);
+    let (out_width, out_height) = ((width * cap / den).max(1), (height * cap / den).max(1));
     let used = out_height.div_ceil(STRIP_ROWS);
-    let mut row = vec![0u8; width * 3];
-    for (k, strip) in pool.strips[..used].iter_mut().enumerate() {
+
+    // Source rows needed for one output row: at most this many, kept in a ring.
+    let span = den.div_ceil(cap) + 1;
+    let mut rows = vec![0u8; span * width * 3];
+    let mut next_row = 0; // next source row to read
+    let mut y = 0;
+    for strip in pool.strips[..used].iter_mut() {
         let stride = strip.width() as usize * 3;
-        let rows = STRIP_ROWS.min(out_height - k * STRIP_ROWS);
         let out = strip.make_mut_bytes();
-        for r in 0..rows {
-            // Read `step` source rows, keep the first.
-            for skip in 0..step {
-                file.read_exact(&mut row).ok()?;
-                if skip == 0 {
-                    let out_row = &mut out[r * stride..][..out_width * 3];
-                    for x in 0..out_width {
-                        out_row[x * 3..x * 3 + 3].copy_from_slice(&row[x * step * 3..x * step * 3 + 3]);
+        for r in 0..STRIP_ROWS.min(out_height - y) {
+            // Source rows and columns covered by an output pixel.
+            let (r0, r1) = (y * den / cap, ((y + 1) * den / cap).max(y * den / cap + 1).min(height));
+            while next_row < r1 {
+                let slot = next_row % span;
+                file.read_exact(&mut rows[slot * width * 3..][..width * 3]).ok()?;
+                next_row += 1;
+            }
+            let out_row = &mut out[r * stride..][..out_width * 3];
+            for x in 0..out_width {
+                let (c0, c1) = (x * den / cap, ((x + 1) * den / cap).max(x * den / cap + 1).min(width));
+                let mut sum = [0u32; 3];
+                for sy in r0..r1 {
+                    let row = &rows[(sy % span) * width * 3..][..width * 3];
+                    for sx in c0..c1 {
+                        for c in 0..3 {
+                            sum[c] += row[sx * 3 + c] as u32;
+                        }
                     }
                 }
+                let n = ((r1 - r0) * (c1 - c0)) as u32;
+                for c in 0..3 {
+                    out_row[x * 3 + c] = (sum[c] / n) as u8;
+                }
             }
+            y += 1;
         }
     }
     Some(Ok(LoadedThumbnail {
         width: out_width as u32,
         height: out_height as u32,
         // Smaller than intended, for lack of memory
-        reduced: step > min_step,
+        reduced: cap < size,
         strips: pool.strips[..used].to_vec(),
     }))
 }

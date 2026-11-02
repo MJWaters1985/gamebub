@@ -145,9 +145,8 @@ impl UiState {
                 &system.thumbnail_path(&game.name),
                 &mut self.library.strip_pool,
                 // Game Boy box art is square (the largest), and those lists are often long:
-                // full-size art and a screen full of names don't fit in memory together, so it
-                // is shown at half resolution (scaled up to the same size).
-                if system.folder == "Game Boy Advance" { 1 } else { 2 },
+                // full-size art and a screen full of names don't fit in memory together.
+                if system.folder == "Game Boy Advance" { library::BOXART_SIZE } else { library::BOXART_SIZE_SQUARE },
             ),
             _ => None,
         };
