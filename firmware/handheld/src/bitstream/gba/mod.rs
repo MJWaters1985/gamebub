@@ -243,7 +243,7 @@ impl Gba {
             corrections.get(setting).unwrap_or(&&IDENTITY)
         };
         correction
-            .with_white_balance()
+            .with_display_color()
             .configure(device, COLOR_CORRECTION_BASE)?;
 
         Ok(())

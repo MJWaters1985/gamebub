@@ -72,7 +72,9 @@ pub fn initial_program_boot(device: &mut Device) -> anyhow::Result<()> {
     device
         .fpga
         .program(&mut bitstream, &mut SCRATCH.take().unwrap())
-        .context("Failed to program FPGA")
+        .context("Failed to program FPGA")?;
+    boot::apply_display_color(device);
+    Ok(())
 }
 
 fn heatshrink_decompress_stream(file: File) -> impl Read {
@@ -85,6 +87,7 @@ fn heatshrink_decompress_stream(file: File) -> impl Read {
 
 pub fn program_boot() {
     program_fpga(&crate::util::get_system_file_path("boot.bit.hs"));
+    boot::apply_display_color(&mut Device::lock());
 }
 
 /// Scale factor applied to accelerometer readings for tilt games.

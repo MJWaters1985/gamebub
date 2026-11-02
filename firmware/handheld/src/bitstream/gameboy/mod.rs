@@ -107,7 +107,7 @@ impl Gameboy {
             }
         };
         correction
-            .with_white_balance()
+            .with_display_color()
             .configure(device, COLOR_CORRECTION_BASE)?;
 
         // DMG palettes

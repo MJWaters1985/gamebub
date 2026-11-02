@@ -23,21 +23,11 @@ impl ColorCorrection {
         correction
     }
 
-    /// Apply the user's display white balance setting.
-    pub fn with_white_balance(&self) -> ColorCorrection {
-        // Red, green, and blue gains (linear).
-        let gains: [f32; 3] = match crate::kvs::keys::DISPLAY_WHITE_BALANCE.get().unwrap_or(0) {
-            1 => [1.0, 0.95, 0.85],
-            2 => [1.0, 0.90, 0.74],
-            3 => [0.90, 0.95, 1.0],
-            _ => return self.clone(),
-        };
+    /// Apply the user's display color settings (Settings > Display) after this correction.
+    pub fn with_display_color(&self) -> ColorCorrection {
         let mut correction = self.clone();
-        for (row, gain) in correction.matrix.chunks_mut(3).zip(gains) {
-            for x in row {
-                *x *= gain;
-            }
-        }
+        correction.matrix =
+            crate::display_color::DisplayColor::current().matrix_after(&self.matrix);
         correction
     }
 }
@@ -157,6 +147,12 @@ impl ColorCorrection {
         let output_depth = 8;
         let mut output_table = [0u16; 1 << OUTPUT_TABLE_DEPTH];
         make_gamma_table(&mut output_table, 1.0 / self.out_gamma, 1.0, output_depth);
+        // Display contrast and gamma, on the encoded output.
+        let display = crate::display_color::DisplayColor::current();
+        let output_max = ((1 << output_depth) - 1) as f32;
+        for value in output_table.iter_mut() {
+            *value = (display.curve(*value as f32 / output_max) * output_max + 0.5) as u16;
+        }
 
         let writes: [(u32, &[u16]); 3] = [
             (0x0000, &matrix),
@@ -181,5 +177,14 @@ impl ColorCorrection {
         }
 
         Ok(())
+    }
+
+    /// Turn corrections on or off, on a core whose color correction has an enable register.
+    pub fn set_enabled(device: &mut Device, base: u32, enabled: bool) -> Result<(), fpga::Error> {
+        let command = fpga::SpiCommand::new(fpga::FpgaSpiWordSize::Bits16);
+        let data = (enabled as u16).to_le_bytes();
+        device
+            .fpga
+            .spi_write(Some(MegaHertz(10).into()), command, base | 0xC000, &data)
     }
 }

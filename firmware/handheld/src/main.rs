@@ -15,6 +15,7 @@ mod control;
 mod core;
 mod crash_handler;
 mod device;
+mod display_color;
 mod fwinfo;
 mod hwinfo;
 mod input;

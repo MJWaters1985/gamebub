@@ -11,6 +11,24 @@ pub const REG_LOGO_Y: u32 = REG_LOGO_BASE | 0x4;
 pub const REG_BASE: u32 = 0x0400_0000;
 pub const MEM_BASE: u32 = 0x0500_0000;
 pub const FIFO_BASE: u32 = 0x0600_0000;
+pub const COLOR_CORRECTION_BASE: u32 = 0x0700_0000;
+
+/// Apply the display color settings to the boot bitstream's video (the logo animation and the
+/// background behind the menus). Left off when the settings are neutral, so colors are unchanged.
+pub fn apply_display_color(device: &mut Device) {
+    use super::util::color_correction::{presets::IDENTITY, ColorCorrection};
+    let result = if crate::display_color::is_neutral() {
+        ColorCorrection::set_enabled(device, COLOR_CORRECTION_BASE, false)
+    } else {
+        IDENTITY
+            .with_display_color()
+            .configure(device, COLOR_CORRECTION_BASE)
+            .and_then(|_| ColorCorrection::set_enabled(device, COLOR_CORRECTION_BASE, true))
+    };
+    if let Err(e) = result {
+        log::error!("Failed to apply display color to boot bitstream: {e:?}");
+    }
+}
 
 /// Load a file to the internal soft CPU memory.
 pub fn load_cpu_memory(

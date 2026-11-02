@@ -5,6 +5,7 @@ import chisel3.util._
 import lib.mem.MemoryMap
 import net.gamebub.framework.interface._
 import lib.mem.MemoryInterface
+import lib.video.ColorCorrection
 import chisel3.util.SRAM
 import lib.mem.RegisterMap
 import chisel3.simulator.PeekPokeAPI.TestableData
@@ -30,6 +31,12 @@ class HandheldBoot extends Module with Core {
             colorDepthG = 5,
             colorDepthB = 5,
             framePeriod = 1.0 / 60.0,
+        )
+        val videoFilter = new VideoFilterBasicV0(
+            colorInDepthR = 5,
+            colorInDepthG = 5,
+            colorInDepthB = 5,
+            latency = 3,
         )
         val host = new HostV0()
         val pmod = new PmodV0()
@@ -82,6 +89,7 @@ class HandheldBoot extends Module with Core {
     val registerInterface = Wire(new MemoryInterface(addressWidth = 16, dataWidth = 32))
     val hostMemInterface = Wire(new MemoryInterface(addressWidth = 16, dataWidth = 32))
     val hostFifoInterface = Wire(new MemoryInterface(addressWidth = 24, dataWidth = 32))
+    val colorCorrectInterface = Wire(new MemoryInterface(addressWidth = 16, dataWidth = 16))
     val memoryMap = MemoryMap(
         addressWidth = 32,
         dataWidth = 32,
@@ -90,6 +98,7 @@ class HandheldBoot extends Module with Core {
             0x04.U(8.W) -> registerInterface,
             0x05.U(8.W) -> hostMemInterface,
             0x06.U(8.W) -> hostFifoInterface,
+            0x07.U(8.W) -> colorCorrectInterface,
         ))
     io.host.mem.unsafe :<>= memoryMap.unsafe
     memoryMap.writeStrobe := "b1111".U
@@ -326,4 +335,13 @@ class HandheldBoot extends Module with Core {
     when (cpu.io.mem_valid && cpu.io.mem_instr) {
         regLastCpuPc := cpu.io.mem_addr
     }
+
+    // Video filter: the display color settings (off until the host enables it)
+    ColorCorrection.setup(
+        clock = clock,
+        reset = reset,
+        videoFilter = io.videoFilter,
+        memInterface = colorCorrectInterface,
+        enableRegister = true,
+    )
 }

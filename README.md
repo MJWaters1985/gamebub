@@ -29,8 +29,10 @@ Highlights:
 - **Better file browser**: natural sorting, large folders, favorites (Select) and core
   settings before loading a ROM (Start). **Load ROM** from the in-game menu.
 - **Safer saves** with a backup copy, and an optional `/saves` folder.
-- **New settings**: auto power off, X/Y as Select/Start, game color temperature, integer
-  overscale for GB/GBC and tilt sensitivity.
+- **Display color settings** for everything on screen: color temperature, saturation,
+  contrast, gamma and red/green/blue.
+- **New settings**: auto power off, X/Y as Select/Start, integer overscale for GB/GBC and
+  tilt sensitivity.
 - **Crash and bug fixes**: WarioWare: Twisted, Game Boy Player rumble, headphones after a
   power cycle, USB drive mode after updates.
 

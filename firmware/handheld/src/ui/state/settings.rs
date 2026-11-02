@@ -12,6 +12,7 @@ use time::OffsetDateTime;
 use super::UiState;
 
 mod settings {
+    use crate::display_color;
     use crate::kvs::{keys, KvsKey};
     use crate::ui::state::ScreenId;
 
@@ -41,6 +42,10 @@ mod settings {
             name: &'static str,
             screen: ScreenId,
         },
+        Action {
+            name: &'static str,
+            action: fn(),
+        },
     }
 
     pub static PAGE_ROOT: Page = Page {
@@ -53,6 +58,10 @@ mod settings {
             Entry::Subpage {
                 name: "General",
                 page: &PAGE_GENERAL,
+            },
+            Entry::Subpage {
+                name: "Display",
+                page: &PAGE_DISPLAY,
             },
             Entry::Subpage {
                 name: "Wi-Fi",
@@ -112,10 +121,50 @@ mod settings {
                 name: "X/Y as Select/Start",
                 key: &keys::XY_SELECT_START,
             },
+        ],
+    };
+
+    pub static PAGE_DISPLAY: Page = Page {
+        name: "Display",
+        entries: &[
             Entry::List {
-                name: "Game Color Temperature",
-                key: &keys::DISPLAY_WHITE_BALANCE,
-                choices: &["Default", "Warm", "Warmer", "Cool"],
+                name: "Color Temperature",
+                key: &keys::DISPLAY_TEMPERATURE,
+                choices: &display_color::TEMPERATURE_CHOICES,
+            },
+            Entry::List {
+                name: "Saturation",
+                key: &keys::DISPLAY_SATURATION,
+                choices: &display_color::SATURATION_CHOICES,
+            },
+            Entry::List {
+                name: "Contrast",
+                key: &keys::DISPLAY_CONTRAST,
+                choices: &display_color::CONTRAST_CHOICES,
+            },
+            Entry::List {
+                name: "Gamma",
+                key: &keys::DISPLAY_GAMMA,
+                choices: &display_color::GAMMA_CHOICES,
+            },
+            Entry::List {
+                name: "Red",
+                key: &keys::DISPLAY_RED,
+                choices: &display_color::GAIN_CHOICES,
+            },
+            Entry::List {
+                name: "Green",
+                key: &keys::DISPLAY_GREEN,
+                choices: &display_color::GAIN_CHOICES,
+            },
+            Entry::List {
+                name: "Blue",
+                key: &keys::DISPLAY_BLUE,
+                choices: &display_color::GAIN_CHOICES,
+            },
+            Entry::Action {
+                name: "Reset to Defaults",
+                action: display_color::reset,
             },
         ],
     };
@@ -385,6 +434,11 @@ impl Model for SettingsModel {
                 r#type: SettingType::Subpage,
                 ..Default::default()
             },
+            settings::Entry::Action { name, .. } => SettingEntry {
+                name: (*name).into(),
+                r#type: SettingType::Subpage,
+                ..Default::default()
+            },
         };
         Some(row)
     }
@@ -418,6 +472,9 @@ impl SettingsModel {
             settings::Entry::Checkbox { key, .. } => key.set(&value.bool_value),
             settings::Entry::List { key, .. } => {
                 key.set(&value.int_value);
+                if std::ptr::eq(self.page, &settings::PAGE_DISPLAY) {
+                    apply_display_color();
+                }
                 if std::ptr::eq(*key, &crate::kvs::keys::TIME_ZONE) {
                     // The date and time row shows local time.
                     crate::timezone::apply();
@@ -437,10 +494,28 @@ impl SettingsModel {
             settings::Entry::Screen { screen, .. } => {
                 return SettingsAction::Screen(*screen);
             }
+            settings::Entry::Action { action, .. } => {
+                action();
+                if std::ptr::eq(self.page, &settings::PAGE_DISPLAY) {
+                    apply_display_color();
+                }
+                self.notify.reset();
+                return SettingsAction::None;
+            }
         }
         self.notify.row_changed(index);
         SettingsAction::None
     }
+}
+
+/// Apply changed display color settings to the menus (games pick them up when they start).
+fn apply_display_color() {
+    crate::display_color::apply_to_menus();
+    // The boot bitstream (logo and background behind the menus) runs whenever no core does.
+    if crate::core::CoreManager::lock().current_bitstream().is_none() {
+        crate::bitstream::boot::apply_display_color(&mut Device::lock());
+    }
+    crate::ui::send(crate::ui::Message::Redraw);
 }
 
 enum SettingsAction {

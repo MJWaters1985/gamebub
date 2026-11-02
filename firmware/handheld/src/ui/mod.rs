@@ -125,6 +125,8 @@ static SENDER: OnceLock<mpsc::Sender<Message>> = OnceLock::new();
 struct FpgaLineRenderer<'a, 'b, 'c> {
     device: &'a mut Device<'b>,
     line_buffer: &'c mut [Argb1555],
+    /// Display color settings output.
+    color_buffer: &'c mut [u16],
 }
 
 impl<'a, 'b, 'c> LineBufferProvider for &mut FpgaLineRenderer<'a, 'b, 'c> {
@@ -140,9 +142,12 @@ impl<'a, 'b, 'c> LineBufferProvider for &mut FpgaLineRenderer<'a, 'b, 'c> {
         let buffer = &mut self.line_buffer[range];
         render_fn(buffer);
 
+        let pixels: &[u16] =
+            unsafe { std::slice::from_raw_parts(buffer.as_ptr() as *const u16, buffer.len()) };
+        let pixels = crate::display_color::transform_menu_line(pixels, self.color_buffer);
         let slice = {
-            let len = buffer.len() * 2;
-            unsafe { std::slice::from_raw_parts(buffer.as_ptr() as *const u8, len) }
+            let len = pixels.len() * 2;
+            unsafe { std::slice::from_raw_parts(pixels.as_ptr() as *const u8, len) }
         };
         let _ = self.device.fpga.write_overlay(start as u32, slice);
     }
@@ -151,6 +156,7 @@ impl<'a, 'b, 'c> LineBufferProvider for &mut FpgaLineRenderer<'a, 'b, 'c> {
 #[allow(unused)]
 pub struct UI {
     framebuffer: Vec<Argb1555>,
+    color_buffer: Vec<u16>,
     lcd_line_buffer: Vec<u8>,
     window: Rc<MinimalSoftwareWindow>,
     message_queue: Receiver<Message>,
@@ -235,8 +241,10 @@ impl UI {
 
         let root = slint::MainWindow::new().unwrap();
 
+        crate::display_color::apply_to_menus();
         let ui = UI {
             framebuffer,
+            color_buffer: vec![0; DISPLAY_WIDTH],
             lcd_line_buffer,
             window,
             message_queue: receiver,
@@ -277,6 +285,7 @@ impl UI {
                     let mut line_renderer = FpgaLineRenderer {
                         device: &mut device,
                         line_buffer: &mut self.framebuffer,
+                        color_buffer: &mut self.color_buffer,
                     };
                     renderer.render_by_line(&mut line_renderer);
                 };

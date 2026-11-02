@@ -139,12 +139,18 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   | Save Files | General | Next to ROM, `/saves` folder (a subfolder per ROM file type, e.g. `/saves/gba`) | [#17](https://github.com/elipsitz/gamebub/issues/17) |
   | Auto Power Off | General | Never, 3, 5, 10 or 30 min, with a warning first | [#37](https://github.com/elipsitz/gamebub/issues/37) |
   | X/Y as Select/Start | General | On, off | [#16](https://github.com/elipsitz/gamebub/issues/16) |
-  | Game Color Temperature | General | Default, Warm, Warmer, Cool | [#24](https://github.com/elipsitz/gamebub/issues/24) |
   | Integer Overscale (crop) | Core: GB / GBC | On, off (one scale step larger, cropping top and bottom) | [#30](https://github.com/elipsitz/gamebub/issues/30) |
   | Tilt Sensitivity | Core: GB / GBC and Core: GBA | Lowest, Low, Normal, High | [#63](https://github.com/elipsitz/gamebub/issues/63) |
   | Time Zone | General | Named time zones (with daylight saving time) or a fixed UTC offset | |
   | Show Clock | General | On, off (the time in the status bar, opposite the battery level) | |
   | Clock Format | General | 12-hour (6:10 PM), 24-hour (18:10) | |
+
+- **Settings → Display** adjusts the colors of everything on screen: games, menus, box art
+  and the boot animation ([#24](https://github.com/elipsitz/gamebub/issues/24)). Color
+  Temperature (Coolest to Warmest), Saturation (0–150%), Contrast (80–120%), Gamma
+  (Darker, Default, Brighter), Red / Green / Blue (80–100%) and Reset to Defaults. Games
+  combine the settings with the core's color profile; the boot bitstream gets the same
+  color correction stage as the cores. With every setting at default, colors are unchanged.
 
 ## Bug fixes
 

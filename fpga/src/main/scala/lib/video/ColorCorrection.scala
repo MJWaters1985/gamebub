@@ -100,6 +100,8 @@ object ColorCorrection {
     reset: Reset,
     videoFilter: VideoFilterBasicV0,
     memInterface: MemoryInterface,
+    /// Start with corrections off, enabled by the host writing 1 to 0xC000 (0 disables).
+    enableRegister: Boolean = false,
   ): Unit = {
     withClockAndReset (videoFilter.clock, videoFilter.reset) {
       val colorCorrector = Module(new ColorCorrection(
@@ -109,7 +111,8 @@ object ColorCorrection {
         matrixDepth = 12,
         outputTableDepth = 10,
       ))
-      colorCorrector.io.enable := true.B
+      val regEnable = RegInit((!enableRegister).B)
+      colorCorrector.io.enable := regEnable
       colorCorrector.io.in := videoFilter.dataIn
       videoFilter.dataOut := colorCorrector.io.out.convertTo(videoFilter.dataOut)
 
@@ -144,6 +147,11 @@ object ColorCorrection {
             outputTable.writePorts(0).enable := true.B
             outputTable.writePorts(0).address := mem.address(colorCorrector.outputTableDepth, 1)
             outputTable.writePorts(0).data := mem.dataWrite
+          }
+          if (enableRegister) {
+            when (mem.address(15, 14) === 3.U) {
+              regEnable := mem.dataWrite(0)
+            }
           }
         }
         colorCorrector.io.matrixR := VecInit(matrix(0), matrix(1), matrix(2))

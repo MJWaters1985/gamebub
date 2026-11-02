@@ -66,8 +66,14 @@ pub static TILT_SENSITIVITY: KvsKey<i32> = KvsKey::new_with_default("tilt-sens",
 /// Scale GB/GBC video one step larger, cropping the top and bottom.
 pub static GB_OVERSCALE: KvsKey<bool> = KvsKey::new_with_default("gb-overscale", false);
 
-/// Display white balance preset.
-pub static DISPLAY_WHITE_BALANCE: KvsKey<i32> = KvsKey::new_with_default("display-wb", 0);
+/// Display color settings (indices into the choices in `display_color`).
+pub static DISPLAY_TEMPERATURE: KvsKey<i32> = KvsKey::new_with_default("disp-temp", 3);
+pub static DISPLAY_SATURATION: KvsKey<i32> = KvsKey::new_with_default("disp-sat", 4);
+pub static DISPLAY_CONTRAST: KvsKey<i32> = KvsKey::new_with_default("disp-contrast", 2);
+pub static DISPLAY_GAMMA: KvsKey<i32> = KvsKey::new_with_default("disp-gamma", 1);
+pub static DISPLAY_RED: KvsKey<i32> = KvsKey::new_with_default("disp-red", 4);
+pub static DISPLAY_GREEN: KvsKey<i32> = KvsKey::new_with_default("disp-green", 4);
+pub static DISPLAY_BLUE: KvsKey<i32> = KvsKey::new_with_default("disp-blue", 4);
 
 /// Run ROM: last system and game (ROM path) viewed.
 pub static LIBRARY_LAST_SYSTEM: KvsKey<String> = KvsKey::new("lib-last-system");
@@ -109,7 +115,13 @@ pub fn flush_all() {
     AUTO_POWER_OFF.flush();
     XY_SELECT_START.flush();
     TILT_SENSITIVITY.flush();
-    DISPLAY_WHITE_BALANCE.flush();
+    DISPLAY_TEMPERATURE.flush();
+    DISPLAY_SATURATION.flush();
+    DISPLAY_CONTRAST.flush();
+    DISPLAY_GAMMA.flush();
+    DISPLAY_RED.flush();
+    DISPLAY_GREEN.flush();
+    DISPLAY_BLUE.flush();
     GB_OVERSCALE.flush();
     LIBRARY_LAST_SYSTEM.flush();
     LIBRARY_LAST_GAME.flush();
