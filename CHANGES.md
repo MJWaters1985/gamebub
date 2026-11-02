@@ -76,6 +76,11 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
     "Reduced".
   - Built to fit large libraries in the ESP32-S3's memory: about 10 rows on screen, box art
     held in buffers allocated once per list, and a fixed-width art panel.
+- **Consistent screens.** Button hints are always on the bottom edge. Results, warnings and
+  errors show a status icon (check, warning or X) with a centered title and message; busy
+  screens show what's happening with a shared progress bar; Run ROM's empty state shows a
+  folder icon. The error screen's reboot prompt is a Start button hint, and a core's details
+  screen is a list (Run Core, Back) like the other menus.
 - **Long lists.** Text lists in the menus only create the rows on screen, filling them in as
   the list scrolls. Creating a row for every entry ran out of memory once a list had about
   30 entries (Run ROM crashed opening a system with more games).

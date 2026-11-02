@@ -1,0 +1,63 @@
+import { Icons } from "../icons.slint";
+
+export enum StatusKind { none, success, warning, error, empty }
+
+// Result, warning and confirmation messages: a status icon, then a bold title and the text,
+// centered in the space it's given. Extra elements (e.g. a progress bar) go below the text.
+// Screens put it above their row of button hints, which stays on the bottom edge.
+export component StatusMessage inherits VerticalLayout {
+    in property <StatusKind> kind: StatusKind.none;
+    in property <string> title;
+    in property <string> text;
+    // Wrap long text (results), or keep each line and shorten it with "..." (warnings).
+    in property <bool> wrap-text: true;
+
+    alignment: center;
+    spacing: 6px;
+
+    if root.kind != StatusKind.none: HorizontalLayout {
+        alignment: center;
+
+        Image {
+            width: 20px;
+            height: 20px;
+            source: root.kind == StatusKind.success ? Icons.status-success
+                : root.kind == StatusKind.warning ? Icons.status-warning
+                : root.kind == StatusKind.empty ? Icons.status-empty
+                : Icons.status-error;
+        }
+    }
+
+    Text {
+        horizontal-alignment: center;
+        font-weight: 800;
+        wrap: word-wrap;
+        text: root.title;
+    }
+
+    if root.text != "": Text {
+        horizontal-alignment: center;
+        wrap: root.wrap-text ? TextWrap.word-wrap : TextWrap.no-wrap;
+        overflow: elide;
+        text: root.text;
+    }
+
+    @children
+}
+
+// Progress bar used by StatusMessage screens (progress from 0 to 1).
+export component ProgressBar inherits Rectangle {
+    in property <float> progress;
+
+    height: 12px;
+    border-color: black;
+    border-width: 1px;
+
+    Rectangle {
+        x: 2px;
+        y: 2px;
+        height: parent.height - 4px;
+        width: (parent.width - 4px) * clamp(root.progress, 0, 1);
+        background: black;
+    }
+}

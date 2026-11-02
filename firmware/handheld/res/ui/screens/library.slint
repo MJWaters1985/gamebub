@@ -2,6 +2,7 @@ import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
 import { TextListView } from "../components/list_view.slint";
 import { ControlHint } from "../components/control_hint.slint";
+import { StatusMessage, StatusKind } from "../components/status_message.slint";
 
 // "Run ROM": pick a system, then a game from /roms/<system>.
 export component LibraryScreen inherits ScreenBase {
@@ -35,15 +36,17 @@ export component LibraryScreen inherits ScreenBase {
             VerticalLayout {
                 spacing: 2px;
 
-                if Backend.library-empty: Text {
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
-                    text: "No ROMs yet.\n\nDump cartridges with Tools → Cartridge Manager,\nor copy ROMs to /roms/Game Boy, /roms/Game Boy Color\nor /roms/Game Boy Advance on the SD card.";
+                if Backend.library-empty: StatusMessage {
+                    vertical-stretch: 1;
+                    kind: StatusKind.empty;
+                    title: "No ROMs yet";
+                    text: "Dump cartridges with Tools → Cartridge Manager, or copy ROMs to /roms/Game Boy, /roms/Game Boy Color or /roms/Game Boy Advance on the SD card.";
                 }
 
                 systems := TextListView {
                     visible: !Backend.library-empty;
+                    // Hidden lists still take part in the layout: give the message the room.
+                    max-height: Backend.library-empty ? 0px : 10000px;
                     model: Backend.library-systems;
                     focus-item <=> Backend.library-system-index;
                     on-item-selected(i) => {

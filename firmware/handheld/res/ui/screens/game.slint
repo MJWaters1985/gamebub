@@ -1,3 +1,4 @@
+import { StatusMessage, ProgressBar } from "../components/status_message.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
 import { Button } from "../components/button.slint";
@@ -56,25 +57,22 @@ export component GameScreen inherits ScreenBase {
             }
         }
 
-        if Backend.core-is-loading:  Rectangle {
-            background: #FFF;
-            border-color: black;
-            border-width: 1px;
-            width: i-loading-layout.min-width;
-            height: i-loading-layout.min-height;
+        // Loading: a busy message over the whole screen, like the other busy screens.
+        if Backend.core-is-loading: Rectangle {
+            background: #E8E8E8;
 
-            i-loading-layout := VerticalLayout {
-                padding: 8px;
-                spacing: 4px;
-                i-text := Text {
-                    horizontal-alignment: center;
-                    text: "Loading...";
-                }
+            StatusMessage {
+                padding-left: 8px;
+                padding-right: 8px;
+                title: "Loading...";
 
-                Rectangle {
-                    background: black;
-                    width: Backend.core-progress * i-text.min-width;
-                    height: 2px;
+                HorizontalLayout {
+                    padding-left: 40px;
+                    padding-right: 40px;
+
+                    ProgressBar {
+                        progress: Backend.core-progress;
+                    }
                 }
             }
         }

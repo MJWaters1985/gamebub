@@ -1,3 +1,4 @@
+import { StatusMessage, StatusKind, ProgressBar } from "../../components/status_message.slint";
 import { Global, ScreenId, Backend, BatteryInfo } from "../../common.slint";
 import { ScreenBase } from "../../components/screen.slint";
 import { TextListView } from "../../components/list_view.slint";
@@ -86,40 +87,21 @@ export component ToolsScreen inherits ScreenBase {
                 }
             }
 
-            // Busy: label and progress bar
-            if Backend.cart-tool-view == 0: VerticalLayout {
-                alignment: center;
-                spacing: 12px;
-                padding: 24px;
+            // Busy: label and progress bar, no icon and no hints (no buttons work)
+            if Backend.cart-tool-view == 0: StatusMessage {
+                padding-left: 8px;
+                padding-right: 8px;
+                title: Backend.cart-tool-busy-label;
+                text: (Backend.cart-tool-progress >= 0 ? "\{Math.round(Backend.cart-tool-progress)}%\n" : "")
+                    + "Don't remove the cartridge.";
 
-                Text {
-                    horizontal-alignment: center;
-                    text: Backend.cart-tool-busy-label;
-                }
+                if Backend.cart-tool-progress >= 0: HorizontalLayout {
+                    padding-left: 40px;
+                    padding-right: 40px;
 
-                if Backend.cart-tool-progress >= 0: Rectangle {
-                    height: 12px;
-                    border-color: black;
-                    border-width: 1px;
-
-                    Rectangle {
-                        x: 2px;
-                        y: 2px;
-                        height: parent.height - 4px;
-                        width: (parent.width - 4px) * min(1, Backend.cart-tool-progress / 100);
-                        background: black;
+                    ProgressBar {
+                        progress: Backend.cart-tool-progress / 100;
                     }
-                }
-
-                if Backend.cart-tool-progress >= 0: Text {
-                    horizontal-alignment: center;
-                    text: "\{Math.round(Backend.cart-tool-progress)}%";
-                }
-
-                Text {
-                    horizontal-alignment: center;
-                    text: "Don't remove the cartridge";
-                    color: #666;
                 }
             }
 
@@ -142,19 +124,23 @@ export component ToolsScreen inherits ScreenBase {
                     padding-right: 8px;
                     spacing: 6px;
 
+                    // One line each (shortened with "..." if needed), so the actions fit below.
                     Text {
                         font-weight: 800;
-                        wrap: word-wrap;
+                        overflow: elide;
+                        vertical-stretch: 0;
                         text: Backend.cart-tool-title;
                     }
 
                     Text {
-                        wrap: word-wrap;
+                        overflow: elide;
+                        vertical-stretch: 0;
                         text: Backend.cart-tool-details;
                     }
 
+                    // Takes the remaining height, and scrolls if the actions don't fit.
                     actions := TextListView {
-                        min-height: 80px;
+                        vertical-stretch: 1;
                         model: Backend.cart-tool-actions;
                         on-item-selected(i) => {
                             Backend.cart-tool-action(i);
@@ -224,34 +210,36 @@ export component ToolsScreen inherits ScreenBase {
                     }
                 }
 
+                // Status icon and message centered above the button hints, which stay on the bottom edge.
                 VerticalLayout {
-                    alignment: center;
-                    padding: 16px;
-                    spacing: 12px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
 
-                    Text {
-                        horizontal-alignment: center;
-                        font-weight: 800;
-                        text: Backend.cart-tool-confirm-title;
-                    }
+                    StatusMessage {
+                        vertical-stretch: 1;
+                        kind: StatusKind.warning;
+                        title: Backend.cart-tool-confirm-title;
+                        text: Backend.cart-tool-confirm-text;
+                        wrap-text: false;
 
-                    Text {
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                        text: Backend.cart-tool-confirm-text + "\n\nHold A for 3 seconds to continue.";
-                    }
+                        HorizontalLayout {
+                            padding-left: 40px;
+                            padding-right: 40px;
 
-                    Rectangle {
-                        height: 12px;
-                        border-color: black;
-                        border-width: 1px;
+                            Rectangle {
+                                height: 12px;
+                                border-color: black;
+                                border-width: 1px;
 
-                        Rectangle {
-                            x: 2px;
-                            y: 2px;
-                            height: parent.height - 4px;
-                            width: (parent.width - 4px) * min(1, held / 3s);
-                            background: black;
+                                Rectangle {
+                                    x: 2px;
+                                    y: 2px;
+                                    height: parent.height - 4px;
+                                    width: (parent.width - 4px) * min(1, held / 3s);
+                                    background: black;
+                                }
+                            }
                         }
                     }
 
@@ -286,20 +274,16 @@ export component ToolsScreen inherits ScreenBase {
                     }
                 }
 
+                // Status icon and message centered above the button hints, which stay on the bottom edge.
                 VerticalLayout {
-                    alignment: center;
-                    padding: 16px;
-                    spacing: 12px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
 
-                    Text {
-                        horizontal-alignment: center;
-                        font-weight: 800;
-                        text: Backend.cart-tool-result-ok ? "Done" : "Problem";
-                    }
-
-                    Text {
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
+                    StatusMessage {
+                        vertical-stretch: 1;
+                        kind: Backend.cart-tool-result-ok ? StatusKind.success : StatusKind.error;
+                        title: Backend.cart-tool-result-ok ? "Done" : "Problem";
                         text: Backend.cart-tool-result;
                     }
 
@@ -331,46 +315,32 @@ export component ToolsScreen inherits ScreenBase {
                 }
             }
 
-            if !Backend.task-done: VerticalLayout {
-                alignment: center;
-                spacing: 12px;
-                padding: 24px;
+            // Busy: no icon and no hints (no buttons work), centered like the other messages.
+            if !Backend.task-done: StatusMessage {
+                padding-left: 8px;
+                padding-right: 8px;
+                title: Backend.task-label;
 
-                Text {
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
-                    text: Backend.task-label;
-                }
+                if Backend.task-progress >= 0: HorizontalLayout {
+                    padding-left: 40px;
+                    padding-right: 40px;
 
-                if Backend.task-progress >= 0: Rectangle {
-                    height: 12px;
-                    border-color: black;
-                    border-width: 1px;
-
-                    Rectangle {
-                        x: 2px;
-                        y: 2px;
-                        height: parent.height - 4px;
-                        width: (parent.width - 4px) * min(1, Backend.task-progress / 100);
-                        background: black;
+                    ProgressBar {
+                        progress: Backend.task-progress / 100;
                     }
                 }
             }
 
+            // Status icon and message centered above the button hints, which stay on the bottom edge.
             if Backend.task-done: VerticalLayout {
-                alignment: center;
-                spacing: 12px;
-                padding: 16px;
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
 
-                Text {
-                    horizontal-alignment: center;
-                    font-weight: 800;
-                    text: Backend.task-result-ok ? "Done" : "Problem";
-                }
-
-                Text {
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
+                StatusMessage {
+                    vertical-stretch: 1;
+                    kind: Backend.task-result-ok ? StatusKind.success : StatusKind.error;
+                    title: Backend.task-result-ok ? "Done" : "Problem";
                     text: Backend.task-result;
                 }
 
@@ -506,34 +476,35 @@ export component ToolsScreen inherits ScreenBase {
                     }
                 }
 
+                // Status icon and message centered above the button hints, which stay on the bottom edge.
                 VerticalLayout {
-                    alignment: center;
-                    padding: 16px;
-                    spacing: 12px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
 
-                    Text {
-                        horizontal-alignment: center;
-                        font-weight: 800;
-                        text: "Erase the SD card?";
-                    }
+                    StatusMessage {
+                        vertical-stretch: 1;
+                        kind: StatusKind.warning;
+                        title: "Erase the SD card?";
+                        text: "Everything on the card is deleted: ROMs, saves, box art and screenshots. BIOS files in /system are kept.";
 
-                    Text {
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                        text: "Everything on the card is deleted: ROMs, saves, box art and screenshots. BIOS files in /system are kept.\n\nHold A for 3 seconds to erase.";
-                    }
+                        HorizontalLayout {
+                            padding-left: 40px;
+                            padding-right: 40px;
 
-                    Rectangle {
-                        height: 12px;
-                        border-color: black;
-                        border-width: 1px;
+                            Rectangle {
+                                height: 12px;
+                                border-color: black;
+                                border-width: 1px;
 
-                        Rectangle {
-                            x: 2px;
-                            y: 2px;
-                            height: parent.height - 4px;
-                            width: (parent.width - 4px) * min(1, held / 3s);
-                            background: black;
+                                Rectangle {
+                                    x: 2px;
+                                    y: 2px;
+                                    height: parent.height - 4px;
+                                    width: (parent.width - 4px) * min(1, held / 3s);
+                                    background: black;
+                                }
+                            }
                         }
                     }
 
@@ -566,27 +537,24 @@ export component ToolsScreen inherits ScreenBase {
                     }
                 }
 
-                if !Backend.task-done: Text {
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
-                    text: Backend.task-label + "\n\nDon't remove the SD card.";
+                // Busy: no icon and no hints (no buttons work).
+                if !Backend.task-done: StatusMessage {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    title: Backend.task-label;
+                    text: "Don't remove the SD card.";
                 }
 
+                // Status icon and message centered above the button hints, which stay on the bottom edge.
                 if Backend.task-done: VerticalLayout {
-                    alignment: center;
-                    spacing: 12px;
-                    padding: 16px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 6px;
 
-                    Text {
-                        horizontal-alignment: center;
-                        font-weight: 800;
-                        text: Backend.task-result-ok ? "Done" : "Problem";
-                    }
-
-                    Text {
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
+                    StatusMessage {
+                        vertical-stretch: 1;
+                        kind: Backend.task-result-ok ? StatusKind.success : StatusKind.error;
+                        title: Backend.task-result-ok ? "Done" : "Problem";
                         text: Backend.task-result;
                     }
 

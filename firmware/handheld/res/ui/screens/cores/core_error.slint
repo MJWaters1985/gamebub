@@ -1,3 +1,4 @@
+import { StatusMessage, StatusKind } from "../../components/status_message.slint";
 import { ControlHint } from "../../components/control_hint.slint";
 
 export component CoreError {
@@ -17,22 +18,21 @@ export component CoreError {
             }
         }
 
+        // Status icon and message centered above the button hints, which stay on the bottom edge.
         VerticalLayout {
-            spacing: 2px;
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 6px;
 
-            Text {
-                text: "Core Error";
-                horizontal-alignment: center;
-                font-weight: 800;
-            }
-
-            Text {
+            StatusMessage {
+                vertical-stretch: 1;
+                kind: StatusKind.error;
+                title: "Core Error";
                 text: error;
-                horizontal-alignment: center;
             }
 
             HorizontalLayout {
-                alignment: center;
+                alignment: end;
                 ControlHint {
                     label: "Confirm";
                     button: "a";

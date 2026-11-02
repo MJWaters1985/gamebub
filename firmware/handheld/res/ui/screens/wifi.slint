@@ -1,3 +1,4 @@
+import { StatusMessage, StatusKind } from "../components/status_message.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
 import { TextListView } from "../components/list_view.slint";
@@ -81,11 +82,11 @@ export component WifiScreen inherits ScreenBase {
                 self.focus();
             }
 
-            Text {
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                wrap: word-wrap;
-                text: Backend.wifi-busy-label;
+            // Busy: no icon and no hints (no buttons work).
+            StatusMessage {
+                padding-left: 8px;
+                padding-right: 8px;
+                title: Backend.wifi-busy-label;
             }
         }
 
@@ -171,20 +172,16 @@ export component WifiScreen inherits ScreenBase {
                 }
             }
 
+            // Status icon and message centered above the button hints, which stay on the bottom edge.
             VerticalLayout {
-                alignment: center;
-                padding: 16px;
-                spacing: 12px;
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
 
-                Text {
-                    horizontal-alignment: center;
-                    font-weight: 800;
-                    text: Backend.wifi-result-ok ? "Done" : "Problem";
-                }
-
-                Text {
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
+                StatusMessage {
+                    vertical-stretch: 1;
+                    kind: Backend.wifi-result-ok ? StatusKind.success : StatusKind.error;
+                    title: Backend.wifi-result-ok ? "Done" : "Problem";
                     text: Backend.wifi-result;
                 }
 

@@ -1,28 +1,33 @@
 import { Global, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
+import { ControlHint } from "../components/control_hint.slint";
+import { StatusMessage, StatusKind } from "../components/status_message.slint";
 
 export component ErrorScreen inherits ScreenBase {
     private property <int> selected-tool: -1;
 
     title: "Error";
     forward-focus: i-focus-scope;
+    // Status icon and message centered above the button hint, which stays on the bottom edge.
     VerticalLayout {
-        spacing: 4px;
-        padding-left: 4px;
-        padding-right: 4px;
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
 
-        Text {
-            text: Backend.error-text;
-            color: black;
-            vertical-alignment: center;
-            horizontal-alignment: center;
+        StatusMessage {
             vertical-stretch: 1;
+            kind: StatusKind.error;
+            title: "Something went wrong";
+            text: Backend.error-text;
         }
 
-        Text {
-            text: "Press START to reboot";
-            horizontal-alignment: center;
-            color: black;
+        HorizontalLayout {
+            alignment: end;
+
+            ControlHint {
+                label: "Reboot";
+                button: "start";
+            }
         }
     }
 

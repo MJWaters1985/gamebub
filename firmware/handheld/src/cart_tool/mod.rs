@@ -224,7 +224,9 @@ impl Worker {
             None => {}
         }
         details.push(match &self.rom {
-            Some(rom) => format!("ROM on SD card: {}", display_path(rom)),
+            // Only name the file when it isn't the name Dump ROM uses.
+            Some(rom) if *rom == info.rom_path() => "ROM on SD card".to_string(),
+            Some(rom) => format!("ROM on SD card: {}", file_name(rom)),
             None => "No matching ROM on SD card".to_string(),
         });
 
@@ -321,8 +323,8 @@ impl Worker {
             return send(Update::Confirm {
                 title: "Replace the save on the SD card?".into(),
                 text: format!(
-                    "{}\n\nIt's replaced by the cartridge's save (the old one is kept as .bak).",
-                    display_path(&path)
+                    "{}\nis replaced by the cartridge's save.\nThe old one is kept as .bak.",
+                    file_name(&path)
                 ),
             });
         }
@@ -366,8 +368,8 @@ impl Worker {
                     return send(Update::Confirm {
                         title: "Overwrite the save on the cartridge?".into(),
                         text: format!(
-                            "From the SD card:\n{}\n\nThe cartridge's current save is lost.",
-                            display_path(&path)
+                            "From the SD card: {}\nThe cartridge's current save is lost.",
+                            file_name(&path)
                         ),
                     });
                 }
@@ -462,6 +464,10 @@ fn format_size(bytes: u32) -> String {
 }
 
 /// Path as the user sees it on the SD card.
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
 fn display_path(path: &std::path::Path) -> String {
     let s = path.to_string_lossy();
     s.strip_prefix("/sdcard").unwrap_or(&s).to_string()
