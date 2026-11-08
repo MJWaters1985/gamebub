@@ -606,6 +606,7 @@ class HandheldTop[T <: Core](coreFactory: () => T, revision: Revision) extends M
   io.hdmiClockPowerDown := hdmiClockPowerTimer === 0.U
 
   val reset_av = withClock(io.clock_av) { XpmCdcSyncRst(reset) }
+  val displayReadingFrame = Wire(UInt(1.W))
   withClockAndReset (clock = io.clock_av, reset = reset_av) {
     val videoX = Wire(UInt(10.W))
     val videoY = Wire(UInt(10.W))
@@ -619,6 +620,7 @@ class HandheldTop[T <: Core](coreFactory: () => T, revision: Revision) extends M
     //
     // Read from the correct framebuffer.
     val framebufferIndex = Wire(UInt(1.W))
+    displayReadingFrame := framebufferIndex
     val lastFrameComplete = XpmCdcSingle(clock, regLastFrameComplete.asBool).asUInt
     for (i <- 0 until 2) {
       framebuffers(i).readPorts(0).enable := framebufferIndex === i.U
@@ -923,11 +925,23 @@ class HandheldTop[T <: Core](coreFactory: () => T, revision: Revision) extends M
 
   // Framebuffer writes
   {
+    val activeDisplayFrame = XpmCdcSingle(io.clock_av, displayReadingFrame.asBool).asUInt
     val framebufferX = RegInit(0.U(log2Ceil(videoWidth).W))
     val framebufferY = RegInit(0.U(log2Ceil(videoHeight).W))
     val framebufferWriteIndex = RegInit(0.U(1.W))
+    val regDropFrame = RegInit(false.B)
 
-    when (coreVideo.dataEnable && !framebufferInterfaceRead) {
+    val vblankEdge = coreVideo.vblank && !RegNext(coreVideo.vblank)
+    val vblankFallingEdge = !coreVideo.vblank && RegNext(coreVideo.vblank)
+    val hblankEdge = coreVideo.hblank && !RegNext(coreVideo.hblank)
+
+    when (vblankFallingEdge) {
+      // If the core starts a frame while the display is still actively reading this buffer,
+      // drop the frame to prevent diagonal tearing across the active scanlines.
+      regDropFrame := framebufferWriteIndex === activeDisplayFrame
+    }
+
+    when (coreVideo.dataEnable && !framebufferInterfaceRead && !regDropFrame) {
       // Core framebuffer write and SPI framebuffer read share the same read/write port,
       // so ensure that they're not activated at the same time (so they can be inferred correctly).
       val address = (framebufferY * videoWidth.U(10.W)) + framebufferX
@@ -943,11 +957,12 @@ class HandheldTop[T <: Core](coreFactory: () => T, revision: Revision) extends M
       }
     }
 
-    val vblankEdge = coreVideo.vblank && !RegNext(coreVideo.vblank)
-    val hblankEdge = coreVideo.hblank && !RegNext(coreVideo.hblank)
     when (vblankEdge) {
-      regLastFrameComplete := framebufferWriteIndex
-      framebufferWriteIndex := !framebufferWriteIndex
+      when (!regDropFrame) {
+        regLastFrameComplete := framebufferWriteIndex
+        framebufferWriteIndex := !framebufferWriteIndex
+      }
+      regDropFrame := false.B
     }
 
     when (coreVideo.vblank) {
