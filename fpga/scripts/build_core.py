@@ -59,6 +59,33 @@ for r in [1, 2, 3, 4]:
     )
 
 
+_SNES = "verilog/snes"
+_SNES_MISTER = f"{_SNES}/mister"
+
+# Extra HDL sources for cores that wrap external HDL (keyed by core class).
+CORE_FILES: dict[str, list[str]] = {
+    "net.gamebub.core.snes.HandheldSnes": [
+        f"{_SNES}/snes_top.sv",
+        f"{_SNES}/sdram_snes.sv",
+        f"{_SNES}/codes_stub.v",
+        f"{_SNES}/bram.vhd",
+        f"{_SNES_MISTER}/main.v",
+        f"{_SNES_MISTER}/ioport.sv",
+        *[
+            f"{_SNES_MISTER}/{name}.vhd"
+            for name in [
+                "65C816/P65816_pkg", "65C816/ALU", "65C816/AddSubBCD", "65C816/AddrGen",
+                "65C816/BCDAdder", "65C816/MCode", "65C816/P65C816",
+                "SPC700/SPC700_pkg", "SPC700/ALU", "SPC700/AddSub", "SPC700/AddrGen",
+                "SPC700/BCDAdj", "SPC700/MCode", "SPC700/MulDiv", "SPC700/SPC700",
+                "PPU_PKG", "DSP_PKG", "CEGen", "CPU", "DSP", "PPU", "SMP", "SNES", "SWRAM",
+                "chip/SRTC", "chip/DSP/OBC1", "chip/DSP/DSPn", "chip/DSP/DSP_LHRomMap",
+            ]
+        ],
+    ],
+}
+
+
 def get_git_revision() -> str:
     try:
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True)
@@ -137,7 +164,15 @@ def build(
         path = ROOT_PATH / file
         files.append(dict(name=path, file_type=file_type))
 
-    # TODO: find and add additional core files
+    # Add additional core files
+    for file in CORE_FILES.get(core_class, []):
+        file_type = {
+            ".v": "verilogSource",
+            ".sv": "systemVerilogSource",
+            # bram.vhd uses the shared-variable RAM template (VHDL-93)
+            ".vhd": "vhdlSource" if file.endswith("/bram.vhd") else "vhdlSource-2008",
+        }[Path(file).suffix]
+        files.append(dict(name=ROOT_PATH / file, file_type=file_type))
 
     # Make all file paths relative to build root.
     for f in files:
