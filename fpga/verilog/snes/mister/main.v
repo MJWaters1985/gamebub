@@ -263,8 +263,8 @@ SNES SNES
 	.ss_spc_do(SS_SPC_DI),
 	.ss_ppu_do(SS_PPU_DI),
 
-	.DBG_BG_EN(DBG_BG_EN),
-	.DBG_CPU_EN(DBG_CPU_EN),
+	.dbg_bg_en(DBG_BG_EN),
+	.dbg_cpu_en(DBG_CPU_EN),
 	
 	.turbo(TURBO),
 

@@ -564,7 +564,7 @@ begin
 				when "00" => IRQ_TIME := '0';
 				when "01" => IRQ_TIME := H_TIME;					--H-IRQ:  every scanline, H=HTIME+~3.5
 				when "10" => IRQ_TIME := V_TIME;					--V-IRQ:  V=VTIME, H=~2.5
-				when "11" => IRQ_TIME := H_TIME and V_TIME;	--HV-IRQ: V=VTIME, H=HTIME+~3.5
+				when others => IRQ_TIME := H_TIME and V_TIME;	--HV-IRQ: V=VTIME, H=HTIME+~3.5
 			end case;
 			
 			if ENABLE = '1' then

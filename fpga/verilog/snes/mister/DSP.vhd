@@ -366,6 +366,7 @@ begin
 			  ECHO_WR_EN, ECHO_ADDR, EOUT, ENABLE, IO_ADDR, IO_REG_DAT, IO_REG_WR)
 		variable ADDR_INC : unsigned(1 downto 0);
 		variable LR: integer range 0 to 1;
+		variable LR2: integer range 0 to 1;
 	begin
 		RAM_DO <= x"00";
 		case RS is
@@ -540,18 +541,18 @@ begin
 				
 					when RS_ECHORDL | RS_ECHORDH =>
 						if STEP = 22 then
-							LR := 0;
+							LR2 := 0;
 						else
-							LR := 1;
+							LR2 := 1;
 						end if;
 					
 						if RS = RS_ECHORDL then
 							ECHO_DATA_TEMP <= RAM_DI(7 downto 1);
 						else
 							for i in 0 to 6 loop
-								ECHO_BUF(LR)(i) <= ECHO_BUF(LR)(i+1);
+								ECHO_BUF(LR2)(i) <= ECHO_BUF(LR2)(i+1);
 							end loop;
-							ECHO_BUF(LR)(7) <= RAM_DI & ECHO_DATA_TEMP;
+							ECHO_BUF(LR2)(7) <= RAM_DI & ECHO_DATA_TEMP;
 						end if;
 
 					when others => null;

@@ -510,7 +510,7 @@ begin
 	DATA_RAM_ADDR_A <= "000" & DP(7 downto 0) when VER(2)='0' else DP;
 	DATA_RAM_ADDR_B <= SS_RAM_A(11 downto 1) when SS_BUSY = '1' else
 						DP_ADDR(11 downto 1) when DP_SEL = '1' and (WR_N = '0' or RD_N = '0') else
-						DATA_RAM_ADDR_A or x"40";
+						DATA_RAM_ADDR_A or ("000" & x"40");
 	DATA_RAM_WE <= '1' when OP_INSTR /= INSTR_JP and OP_DST = x"F" and EN = '1' else '0';
 	DATA_RAM_WE_B_L <= SS_RAM_WR and not SS_RAM_A(0) when SS_BUSY = '1' else (not WR_N and DP_SEL and not DP_ADDR(0));
 	DATA_RAM_WE_B_H <= SS_RAM_WR and SS_RAM_A(0) when SS_BUSY = '1' else (not WR_N and DP_SEL and DP_ADDR(0));
