@@ -7,6 +7,8 @@ the official project's issue tracker.
 Firmware built from this fork shows its version as
 `<official version>.mod-<commit date> (<commit>)`, e.g. `1.0.3.mod-20261101 (3711c01)`,
 in **Settings → About**. Builds with uncommitted changes add `-dirty` to the commit.
+Settings → About also says it's unofficial, modified firmware, with a copyright line for
+this fork's changes and a link to this repository.
 
 ## Cartridge and game compatibility
 
