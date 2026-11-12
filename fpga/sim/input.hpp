@@ -13,4 +13,6 @@ struct JoypadState {
     bool right;
     bool l;
     bool r;
+    bool x;
+    bool y;
 };

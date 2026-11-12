@@ -53,6 +53,17 @@ module snes_top (
 	output            sdram_cas_n,
 	output            sdram_cke,
 
+	// Host access to the external SRAM (BSRAM loading and saving). Hold
+	// host_sram_req until host_sram_ack, which is high for one cycle; the access
+	// takes a cycle in which the console isn't using the SRAM.
+	input             host_sram_req,
+	input             host_sram_write,
+	input      [17:0] host_sram_addr,
+	input      [15:0] host_sram_wdata,
+	input       [1:0] host_sram_mask_n,
+	output reg [15:0] host_sram_rdata,
+	output reg        host_sram_ack,
+
 	// External SRAM (512 KiB, 16-bit) for BSRAM
 	output     [17:0] sram_addr,
 	input      [15:0] sram_dq_in,
@@ -336,16 +347,20 @@ end
 // and register the data at the end of it, which matches the one-cycle read
 // latency of the block RAM MiSTer uses. Writes pulse WE# in the middle two
 // quarters of the cycle (timed with clk_mem) so the address is stable around it.
-wire bsram_write = ~BSRAM_CE_N & ~BSRAM_WE_N;
+// The host gets cycles in which the console doesn't select BSRAM.
+wire use_host = host_sram_req & ~host_sram_ack & BSRAM_CE_N;
+wire bsram_write = use_host ? host_sram_write : ~BSRAM_CE_N & ~BSRAM_WE_N;
 
-assign sram_addr = BSRAM_ADDR[18:1];
-assign sram_dq_out = {BSRAM_D, BSRAM_D};
+assign sram_addr = use_host ? host_sram_addr : BSRAM_ADDR[18:1];
+assign sram_dq_out = use_host ? host_sram_wdata : {BSRAM_D, BSRAM_D};
 assign sram_dq_dir = bsram_write;
 assign sram_oe_n = bsram_write;
-assign sram_mask_n = BSRAM_ADDR[0] ? 2'b01 : 2'b10;
+assign sram_mask_n = use_host ? host_sram_mask_n : BSRAM_ADDR[0] ? 2'b01 : 2'b10;
 
 always @(posedge clk_sys) begin
 	BSRAM_Q <= BSRAM_ADDR[0] ? sram_dq_in[15:8] : sram_dq_in[7:0];
+	host_sram_ack <= use_host;
+	if (use_host) host_sram_rdata <= sram_dq_in;
 end
 
 reg sys_toggle = 0;

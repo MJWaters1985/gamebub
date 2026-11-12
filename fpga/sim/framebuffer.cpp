@@ -29,6 +29,9 @@ void Framebuffer::clear() {
 }
 
 void Framebuffer::pushBGR(uint16_t pixel) {
+    if (x >= width || y >= height) {
+        return;
+    }
     std::vector<uint8_t>& buffer = writeBuffer();
 
     int index = ((y * width) + x) * 4;

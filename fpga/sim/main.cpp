@@ -30,6 +30,8 @@ JoypadState read_joypad_state() {
     joypad.right = keyboard[SDL_SCANCODE_RIGHT];
     joypad.l = keyboard[SDL_SCANCODE_A];
     joypad.r = keyboard[SDL_SCANCODE_S];
+    joypad.x = keyboard[SDL_SCANCODE_D];
+    joypad.y = keyboard[SDL_SCANCODE_C];
     return joypad;
 }
 
@@ -74,6 +76,8 @@ std::vector<ScriptedInput> parse_input_script(const std::string& script) {
             else if (name == "right") input.state.right = true;
             else if (name == "l") input.state.l = true;
             else if (name == "r") input.state.r = true;
+            else if (name == "x") input.state.x = true;
+            else if (name == "y") input.state.y = true;
             else {
                 std::cerr << "Unknown button: " << name << std::endl;
                 std::exit(1);
@@ -98,6 +102,8 @@ JoypadState scripted_joypad_state(const std::vector<ScriptedInput>& inputs, int 
             state.right |= input.state.right;
             state.l |= input.state.l;
             state.r |= input.state.r;
+            state.x |= input.state.x;
+            state.y |= input.state.y;
         }
     }
     return state;
