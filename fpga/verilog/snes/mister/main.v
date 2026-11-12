@@ -1,5 +1,6 @@
 module main (
 	input             RESET_N,
+	input             ENABLE,
 
 	input             MCLK,
 	input             ACLK,
@@ -174,7 +175,7 @@ SNES SNES
 	.dspclk(ACLK),
 
 	.rst_n(RESET_N),
-	.enable(1),
+	.enable(ENABLE),
 
 	.ca(CA),
 	.cpurd_n(CPURD_N),
