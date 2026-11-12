@@ -111,6 +111,9 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
   - Supports Game Boy cartridges without a mapper or with MBC1, MBC2, MBC3 or MBC5, and GBA
     cartridges with SRAM/FRAM, Flash (64 or 128 KiB) or EEPROM (4 or 64 Kbit). Real-time
     clock data isn't backed up yet.
+  - MBC7 cartridges (e.g. Kirby Tilt 'n' Tumble): ROM dumps, and copying the 256-byte
+    EEPROM save both ways. The save file matches the Game Bub's MBC7 core. Command Master's
+    larger EEPROM isn't supported.
   - **Cartridge clock**: for cartridges with a real-time clock, the details show the clock,
     and **Set cartridge clock to now** sets it to the local time.
     - GBA (Seiko S-3511, e.g. Pokémon Ruby, Sapphire and Emerald): sets the date and time.

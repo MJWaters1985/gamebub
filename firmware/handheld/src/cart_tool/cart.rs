@@ -5,7 +5,7 @@
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context};
 
@@ -53,6 +53,8 @@ pub enum Mbc {
     Mbc2,
     Mbc3,
     Mbc5,
+    /// MBC7 (with an accelerometer and EEPROM save), e.g. Kirby Tilt 'n' Tumble
+    Mbc7,
     Unsupported(u8),
 }
 
@@ -64,6 +66,7 @@ impl Mbc {
             0x05 | 0x06 => Self::Mbc2,
             0x0F..=0x13 => Self::Mbc3,
             0x19..=0x1E => Self::Mbc5,
+            0x22 => Self::Mbc7,
             other => Self::Unsupported(other),
         }
     }
@@ -75,6 +78,7 @@ impl Mbc {
             Self::Mbc2 => "MBC2".into(),
             Self::Mbc3 => "MBC3".into(),
             Self::Mbc5 => "MBC5".into(),
+            Self::Mbc7 => "MBC7".into(),
             Self::Unsupported(t) => format!("Unsupported mapper ({t:#04x})"),
         }
     }
@@ -92,6 +96,8 @@ pub enum SaveKind {
     AgbFlash(u32),
     /// GBA EEPROM
     AgbEeprom(EepromSize),
+    /// Game Boy MBC7 serial EEPROM (93LC56)
+    Mbc7Eeprom(u32),
     /// A save type this tool can't handle
     Unsupported(&'static str),
 }
@@ -100,7 +106,7 @@ impl SaveKind {
     pub fn size(self) -> u32 {
         match self {
             Self::None | Self::Unsupported(_) => 0,
-            Self::DmgRam(n) | Self::AgbSram(n) | Self::AgbFlash(n) => n,
+            Self::DmgRam(n) | Self::AgbSram(n) | Self::AgbFlash(n) | Self::Mbc7Eeprom(n) => n,
             Self::AgbEeprom(EepromSize::Small) => 512,
             Self::AgbEeprom(EepromSize::Large) => 8192,
         }
@@ -121,6 +127,7 @@ impl SaveKind {
             Self::AgbFlash(n) => format!("{} Flash", kib(n)),
             Self::AgbEeprom(EepromSize::Small) => "512 bytes EEPROM".into(),
             Self::AgbEeprom(EepromSize::Large) => "8 KiB EEPROM".into(),
+            Self::Mbc7Eeprom(n) => format!("{} EEPROM", kib(n)),
             Self::Unsupported(name) => format!("{name} (unsupported)"),
         }
     }
@@ -306,6 +313,8 @@ fn identify_dmg(header: Vec<u8>, db: Option<GameEntry>) -> anyhow::Result<CartIn
     };
     let save = match mbc {
         Mbc::Mbc2 => SaveKind::DmgRam(512),
+        // 93LC56: 128 16-bit words. (Command Master's 93LC66 is twice the size; not handled.)
+        Mbc::Mbc7 => SaveKind::Mbc7Eeprom(256),
         _ => match header[0x149] {
             1 => SaveKind::DmgRam(0x800),
             2 => SaveKind::DmgRam(0x2000),
@@ -324,7 +333,7 @@ fn identify_dmg(header: Vec<u8>, db: Option<GameEntry>) -> anyhow::Result<CartIn
         db,
         rom_size,
         mbc,
-        save: if has_battery { save } else { SaveKind::None },
+        save: if has_battery || mbc == Mbc::Mbc7 { save } else { SaveKind::None },
         save_guessed: false,
         header,
     })
@@ -434,7 +443,7 @@ fn select_rom_bank(link: &mut Link, mbc: Mbc, bank: u32) -> anyhow::Result<u16> 
             link.dmg_write(0x4000, (bank >> 5) as u8)?;
             return Ok(if bank & 0x1F != 0 { 0x4000 } else { 0 });
         }
-        Mbc::Mbc2 | Mbc::Mbc3 => link.dmg_write(0x2100, bank as u8)?,
+        Mbc::Mbc2 | Mbc::Mbc3 | Mbc::Mbc7 => link.dmg_write(0x2100, bank as u8)?,
         Mbc::Mbc5 => {
             link.dmg_write(0x3000, (bank >> 8) as u8)?;
             link.dmg_write(0x2100, bank as u8)?;
@@ -627,8 +636,144 @@ pub fn read_save(
                 progress((offset + 0x100) as f32 / size as f32);
             }
         }
+        SaveKind::Mbc7Eeprom(_) => {
+            let mut buf = vec![0u8; size];
+            let mut eeprom = Mbc7Eeprom::open(link)?;
+            let result = eeprom.read(&mut buf, progress);
+            eeprom.close()?;
+            result?;
+            sink(&buf)?;
+        }
     }
     Ok(())
+}
+
+// ---- MBC7 EEPROM ----
+
+/// The MBC7's EEPROM pins, as bits of the register at 0xA080: chip select, clock, data in, and
+/// data out (read only).
+const MBC7_EEPROM_REGISTER: u16 = 0xA080;
+const MBC7_CS: u8 = 0x80;
+const MBC7_CLK: u8 = 0x40;
+const MBC7_DI: u8 = 0x02;
+
+/// The serial EEPROM in MBC7 cartridges (93LC56: 16-bit words, most significant bit first).
+/// Save files hold the words high byte first, like the Game Bub's MBC7 core.
+struct Mbc7Eeprom<'a> {
+    link: &'a mut Link,
+}
+
+impl<'a> Mbc7Eeprom<'a> {
+    fn open(link: &'a mut Link) -> anyhow::Result<Self> {
+        link.dmg_mbc_reset()?;
+        // Both RAM enables are needed to reach the EEPROM register.
+        link.dmg_write(0x0000, 0x0A)?;
+        link.dmg_write(0x4000, 0x40)?;
+        link.dmg_set_cs_pulses(false, true)?;
+        let mut eeprom = Mbc7Eeprom { link };
+        eeprom.set(0)?;
+        Ok(eeprom)
+    }
+
+    fn close(mut self) -> anyhow::Result<()> {
+        self.set(0)?;
+        self.link.dmg_write(0x4000, 0x00)?;
+        self.link.dmg_write(0x0000, 0x00)?;
+        self.link.dmg_set_cs_pulses(false, false)?;
+        Ok(())
+    }
+
+    fn set(&mut self, pins: u8) -> anyhow::Result<()> {
+        Ok(self.link.dmg_write(MBC7_EEPROM_REGISTER, pins)?)
+    }
+
+    fn data_out(&mut self) -> anyhow::Result<bool> {
+        let mut value = [0u8];
+        self.link.dmg_read_ram(MBC7_EEPROM_REGISTER - 0xA000, &mut value)?;
+        Ok(value[0] & 1 != 0)
+    }
+
+    /// Clock one bit in (the EEPROM reads data in on the rising clock edge).
+    fn send_bit(&mut self, bit: bool) -> anyhow::Result<()> {
+        let di = if bit { MBC7_DI } else { 0 };
+        self.set(MBC7_CS | di)?;
+        self.set(MBC7_CS | MBC7_CLK | di)
+    }
+
+    /// Select the chip and send a start bit, a 2-bit opcode and an 8-bit word address.
+    fn command(&mut self, opcode: u8, address: u8) -> anyhow::Result<()> {
+        self.set(0)?;
+        self.set(MBC7_CS)?;
+        self.send_bit(true)?;
+        for i in (0..2).rev() {
+            self.send_bit(opcode >> i & 1 != 0)?;
+        }
+        for i in (0..8).rev() {
+            self.send_bit(address >> i & 1 != 0)?;
+        }
+        Ok(())
+    }
+
+    /// Read the whole EEPROM in one sequential read.
+    fn read(&mut self, out: &mut [u8], progress: Progress) -> anyhow::Result<()> {
+        self.command(0b10, 0)?;
+        // The EEPROM outputs a 0 before the data; a 1 means nothing answered.
+        if self.data_out()? {
+            bail!("The cartridge's save chip didn't answer.\nClean the contacts and try again.");
+        }
+        let len = out.len();
+        for (i, byte) in out.iter_mut().enumerate() {
+            let mut value = 0u8;
+            for _ in 0..8 {
+                self.set(MBC7_CS)?;
+                self.set(MBC7_CS | MBC7_CLK)?;
+                value = value << 1 | self.data_out()? as u8;
+            }
+            *byte = value;
+            progress((i + 1) as f32 / len as f32);
+        }
+        self.set(0)
+    }
+
+    /// Allow or prevent writes.
+    fn write_enable(&mut self, enable: bool) -> anyhow::Result<()> {
+        self.command(0b00, if enable { 0xC0 } else { 0x00 })?;
+        self.set(0)
+    }
+
+    /// Write one word, then wait for the EEPROM to finish (it signals ready on data out).
+    fn write_word(&mut self, address: u8, word: u16) -> anyhow::Result<()> {
+        self.command(0b01, address)?;
+        for i in (0..16).rev() {
+            self.send_bit(word >> i & 1 != 0)?;
+        }
+        // Lowering chip select starts the write; selecting it again shows the busy status.
+        self.set(0)?;
+        self.set(MBC7_CS)?;
+        let start = Instant::now();
+        while !self.data_out()? {
+            if start.elapsed() > Duration::from_millis(100) {
+                self.set(0)?;
+                bail!("The cartridge's save chip didn't finish a write.");
+            }
+        }
+        self.set(0)
+    }
+
+    /// Write the whole EEPROM.
+    fn write(&mut self, data: &[u8], progress: Progress) -> anyhow::Result<()> {
+        self.write_enable(true)?;
+        let words = data.len() / 2;
+        let result = (|| {
+            for (i, pair) in data.chunks_exact(2).enumerate() {
+                self.write_word(i as u8, u16::from_be_bytes([pair[0], pair[1]]))?;
+                progress((i + 1) as f32 / words as f32);
+            }
+            Ok(())
+        })();
+        self.write_enable(false)?;
+        result
+    }
 }
 
 /// Save data read from a file in chunks. Files from other tools may be a different size than
@@ -754,6 +899,14 @@ pub fn write_save(
             if size > 0x10000 {
                 agb_flash_select_bank(link, 0)?;
             }
+        }
+        SaveKind::Mbc7Eeprom(_) => {
+            let mut buf = vec![0u8; size];
+            source.next(&mut buf)?;
+            let mut eeprom = Mbc7Eeprom::open(link)?;
+            let result = eeprom.write(&buf, &mut write_progress);
+            eeprom.close()?;
+            result?;
         }
         SaveKind::AgbEeprom(eeprom) => {
             let mut buf = vec![0u8; 0x40];
