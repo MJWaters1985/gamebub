@@ -39,7 +39,9 @@ ENTITY spram_sz IS
 END ENTITY;
 
 ARCHITECTURE SYN OF spram_sz IS
-	type mem_t is array(0 to numwords-1) of std_logic_vector(data_width-1 downto 0);
+	-- The full address range, so that every address is in range (numwords
+	-- can be smaller; Vivado won't use block RAM for an out-of-range read).
+	type mem_t is array(0 to 2**addr_width-1) of std_logic_vector(data_width-1 downto 0);
 
 	function ends_with(s, suffix : string) return boolean is
 	begin
