@@ -110,8 +110,9 @@ impl Nes {
                     address: 0x3000_0000, // Loader (byte stream)
                     max_size: 8 * 1024 * 1024,
                     exact_size: 0,
-                    // The core takes a byte every 8 cycles (about 2.7 MB/s).
-                    max_transfer_speed: 2_000, // 2 MB/s
+                    // The core takes a byte every 4 cycles (5.4 MB/s), so this must
+                    // stay at the slowest SPI clock.
+                    max_transfer_speed: 5_000, // 5 MB/s
                     transfer_word_size: fpga::FpgaSpiWordSize::Bits32,
                 },
                 CoreFile {
@@ -130,7 +131,7 @@ impl Nes {
                     address: 0x4000_0000, // Cartridge RAM
                     max_size: MAX_SAVE_SIZE,
                     exact_size: 0,
-                    max_transfer_speed: 1_000, // 1 MB/s
+                    max_transfer_speed: 5_000, // 5 MB/s (the slowest SPI clock)
                     transfer_word_size: fpga::FpgaSpiWordSize::Bits32,
                 },
             ]

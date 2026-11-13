@@ -22,7 +22,7 @@ module nes_top #(
 	// Game loading: a byte stream, as the file appears on disk.
 	input             dl_en,        // high for the whole file
 	input       [1:0] dl_type,      // 0 = .nes, 1 = .fds, 2 = FDS BIOS
-	input             dl_wr,        // one pulse per byte, at least 8 cycles apart
+	input             dl_wr,        // one pulse per byte, at least 4 cycles apart
 	input       [7:0] dl_data,
 	output            loader_busy,  // still loading or clearing RAM after dl_en falls
 	output            loader_fail,  // unsupported file
@@ -140,21 +140,22 @@ end
 wire hold_reset;
 wire reset_nes = reset || ~init_reset_n || download_reset || loader_fail || hold_reset;
 
-// Loader writes go to the SDRAM when the PPU isn't using it (nes_ce == 3).
+// Loader writes: hold the SDRAM request until the controller takes it (its
+// busy flag rises), so that a byte can come every 4 cycles. (The PPU doesn't
+// use the SDRAM while loading.)
 wire [1:0] nes_ce;
-reg        loader_write_mem;
+reg        loader_write_mem = 0;
 reg  [7:0] loader_write_data_mem;
 reg [24:0] loader_addr_mem;
-reg        loader_write_triggered;
+wire       ch0_busy;
+reg        ch0_busy_d;
 always @(posedge clk) begin
+	ch0_busy_d <= ch0_busy;
+	if (ch0_busy & ~ch0_busy_d) loader_write_mem <= 1'b0;
 	if (loader_write) begin
-		loader_write_triggered <= 1'b1;
+		loader_write_mem <= 1'b1;
 		loader_addr_mem <= loader_addr;
 		loader_write_data_mem <= loader_write_data;
-	end
-	if (nes_ce == 3) begin
-		loader_write_mem <= loader_write_triggered;
-		if (loader_write_triggered) loader_write_triggered <= 1'b0;
 	end
 end
 
@@ -320,7 +321,7 @@ sdram_nes sdram (
 	.ch0_din     ((downloading | loader_busy) ? loader_write_data_mem : ppu_dout),
 	.ch0_rd      (~(downloading | loader_busy) & ppu_read),
 	.ch0_dout    (ppu_din),
-	.ch0_busy    (),
+	.ch0_busy    (ch0_busy),
 
 	.ch1_addr    (cpu_addr),
 	.ch1_wr      (cpu_write),
@@ -372,10 +373,12 @@ dpram #(" ", 11) eeprom (
 );
 
 // Host save access: hold the request until the SDRAM controller takes it
-// (save_busy rises), then wait for it to finish. Requests wait while a game
-// is loading, since the loader clears the save RAM.
+// (save_busy rises); a write is done then, a read when it finishes. Requests
+// wait while a game is loading, since the loader clears the save RAM.
+reg save_busy_d;
 always @(posedge clk) begin
 	save_ack <= 0;
+	save_busy_d <= save_busy;
 	case (save_state)
 	0: if (save_req & ~save_ack & ~downloading & ~loader_busy) begin
 		if (bram_en) begin
@@ -386,10 +389,15 @@ always @(posedge clk) begin
 			save_state <= 1;
 		end
 	end
-	1: if (save_busy) begin
+	1: if (save_busy & ~save_busy_d) begin
 		ch2_rd <= 0;
 		ch2_wr <= 0;
-		save_state <= 2;
+		if (ch2_wr) begin
+			save_ack <= 1;
+			save_state <= 0;
+		end else begin
+			save_state <= 2;
+		end
 	end
 	2: if (~save_busy) begin
 		save_rdata <= save_dout;

@@ -49,7 +49,7 @@ void Simulator::reset()
     top->save_req = 0;
 
     // Let the SDRAM controller initialize, then load the game through the
-    // download port, one byte every 8 cycles like the hardware wrapper.
+    // download port, one byte every 4 cycles like the hardware wrapper.
     top->reset = 1;
     top->sdram_init = 1;
     simulate_cycles(100);
@@ -64,7 +64,7 @@ void Simulator::reset()
         top->dl_wr = 1;
         simulate_cycles(1);
         top->dl_wr = 0;
-        simulate_cycles(7);
+        simulate_cycles(3);
     }
     top->dl_en = 0;
     simulate_cycles(16);

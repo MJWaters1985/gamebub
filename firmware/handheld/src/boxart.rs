@@ -57,6 +57,22 @@ pub fn thumbnail_urls(system: &System, game_name: &str) -> [String; 2] {
     ]
 }
 
+/// A game name without its square-bracket tags (e.g. "[T-En by ...]", "[n]"), if it has any.
+fn without_tags(name: &str) -> Option<String> {
+    let mut out = String::new();
+    let mut depth = 0;
+    for c in name.chars() {
+        match c {
+            '[' => depth += 1,
+            ']' if depth > 0 => depth -= 1,
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let out = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    (out != name && !out.is_empty()).then_some(out)
+}
+
 /// Game Boy for Game Boy Color, and the other way round.
 fn other_game_boy_system(system: &System) -> Option<System> {
     let other = match system.folder {
@@ -263,13 +279,18 @@ pub fn fetch(games: &[(System, String)], progress: &mut dyn FnMut(&str, f32)) ->
             // Game Boy games with Color enhancements (e.g. Pokemon Yellow) are filed as Game Boy
             // Color by their header, but are Game Boy games in the thumbnail library (and the
             // other way round): try the other system's folder if needed.
+            // Translations and hacks ("... (Japan) [T-En by ...]") aren't in the library under
+            // their own names: fall back to the original game's.
             let mut found = Ok(None);
-            let systems = std::iter::once(*system).chain(other_game_boy_system(system));
-            'search: for system in systems {
-                for url in thumbnail_urls(&system, name) {
-                    found = wifi.download(&url, &path);
-                    if matches!(found, Ok(Some(_))) {
-                        break 'search;
+            let names = std::iter::once(name.clone()).chain(without_tags(name));
+            'search: for name in names {
+                let systems = std::iter::once(*system).chain(other_game_boy_system(system));
+                for system in systems {
+                    for url in thumbnail_urls(&system, &name) {
+                        found = wifi.download(&url, &path);
+                        if matches!(found, Ok(Some(_))) {
+                            break 'search;
+                        }
                     }
                 }
             }

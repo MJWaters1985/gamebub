@@ -244,22 +244,23 @@ class HandheldNes extends Module with Core {
   nes.io.sdram_init := !sdramInitTimer.andR
 
   // Game download: each 32-bit host write becomes four bytes for the loader
-  // (file order, so little-endian), 8 cycles apart.
+  // (file order, so little-endian), 4 cycles apart: 5.4 MB/s, a little more
+  // than the host's slowest SPI clock delivers.
   {
     val busy = RegInit(false.B)
-    val timer = RegInit(0.U(5.W))
+    val timer = RegInit(0.U(4.W))
     val data = Reg(UInt(32.W))
 
     downloadInterface.done := false.B
     downloadInterface.dataRead := 0.U
     nes.io.dl_en := regDownload
     nes.io.dl_type := regDownloadType
-    nes.io.dl_wr := busy && timer(2, 0) === 0.U
-    nes.io.dl_data := (data >> (timer(4, 3) ## 0.U(3.W)))(7, 0)
+    nes.io.dl_wr := busy && timer(1, 0) === 0.U
+    nes.io.dl_data := (data >> (timer(3, 2) ## 0.U(3.W)))(7, 0)
 
     when (busy) {
       timer := timer + 1.U
-      when (timer === 31.U) {
+      when (timer === 15.U) {
         busy := false.B
         downloadInterface.done := true.B
       }
@@ -282,9 +283,8 @@ class HandheldNes extends Module with Core {
     val address = Reg(UInt(16.W)) // 32-bit word address
     val data = Reg(UInt(32.W))
     val readData = Reg(Vec(4, UInt(8.W)))
-    val requested = RegInit(false.B)
 
-    nes.io.save_req := busy && !requested
+    nes.io.save_req := busy
     nes.io.save_write := write
     nes.io.save_addr := Cat(address, byte)
     nes.io.save_wdata := (data >> (byte ## 0.U(3.W)))(7, 0)
@@ -292,11 +292,8 @@ class HandheldNes extends Module with Core {
     saveInterface.dataRead := readData.asUInt
 
     when (busy) {
-      when (!requested) {
-        requested := true.B
-      } .elsewhen (nes.io.save_ack) {
+      when (nes.io.save_ack) {
         readData(byte) := nes.io.save_rdata
-        requested := false.B
         byte := byte + 1.U
         when (byte === 3.U) {
           busy := false.B
@@ -305,7 +302,6 @@ class HandheldNes extends Module with Core {
       }
     } .elsewhen (saveInterface.enable) {
       busy := true.B
-      requested := false.B
       byte := 0.U
       write := saveInterface.write
       address := saveInterface.address(17, 2)
