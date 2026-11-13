@@ -27,8 +27,7 @@ for spec in SNES: DSP_LHRomMap:lhrom_ CX4Map:cx4_ GSUMap:gsu_ SA1Map:sa1_ SDD1Ma
   ghdl --synth --std=08 -fsynopsys -frelaxed -Wno-binding --latches --out=verilog \
     $FILES -e $top > $top.v 2> $top.log || { grep -B1 -A3 error $top.log | head -40; exit 1; }
   if [ -n "$prefix" ]; then
-    # main.v leaves the chip maps' ENABLE input (VHDL default '1') unconnected.
-    python3 "$HERE/ghdl_fixup.py" $top.v --top $top --prefix $prefix --tie "enable=1'b1"
+    python3 "$HERE/ghdl_fixup.py" $top.v --top $top --prefix $prefix
   else
     python3 "$HERE/ghdl_fixup.py" $top.v --top $top
   fi

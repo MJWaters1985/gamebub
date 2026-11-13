@@ -340,6 +340,7 @@ if (USE_DLH == 1'b1) begin
 
 DSP_LHRomMap #(.USE_DSPn(USE_DSPn)) DSP_LHRomMap
 (
+	.enable(1'b1),
 	.mclk(MCLK),
 	.rst_n(RESET_N),
 
@@ -420,6 +421,7 @@ if (USE_CX4 == 1'b1) begin
 
 CX4Map CX4Map
 (
+	.enable(1'b1),
 	.mclk(MCLK),
 	.rst_n(RESET_N),
 
@@ -481,6 +483,7 @@ if (USE_SDD1 == 1'b1) begin
 
 SDD1Map SDD1Map
 (
+	.enable(1'b1),
 	.mclk(MCLK),
 	.rst_n(RESET_N),
 
@@ -542,6 +545,7 @@ if (USE_GSU == 1'b1) begin
 
 GSUMap GSUMap
 (
+	.enable(1'b1),
 	.mclk(MCLK),
 	.rst_n(RESET_N),
 
@@ -620,6 +624,7 @@ if (USE_SA1 == 1'b1) begin
 
 SA1Map SA1Map
 (
+	.enable(1'b1),
 	.mclk(MCLK),
 	.rst_n(RESET_N),
 

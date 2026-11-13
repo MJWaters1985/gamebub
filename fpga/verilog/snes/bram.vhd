@@ -67,6 +67,14 @@ ARCHITECTURE SYN OF spram_sz IS
 	end function;
 
 	signal mem : mem_t := init_mem;
+
+	-- Vivado otherwise builds the DSP chip's ROMs from LUT RAM.
+	function ram_style_for(bits : integer) return string is
+	begin
+		if bits >= 16384 then return "block"; else return "auto"; end if;
+	end function;
+	attribute ram_style : string;
+	attribute ram_style of mem : signal is ram_style_for(numwords * data_width);
 	signal q0  : std_logic_vector(data_width-1 downto 0);
 BEGIN
 	q <= q0 when cs = '1' else (others => '1');
