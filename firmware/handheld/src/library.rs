@@ -27,10 +27,11 @@ pub struct System {
     pub core_id: &'static str,
 }
 
-pub const SYSTEMS: [System; 3] = [
+pub const SYSTEMS: [System; 4] = [
     System { folder: "Game Boy", extensions: &[".gb", ".sgb"], core_id: "Game-Bub.GB" },
     System { folder: "Game Boy Color", extensions: &[".gbc", ".gb"], core_id: "Game-Bub.GB" },
     System { folder: "Game Boy Advance", extensions: &[".gba"], core_id: "Game-Bub.GBA" },
+    System { folder: "Super Nintendo", extensions: &[".sfc", ".smc"], core_id: "Game-Bub.SNES" },
 ];
 
 #[derive(Clone, Debug)]

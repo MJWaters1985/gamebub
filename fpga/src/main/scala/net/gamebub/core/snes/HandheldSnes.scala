@@ -15,10 +15,10 @@ object HandheldSnes {
     val idle, busy, error, done = Value
   }
 
-  /// MMCM VCO: 50 MHz / 5 * 85.875 = 858.75 MHz
-  val mmcmVcoHz = 50_000_000.toDouble / 5 * 85.875
+  /// MMCM VCO: 50 MHz / 2 * 34.375 = 859.375 MHz
+  val mmcmVcoHz = 50_000_000.toDouble / 2 * 34.375
 
-  /// SNES master clock (NTSC 21.477 MHz; this is 0.04% slow)
+  /// SNES master clock (NTSC 21.477 MHz; this is 0.03% fast)
   val clockSystemHz = mmcmVcoHz / 40
 
   /// Master clock cycles per (non-interlaced NTSC) frame
@@ -127,8 +127,8 @@ class HandheldSnes extends Module with Core {
   // Main MMCM
   val mmcm = Module(new MMCM(
     clockInHz = 50_000_000,
-    divide = 5,
-    multiply = 85.875,
+    divide = 2,
+    multiply = 34.375,
     clockOutConfig = Seq(
       MMCM.ClockOut(40), // System (SNES master clock)
       MMCM.ClockOut(10), // SDRAM controller (4x)
@@ -272,15 +272,15 @@ class HandheldSnes extends Module with Core {
     sdramInterface.dataRead := 0.U
     snes.io.dl_en := busy
     snes.io.dl_wr := false.B
-    snes.io.dl_addr := Cat(address(23, 2), timer >= 8.U, 0.U(1.W))
-    snes.io.dl_data := Mux(timer >= 8.U, data(31, 16), data(15, 0))
+    snes.io.dl_addr := Cat(address(23, 2), timer >= 4.U, 0.U(1.W))
+    snes.io.dl_data := Mux(timer >= 4.U, data(31, 16), data(15, 0))
 
     when (busy) {
       timer := timer + 1.U
-      // Pulse the write on cycles 3 and 11 (download mode is registered
-      // in snes_top, and it releases reset on a 4-cycle phase).
-      snes.io.dl_wr := timer === 3.U || timer === 11.U
-      when (timer === 15.U) {
+      // Pulse the write on cycles 2 and 6 (snes_top registers the download
+      // signals, and the SDRAM controller needs a few cycles per write).
+      snes.io.dl_wr := timer === 2.U || timer === 6.U
+      when (timer === 11.U) {
         busy := false.B
         sdramInterface.done := true.B
       }

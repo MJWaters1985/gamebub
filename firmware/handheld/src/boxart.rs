@@ -28,6 +28,7 @@ fn libretro_system(system: &System) -> &'static str {
     match system.folder {
         "Game Boy" => "Nintendo - Game Boy",
         "Game Boy Color" => "Nintendo - Game Boy Color",
+        "Super Nintendo" => "Nintendo - Super Nintendo Entertainment System",
         _ => "Nintendo - Game Boy Advance",
     }
 }
