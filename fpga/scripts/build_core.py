@@ -65,6 +65,7 @@ _SNES_MISTER = f"{_SNES}/mister"
 # Extra HDL sources for cores that wrap external HDL (keyed by core class).
 CORE_FILES: dict[str, list[str]] = {
     "net.gamebub.core.snes.HandheldSnes": [
+        f"{_SNES}/snes.xdc",
         f"{_SNES}/snes_top.sv",
         f"{_SNES}/sdram_snes.sv",
         f"{_SNES}/codes_stub.v",
@@ -167,6 +168,7 @@ def build(
     # Add additional core files
     for file in CORE_FILES.get(core_class, []):
         file_type = {
+            ".xdc": "xdc",
             ".v": "verilogSource",
             ".sv": "systemVerilogSource",
             # bram.vhd uses the shared-variable RAM template (VHDL-93)
