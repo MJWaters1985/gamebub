@@ -1148,8 +1148,41 @@ impl CoreManager {
     }
 }
 
+/// Point a core's remembered file paths and favorites at a ROM's new path, after it has been
+/// renamed (only while no core is running, which keeps its settings in memory).
+pub fn rename_rom_in_settings(core_id: &str, old: &Path, new: &Path) {
+    let mut path = PathBuf::from(DIR_SETTINGS);
+    path.push(core_id);
+    path.add_extension("json");
+    let Ok(file) = File::open(&path) else {
+        return;
+    };
+    let Ok(mut settings) =
+        serde_json::from_reader::<_, CoreSettings>(BufReader::with_capacity(256, file))
+    else {
+        return;
+    };
+    let mut changed = false;
+    let paths = settings.file_paths.iter_mut().map(|(_, p)| p);
+    for p in paths.chain(settings.favorites.iter_mut()) {
+        if p == old {
+            *p = new.to_path_buf();
+            changed = true;
+        }
+    }
+    if changed {
+        let result = File::create(&path).map_err(|e| e.to_string()).and_then(|file| {
+            serde_json::to_writer(BufWriter::with_capacity(256, file), &settings)
+                .map_err(|e| e.to_string())
+        });
+        if let Err(e) = result {
+            log::warn!("Couldn't update {}: {e}", path.display());
+        }
+    }
+}
+
 /// Path for a save file in the saves directory, e.g. `/sdcard/saves/gba/Game.sav`.
-fn saves_dir_path(rom_path: &Path, extension: &str) -> PathBuf {
+pub(crate) fn saves_dir_path(rom_path: &Path, extension: &str) -> PathBuf {
     let system = rom_path
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())

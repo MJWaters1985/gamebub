@@ -145,13 +145,30 @@ pub fn download_library_boxart() {
     };
     task("Looking for games without box art...", -1.0, None);
     spawn("boxart", move || {
+        // SNES ROMs are found by their No-Intro names, so name them that way first.
+        let mut renamed = String::new();
+        if let Some(snes) = crate::library::SYSTEMS.iter().find(|s| s.core_id == "Game-Bub.SNES") {
+            let mut buf = vec![0u8; 8 * 1024];
+            let r = crate::snes_db::identify_library(snes, &mut buf, &mut |label, p| {
+                task(label, p, None)
+            });
+            if r.renamed > 0 {
+                renamed = format!("\nRenamed {} SNES ROMs to their No-Intro names.", r.renamed);
+            }
+            if r.unknown > 0 {
+                renamed += &format!("\n{} SNES ROMs weren't recognized.", r.unknown);
+            }
+        }
+
         let games = boxart::missing_in_library();
         if games.is_empty() {
-            return task("", 1.0, Some((true, "Every game in /roms already has box art.".into())));
+            let message = format!("Every game in /roms already has box art.{renamed}");
+            return task("", 1.0, Some((true, message)));
         }
         match boxart::fetch(&games, &mut |label, p| task(label, p, None)) {
             Ok(r) => {
                 let mut message = format!("Box art added for {} of {} games.", r.found, games.len());
+                message += &renamed;
                 if r.not_found > 0 {
                     message += &format!("\n{} not found in the box art library.", r.not_found);
                 }
