@@ -54,6 +54,24 @@ this fork's changes and a link to this repository.
 
 ## New features
 
+- **Super Nintendo core** (Cores → Super Nintendo, or Run ROM → Super Nintendo), a port of
+  the [MiSTer SNES core](https://github.com/srg320/SNES_MiSTer) by srg320.
+  - Plays `.sfc` and `.smc` files (copier headers are skipped), LoROM, HiROM and ExHiROM,
+    with battery saves in `.srm` files.
+  - Enhancement chips: DSP-1/2/3/4, OBC1, CX4, Super FX (GSU-1 and GSU-2), SA-1 and S-DD1.
+    SPC7110 isn't supported.
+  - **Needs two extra files on the SD card**: copy `snes.bit.hs` and `snes_sdd1.bit.hs`
+    from the release into `/system`. They don't fit in the firmware's system partition.
+    S-DD1 games (Street Fighter Alpha 2, Star Ocean) use the second one.
+  - Tested on hardware with Super Mario World, Super Mario World 2: Yoshi's Island, Super
+    Mario RPG, Kirby Super Star, Mega Man X2, Super Mario Kart, Pilotwings, Top Gear 3000,
+    Star Fox, Metal Combat and Street Fighter Alpha 2 (which pauses briefly while
+    loading). Saving and reloading isn't tested yet.
+  - **Download Box Art** first identifies Super Nintendo ROMs by their CRC32 (without the
+    copier header) against the No-Intro database, and renames them, their saves and box art
+    to the No-Intro name, so the libretro thumbnails match. **Set Up SD Card** creates
+    `/roms/Super Nintendo` and `/boxart/Super Nintendo`; Check ROMs skips Super Nintendo
+    games for now.
 - **Wi-Fi** (Settings → Wi-Fi). The radio was unused; Wi-Fi is only turned on for a task and
   then off again.
   - **Network**: scan for networks and enter the password with an on-screen keyboard (D-pad
@@ -236,6 +254,12 @@ this fork's changes and a link to this repository.
   menu opens. `fpga/scripts/parse_cart_log.py` compares it against a ROM dump.
 
 ## Credits
+
+The Super Nintendo core is the [MiSTer SNES core](https://github.com/srg320/SNES_MiSTer)
+by srg320 and contributors (GPL-3.0); its cartridge detection follows MiSTer's, and
+[agg23's Analogue Pocket port](https://github.com/agg23/openfpga-SNES) was a reference. The
+Super Nintendo ROM database comes from the No-Intro DAT in
+[libretro-database](https://github.com/libretro/libretro-database).
 
 The physical-cartridge read timing work and simulation model build on
 [ghogan42/gamebub](https://github.com/ghogan42/gamebub). The Cartridge Manager uses the
