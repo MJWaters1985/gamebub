@@ -350,36 +350,52 @@ end
 
 ////////////////////////////  BSRAM (external SRAM)  ///////////////////
 
-// The SRAM is asynchronous: present the address for the whole clk_sys cycle
-// and register the data at the end of it, which matches the one-cycle read
-// latency of the block RAM MiSTer uses. Writes pulse WE# in the middle two
-// quarters of the cycle (timed with clk_mem) so the address is stable around it.
+// The SRAM is asynchronous. MiSTer uses block RAM here, which samples the
+// address, data and write enable at the end of each clk_sys cycle (and the
+// enhancement chips change them mid-cycle, on the falling edge). So a write is
+// latched at the end of its cycle and done in the first half of the next one,
+// with WE# low from the first to the second clk_mem falling edge. The second
+// half of every cycle reads the current address, and the data is registered at
+// the end of it: the same one-cycle read latency as block RAM.
 // The host gets cycles in which the console doesn't select BSRAM.
 wire use_host = host_sram_req & ~host_sram_ack & BSRAM_CE_N;
 wire bsram_write = use_host ? host_sram_write : ~BSRAM_CE_N & ~BSRAM_WE_N;
+wire [17:0] bsram_addr = use_host ? host_sram_addr : BSRAM_ADDR[18:1];
 
-assign sram_addr = use_host ? host_sram_addr : BSRAM_ADDR[18:1];
-assign sram_dq_out = use_host ? host_sram_wdata : {BSRAM_D, BSRAM_D};
-assign sram_dq_dir = bsram_write;
-assign sram_oe_n = bsram_write;
-assign sram_mask_n = use_host ? host_sram_mask_n : BSRAM_ADDR[0] ? 2'b01 : 2'b10;
+reg        wr_pending;
+reg [17:0] wr_addr;
+reg [15:0] wr_data;
+reg  [1:0] wr_mask_n;
+always @(posedge clk_sys) begin
+	wr_pending <= bsram_write;
+	wr_addr <= bsram_addr;
+	wr_data <= use_host ? host_sram_wdata : {BSRAM_D, BSRAM_D};
+	wr_mask_n <= use_host ? host_sram_mask_n : BSRAM_ADDR[0] ? 2'b01 : 2'b10;
+end
+
+// clk_mem cycle (0-3) within the clk_sys cycle
+reg sys_toggle = 0;
+always @(posedge clk_sys) sys_toggle <= ~sys_toggle;
+reg [1:0] phase;
+always @(posedge clk_mem) begin
+	reg last_toggle;
+	last_toggle <= sys_toggle;
+	phase <= (last_toggle != sys_toggle) ? 2'd1 : phase + 2'd1;
+end
+
+wire writing = wr_pending & ~phase[1];
+assign sram_addr = writing ? wr_addr : bsram_addr;
+assign sram_dq_out = wr_data;
+assign sram_dq_dir = writing;
+assign sram_oe_n = writing;
+assign sram_mask_n = writing ? wr_mask_n : 2'b00;
+
+always @(negedge clk_mem) sram_we_n <= ~(wr_pending & phase == 2'd0);
 
 always @(posedge clk_sys) begin
 	BSRAM_Q <= BSRAM_ADDR[0] ? sram_dq_in[15:8] : sram_dq_in[7:0];
 	host_sram_ack <= use_host;
 	if (use_host) host_sram_rdata <= sram_dq_in;
-end
-
-reg sys_toggle = 0;
-always @(posedge clk_sys) sys_toggle <= ~sys_toggle;
-
-always @(posedge clk_mem) begin
-	reg       last_toggle;
-	reg [1:0] phase;
-
-	last_toggle <= sys_toggle;
-	phase <= (last_toggle != sys_toggle) ? 2'd1 : phase + 2'd1;
-	sram_we_n <= ~(bsram_write & (phase == 2'd1 || phase == 2'd2));
 end
 
 ////////////////////////////  CONTROLLERS  /////////////////////////////

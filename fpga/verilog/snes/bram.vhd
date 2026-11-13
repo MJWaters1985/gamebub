@@ -75,6 +75,9 @@ ARCHITECTURE SYN OF spram_sz IS
 	end function;
 	attribute ram_style : string;
 	attribute ram_style of mem : signal is ram_style_for(numwords * data_width);
+	-- Never-written RAMs (the chip ROMs) are inferred as ROMs, which use rom_style.
+	attribute rom_style : string;
+	attribute rom_style of mem : signal is ram_style_for(numwords * data_width);
 	signal q0  : std_logic_vector(data_width-1 downto 0);
 BEGIN
 	q <= q0 when cs = '1' else (others => '1');
