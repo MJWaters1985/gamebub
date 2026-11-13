@@ -163,6 +163,7 @@ enum CoreHandlerImpl {
     Gameboy(crate::bitstream::gameboy::Gameboy),
     Gba(crate::bitstream::gba::Gba),
     Snes(crate::bitstream::snes::Snes),
+    Nes(crate::bitstream::nes::Nes),
 }
 
 impl CoreHandlerImpl {
@@ -172,6 +173,7 @@ impl CoreHandlerImpl {
             CoreHandlerImpl::Gameboy(gameboy) => Some(gameboy),
             CoreHandlerImpl::Gba(gba) => Some(gba),
             CoreHandlerImpl::Snes(snes) => Some(snes),
+            CoreHandlerImpl::Nes(nes) => Some(nes),
         }
     }
 }
@@ -231,6 +233,7 @@ impl CoreManager {
             "Game-Bub.GB" => CoreHandlerImpl::Gameboy(crate::bitstream::gameboy::Gameboy::new()),
             "Game-Bub.GBA" => CoreHandlerImpl::Gba(crate::bitstream::gba::Gba::new()),
             "Game-Bub.SNES" => CoreHandlerImpl::Snes(crate::bitstream::snes::Snes::new()),
+            "Game-Bub.NES" => CoreHandlerImpl::Nes(crate::bitstream::nes::Nes::new()),
             _ => CoreHandlerImpl::None,
         };
 
@@ -795,6 +798,15 @@ impl CoreManager {
                 .get_mut()
                 .and_then(|x| x.get_file_size(info.id))
             {
+                if override_size == 0 {
+                    // The game has nothing to save (no battery-backed RAM).
+                    self.run_core_command(
+                        &[command::FILE_READ_END, info.id as u32],
+                        &mut [],
+                        NOTIFY_TIMEOUT,
+                    )?;
+                    continue;
+                }
                 file_size = override_size;
             }
 

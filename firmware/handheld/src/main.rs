@@ -26,7 +26,7 @@ mod net;
 mod library;
 mod power;
 mod sd_setup;
-mod snes_db;
+mod rom_db;
 mod timezone;
 pub mod ui;
 mod util;

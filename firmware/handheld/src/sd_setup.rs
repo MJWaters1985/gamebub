@@ -61,7 +61,7 @@ fn check_roms() -> anyhow::Result<(bool, String)> {
     let roms: Vec<(bool, library::Game)> = library::SYSTEMS
         .iter()
         // The ROM database only has Game Boy and Game Boy Advance games.
-        .filter(|system| system.core_id != "Game-Bub.SNES")
+        .filter(|system| matches!(system.core_id, "Game-Bub.GB" | "Game-Bub.GBA"))
         .flat_map(|system| {
             let gba = system.folder == "Game Boy Advance";
             system.games().into_iter().map(move |game| (gba, game))

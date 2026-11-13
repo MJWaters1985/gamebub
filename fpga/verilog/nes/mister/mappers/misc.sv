@@ -1781,7 +1781,7 @@ wire [1:0] reg_b = flags[7:0] == 162 ? 2'd2 : 2'd1;
 reg [7:0] state[4];
 
 // register 0x5000 to 0x5FFF
-wire [7:0] prg_bank;
+reg [7:0] prg_bank;
 
 always_comb begin
 	case ({state[3][2], 1'b0, state[3][0]})
@@ -2628,7 +2628,7 @@ assign audio_b      = enable ? {audio_in[15:0]} : 16'hZ;
 assign exp_audioe   = enable ? (nsf_reg[3][5:0]==6'd0) ? ({2'b00,midi_reg[5'd7][3],3'b000}) : nsf_reg[3][5:0] : 6'h00;
 
 wire [21:0] prg_aout, chr_aout;
-wire [7:0] prg_dout;
+reg [7:0] prg_dout;
 wire prg_allow;
 wire chr_allow;
 wire vram_a10;
@@ -2766,7 +2766,7 @@ always @(posedge clk) begin
 	end
 end
 
-wire [9:0] prg_bank;
+reg [9:0] prg_bank;
 always begin
 	casez({prg_ain[15:12], exp_audioe[2]})
 		5'b00???: prg_bank = 10'h0;//{10'b11_1110_0000};
@@ -2862,7 +2862,7 @@ wire [4:0] ms_freq = mmc5_reg[4'h8][0] ? 5'h1 : 5'h0;  // 'h4010/5010 = sample f
 wire [4:0] freq = nois ? n_freq : samp ? s_freq : ms_freq;
 wire use_freq = nois | samp | m5samp;
 
-wire [4:0] voi_tab_idx;
+reg [4:0] voi_tab_idx;
 always begin
 	casez({n163_max,exp_audioe,ppu_line}) //6,5
 		12'b???????_000??: voi_tab_idx = 5'd0;  //Info;
@@ -2940,7 +2940,7 @@ wire use78 = use_v6saw || use_vrc7;
 wire use1615 = use_n163;
 wire [11:0] period_use = use1615? period1615 : use78 ? period78 : period[find_idx];
 
-wire [17:0] find_bits;
+reg [17:0] find_bits;
 	logic [10:0] find_note_lut[80];  //not used; done in asm
 	assign find_note_lut = '{
 		11'h7f1,11'h77f,11'h713,11'h6ad,11'h64d,11'h5f3,11'h59d,11'h54c,
@@ -3246,7 +3246,8 @@ assign audio_b      = enable ? audio : 16'hZ;
 wire [21:0] prg_aout, chr_aout;
 reg [7:0] prg_dout;
 wire prg_allow, chr_allow;
-wire vram_ce, vram_a10;
+wire vram_ce;
+reg  vram_a10;
 wire [15:0] audio = audio_in;
 wire [15:0] flags_out = {14'h0, prg_bus_write, 1'h0};
 wire prg_bus_write;

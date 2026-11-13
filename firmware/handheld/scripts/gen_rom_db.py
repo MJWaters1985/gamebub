@@ -1,11 +1,15 @@
-"""Generate res/snesdb.bin, the database used to identify SNES ROM files.
+"""Generate a database used to identify ROM files (res/snesdb.bin, res/nesdb.bin).
 
-The data comes from libretro-database's No-Intro DAT (metadat/no-intro/Nintendo -
-Super Nintendo Entertainment System.dat, https://github.com/libretro/libretro-database),
-whose names are also the names of libretro's box art. Entries are keyed by the CRC32 of
-the ROM without a copier header.
+The data comes from libretro-database's No-Intro DATs (metadat/no-intro/,
+https://github.com/libretro/libretro-database), whose names are also the names of
+libretro's box art. Entries are keyed by the CRC32 of the ROM without any file header
+(an SNES copier header, an iNES header).
 
-Usage: python3 scripts/gen_snes_db.py path/to/snes.dat res/snesdb.bin
+Usage: python3 scripts/gen_rom_db.py path/to/system.dat out.bin [--ext .unh]
+
+  SNES: "Nintendo - Super Nintendo Entertainment System.dat" -> res/snesdb.bin
+  NES:  "Nintendo - Nintendo Entertainment System.dat" --ext .unh -> res/nesdb.bin
+        (the DAT lists each game twice; the .unh entry is the ROM without its header)
 
 Format (little endian):
     header:  b"SNDB", u32 version, u32 record count, u32 strings offset
@@ -29,9 +33,12 @@ ROM = re.compile(r'rom \( name "(.*?)" size (\d+) crc ([0-9A-Fa-f]{8})')
 def main() -> None:
     dat = Path(sys.argv[1]).read_text(encoding="utf-8")
     out = Path(sys.argv[2])
+    ext = sys.argv[4] if len(sys.argv) > 4 and sys.argv[3] == "--ext" else None
 
     games = {}
     for name, size, crc in ROM.findall(dat):
+        if ext is not None and not name.endswith(ext):
+            continue
         crc = int(crc, 16)
         if crc in games:
             raise SystemExit(f"CRC collision: {name} and {games[crc][0]}")

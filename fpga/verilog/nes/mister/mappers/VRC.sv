@@ -1327,7 +1327,7 @@ module VRC5(
 	input         Savestate_MAPRAMRdEn,    
 	input         Savestate_MAPRAMWrEn,    
 	input  [7:0]  Savestate_MAPRAMWriteData,
-	output [7:0]  Savestate_MAPRAMReadData
+	output reg [7:0]  Savestate_MAPRAMReadData
 );
 
 assign prg_aout_b   = enable ? prg_aout : 22'hZ;
@@ -1347,7 +1347,7 @@ wire [7:0] prg_dout;
 wire prg_allow;
 wire chr_allow;
 wire [7:0] chr_dout;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 wire irq;
 wire [15:0] flags_out = {12'h0, 1'b1, 1'b0, prg_bus_write, has_chr_dout};
@@ -1362,7 +1362,7 @@ reg ppu_bkg;
 reg [2:0] attributes;
 reg [6:0] JIS_col;
 reg [6:0] JIS_row;
-wire [6:0] prg_tmp;
+reg [6:0] prg_tmp;
 wire overdump = (flags[13:11] == 3'd5); // 256KB chr is an overdump; use alternate mapping
 
 // Block RAM, otherwise we need to time multiplex..

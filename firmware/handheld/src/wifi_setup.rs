@@ -145,20 +145,28 @@ pub fn download_library_boxart() {
     };
     task("Looking for games without box art...", -1.0, None);
     spawn("boxart", move || {
-        // SNES ROMs are found by their No-Intro names, so name them that way first.
+        // ROMs are found by their No-Intro names, so name them that way first.
         let mut renamed = String::new();
-        if let Some(snes) = crate::library::SYSTEMS.iter().find(|s| s.core_id == "Game-Bub.SNES") {
-            let mut buf = vec![0u8; 8 * 1024];
-            let r = crate::snes_db::identify_library(snes, &mut buf, &mut |label, p| {
+        let databases = [
+            ("Game-Bub.SNES", &crate::rom_db::SNES),
+            ("Game-Bub.NES", &crate::rom_db::NES),
+        ];
+        let mut buf = vec![0u8; 8 * 1024];
+        for (core_id, db) in databases {
+            let Some(system) = crate::library::SYSTEMS.iter().find(|s| s.core_id == core_id) else {
+                continue;
+            };
+            let r = crate::rom_db::identify_library(system, db, &mut buf, &mut |label, p| {
                 task(label, p, None)
             });
             if r.renamed > 0 {
-                renamed = format!("\nRenamed {} SNES ROMs to their No-Intro names.", r.renamed);
+                renamed += &format!("\nRenamed {} {} ROMs to their No-Intro names.", r.renamed, db.name);
             }
             if r.unknown > 0 {
-                renamed += &format!("\n{} SNES ROMs weren't recognized.", r.unknown);
+                renamed += &format!("\n{} {} ROMs weren't recognized.", r.unknown, db.name);
             }
         }
+        drop(buf);
 
         let games = boxart::missing_in_library();
         if games.is_empty() {

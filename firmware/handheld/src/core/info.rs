@@ -87,6 +87,11 @@ pub fn list_cores() -> Vec<CoreListEntry> {
             author: "Game Bub".try_into().unwrap(),
         },
         CoreListEntry {
+            id: "Game-Bub.NES".try_into().unwrap(),
+            name: "NES".try_into().unwrap(),
+            author: "Game Bub".try_into().unwrap(),
+        },
+        CoreListEntry {
             id: "Game-Bub.SNES".try_into().unwrap(),
             name: "Super Nintendo".try_into().unwrap(),
             author: "Game Bub".try_into().unwrap(),
@@ -150,6 +155,7 @@ pub fn get_core(id: &str) -> Result<CoreInfo, String> {
         "Game-Bub.GB" => return Ok(crate::bitstream::gameboy::Gameboy::get_core_info()),
         "Game-Bub.GBA" => return Ok(crate::bitstream::gba::Gba::get_core_info()),
         "Game-Bub.SNES" => return Ok(crate::bitstream::snes::Snes::get_core_info()),
+        "Game-Bub.NES" => return Ok(crate::bitstream::nes::Nes::get_core_info()),
         _ => {}
     }
 

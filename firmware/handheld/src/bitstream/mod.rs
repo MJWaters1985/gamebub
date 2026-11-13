@@ -14,6 +14,7 @@ use crate::ui;
 pub mod boot;
 pub mod gameboy;
 pub mod gba;
+pub mod nes;
 pub mod snes;
 
 mod util;
