@@ -110,7 +110,6 @@ SIMS: list[Sim] = [
             "verilog/nes/mister/miracle.sv",
             "verilog/nes/mister/zapper.sv",
             "verilog/nes/mister/keyboard.sv",
-            "verilog/nes/mister/dsp.v",
             "verilog/nes/mister/sys/iir_filter.v",
             "verilog/nes/mister/mappers/FDS.sv",
             "verilog/nes/mister/mappers/JYCompany.sv",

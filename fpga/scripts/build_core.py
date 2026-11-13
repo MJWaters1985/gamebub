@@ -104,9 +104,10 @@ CORE_FILES["net.gamebub.core.nes.HandheldNes"] = [
     *[
         f"{_NES_MISTER}/{name}"
         for name in [
-            "gameloader.sv", "nes.v", "cart.sv", "ppu.sv", "apu.sv", "video.sv", "compat.v",
+            # (compat.v, Xilinx primitive models for Quartus, is simulation-only here)
+            "gameloader.sv", "nes.v", "cart.sv", "ppu.sv", "apu.sv", "video.sv",
             "EEPROM_24C0x.sv", "cheatcodes.sv", "composite_board.sv", "miracle.sv",
-            "zapper.sv", "keyboard.sv", "dsp.v", "sys/iir_filter.v",
+            "zapper.sv", "keyboard.sv", "sys/iir_filter.v",
             "mappers/FDS.sv", "mappers/JYCompany.sv", "mappers/MMC1.sv", "mappers/MMC2.sv",
             "mappers/MMC3.sv", "mappers/MMC5.sv", "mappers/Mapper99.sv", "mappers/Namco.sv",
             "mappers/Sachen.sv", "mappers/Sunsoft.sv", "mappers/VRC.sv",
@@ -219,7 +220,8 @@ def build(
     for file in CORE_FILES.get(core_class, []):
         file_type = {
             ".xdc": "xdc",
-            ".v": "verilogSource",
+            # MiSTer's sys/ Verilog uses SystemVerilog syntax
+            ".v": "systemVerilogSource" if "/sys/" in file else "verilogSource",
             ".sv": "systemVerilogSource",
             ".vhd": vhdl_file_type(file),
         }[Path(file).suffix]
