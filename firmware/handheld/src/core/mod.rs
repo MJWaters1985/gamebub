@@ -122,6 +122,13 @@ pub enum CoreError {
 /// The main purpose is to add core-specific customizations for built-in cores
 /// while generic core functionality is being built.
 pub trait CoreHandler {
+    /// Called once files are selected, before the bitstream is programmed, with the selected
+    /// path of each file (by ID). Returns a bitstream to use instead of the core's, or an error
+    /// (shown to the user) if the files can't be run.
+    fn get_bitstream_override(&mut self, _files: &[(u16, &Path)]) -> Result<Option<PathBuf>, String> {
+        Ok(None)
+    }
+
     /// Called after the bitstream is programmed.
     fn on_after_program(&mut self);
 
@@ -502,7 +509,22 @@ impl CoreManager {
     }
 
     fn finish_loading_inner(&mut self) -> Result<(), CoreError> {
-        self.load_bitstream();
+        let core = self.core_info.as_ref().unwrap();
+        let files: Vec<(u16, &Path)> = core
+            .files
+            .iter()
+            .zip(&self.selected_files)
+            .filter_map(|(info, path)| Some((info.id, path.as_deref()?)))
+            .collect();
+        let bitstream = match self.core_handler.get_mut() {
+            Some(handler) => handler.get_bitstream_override(&files).map_err(CoreError::Other)?,
+            None => None,
+        }
+        .unwrap_or_else(|| core.bitstream.clone());
+        if !bitstream.is_file() {
+            return Err(CannotOpenFile(bitstream.display().to_string()));
+        }
+        self.load_bitstream(&bitstream);
 
         // Wait for the core to be ready for setup.
         self.poll_core_status(command::STATUS_SETUP, SETUP_TIMEOUT)?;
@@ -540,10 +562,10 @@ impl CoreManager {
         Ok(())
     }
 
-    fn load_bitstream(&mut self) {
+    fn load_bitstream(&mut self, path: &Path) {
         assert!(self.stage == Stage::LoadBitstream);
 
-        bitstream::program_fpga(&self.core_info.as_ref().unwrap().bitstream);
+        bitstream::program_fpga(path);
         if let Some(core_handler) = self.core_handler.get_mut() {
             core_handler.on_after_program();
         }

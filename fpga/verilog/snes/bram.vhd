@@ -9,12 +9,14 @@
 --   * for the dual-port RAMs, `enable` is a clock enable for that port
 --     (the single-port RAMs ignore it, as the originals do)
 --   * `cs` low forces the output to all ones and blocks writes
--- Memory initialisation files are not supported.
+-- Memory initialisation files are only supported for the single-port RAMs, and
+-- only for the chip ROMs in rom_init_pkg.vhd (see gen_rom_init.py).
 --------------------------------------------------------------
 
 LIBRARY ieee;
 USE ieee.std_logic_1164.all;
 USE ieee.numeric_std.all;
+USE work.rom_init_pkg.all;
 
 ENTITY spram_sz IS
 	generic (
@@ -38,7 +40,33 @@ END ENTITY;
 
 ARCHITECTURE SYN OF spram_sz IS
 	type mem_t is array(0 to numwords-1) of std_logic_vector(data_width-1 downto 0);
-	signal mem : mem_t := (others => (others => '0'));
+
+	function ends_with(s, suffix : string) return boolean is
+	begin
+		return s'length >= suffix'length and
+			s(s'right - suffix'length + 1 to s'right) = suffix;
+	end function;
+
+	function init_mem return mem_t is
+		variable m : mem_t := (others => (others => '0'));
+	begin
+		if ends_with(mem_init_file, "dsp11b23410_p.mif") then
+			for i in 0 to numwords-1 loop
+				if i <= DSP_PROG_ROM'high then m(i) := DSP_PROG_ROM(i)(data_width-1 downto 0); end if;
+			end loop;
+		elsif ends_with(mem_init_file, "dsp11b23410_d.mif") then
+			for i in 0 to numwords-1 loop
+				if i <= DSP_DATA_ROM'high then m(i) := DSP_DATA_ROM(i)(data_width-1 downto 0); end if;
+			end loop;
+		elsif ends_with(mem_init_file, "drom.mif") then
+			for i in 0 to numwords-1 loop
+				if i <= CX4_DATA_ROM'high then m(i) := CX4_DATA_ROM(i)(data_width-1 downto 0); end if;
+			end loop;
+		end if;
+		return m;
+	end function;
+
+	signal mem : mem_t := init_mem;
 	signal q0  : std_logic_vector(data_width-1 downto 0);
 BEGIN
 	q <= q0 when cs = '1' else (others => '1');

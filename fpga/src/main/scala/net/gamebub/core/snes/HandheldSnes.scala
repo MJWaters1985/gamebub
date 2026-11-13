@@ -1,6 +1,7 @@
 package net.gamebub.core.snes
 
 import chisel3._
+import chisel3.experimental.IntParam
 import chisel3.util._
 import HandheldSnes.CommandState
 import lib.audio.AudioFilterChain
@@ -25,8 +26,23 @@ object HandheldSnes {
   val cyclesPerFrame = 1364 * 262
 }
 
+/** Enhancement chips built into a SNES bitstream (OBC1 and S-RTC are always included). */
+case class SnesChips(
+  dspn: Boolean = false,
+  cx4: Boolean = false,
+  gsu: Boolean = false,
+  sa1: Boolean = false,
+  sdd1: Boolean = false,
+)
+
 /** The MiSTer SNES core with its memories (verilog/snes/snes_top.sv). */
-class SnesTop extends BlackBox {
+class SnesTop(chips: SnesChips) extends BlackBox(Map(
+  "USE_DSPn" -> IntParam(if (chips.dspn) 1 else 0),
+  "USE_CX4" -> IntParam(if (chips.cx4) 1 else 0),
+  "USE_GSU" -> IntParam(if (chips.gsu) 1 else 0),
+  "USE_SA1" -> IntParam(if (chips.sa1) 1 else 0),
+  "USE_SDD1" -> IntParam(if (chips.sdd1) 1 else 0),
+)) {
   override def desiredName = "snes_top"
 
   val io = IO(new Bundle {
@@ -90,7 +106,13 @@ class SnesTop extends BlackBox {
   })
 }
 
-class HandheldSnes extends Module with Core {
+/** SNES with the DSP-1/2/3/4, ST010/011, CX4, Super FX and SA-1 chips. */
+class HandheldSnes extends HandheldSnesBase(SnesChips(dspn = true, cx4 = true, gsu = true, sa1 = true))
+
+/** SNES with the S-DD1 chip. */
+class HandheldSnesSdd1 extends HandheldSnesBase(SnesChips(sdd1 = true))
+
+class HandheldSnesBase(chips: SnesChips) extends Module with Core {
   val framePeriod = HandheldSnes.cyclesPerFrame / HandheldSnes.clockSystemHz
   val displayDivider = (HandheldSnes.mmcmVcoHz / ClocksV0.getClockDisplayHz(framePeriod)._1).floor.toInt
   val io = IO(new Bundle {
@@ -240,7 +262,7 @@ class HandheldSnes extends Module with Core {
   io.vibrate.mode := VibrateV0.Mode.Off
 
   // SNES
-  val snes = Module(new SnesTop)
+  val snes = Module(new SnesTop(chips))
   snes.io.clk_sys := clock
   snes.io.clk_mem := clockMem
   snes.io.reset := regCoreReset || regCoreResetOnce || reset.asBool

@@ -1,5 +1,5 @@
 // Empty placeholders for the enhancement-chip and save-state modules that
-// main.v names only inside generate blocks disabled in the Game Bub build.
+// main.v names only inside generate blocks disabled in the Game Bub builds.
 // The simulator build needs every named module to exist; Vivado does not use
 // this file.
 
@@ -131,84 +131,6 @@ module SPC7110Map(
 );
 endmodule
 
-module SDD1Map(
-	input [255:0] mclk,
-	input [255:0] rst_n,
-	input [255:0] ca,
-	input [255:0] di,
-	input [255:0] do,
-	input [255:0] cpurd_n,
-	input [255:0] cpuwr_n,
-	input [255:0] pa,
-	input [255:0] pard_n,
-	input [255:0] pawr_n,
-	input [255:0] romsel_n,
-	input [255:0] ramsel_n,
-	input [255:0] sysclkf_ce,
-	input [255:0] sysclkr_ce,
-	input [255:0] refresh,
-	input [255:0] irq_n,
-	input [255:0] rom_addr,
-	input [255:0] rom_q,
-	input [255:0] rom_ce_n,
-	input [255:0] rom_oe_n,
-	input [255:0] rom_word,
-	input [255:0] bsram_addr,
-	input [255:0] bsram_d,
-	input [255:0] bsram_q,
-	input [255:0] bsram_ce_n,
-	input [255:0] bsram_oe_n,
-	input [255:0] bsram_we_n,
-	input [255:0] map_active,
-	input [255:0] map_ctrl,
-	input [255:0] rom_mask,
-	input [255:0] bsram_mask
-);
-endmodule
-
-module SA1Map(
-	input [255:0] mclk,
-	input [255:0] rst_n,
-	input [255:0] ca,
-	input [255:0] di,
-	input [255:0] do,
-	input [255:0] cpurd_n,
-	input [255:0] cpuwr_n,
-	input [255:0] pa,
-	input [255:0] pard_n,
-	input [255:0] pawr_n,
-	input [255:0] romsel_n,
-	input [255:0] ramsel_n,
-	input [255:0] sysclkf_ce,
-	input [255:0] sysclkr_ce,
-	input [255:0] refresh,
-	input [255:0] pal,
-	input [255:0] irq_n,
-	input [255:0] rom_addr,
-	input [255:0] rom_q,
-	input [255:0] rom_ce_n,
-	input [255:0] rom_oe_n,
-	input [255:0] rom_word,
-	input [255:0] bsram_addr,
-	input [255:0] bsram_d,
-	input [255:0] bsram_q,
-	input [255:0] bsram_ce_n,
-	input [255:0] bsram_oe_n,
-	input [255:0] bsram_we_n,
-	input [255:0] map_active,
-	input [255:0] map_ctrl,
-	input [255:0] rom_mask,
-	input [255:0] bsram_mask,
-	input [255:0] sa1_p65_a,
-	input [255:0] sa1_p65_do,
-	input [255:0] sa1_p65_rd_n,
-	input [255:0] sa1_p65_wr_n,
-	input [255:0] ss_busy,
-	input [255:0] ss_sa1_romsel,
-	input [255:0] ss_sns_romsel
-);
-endmodule
-
 module MSU(
 	input [255:0] CLK,
 	input [255:0] RST_N,
@@ -233,81 +155,6 @@ module MSU(
 	input [255:0] status_audio_playing,
 	input [255:0] audio_stop,
 	input [255:0] volume
-);
-endmodule
-
-module GSUMap(
-	input [255:0] mclk,
-	input [255:0] rst_n,
-	input [255:0] ca,
-	input [255:0] di,
-	input [255:0] do,
-	input [255:0] cpurd_n,
-	input [255:0] cpuwr_n,
-	input [255:0] pa,
-	input [255:0] pard_n,
-	input [255:0] pawr_n,
-	input [255:0] romsel_n,
-	input [255:0] ramsel_n,
-	input [255:0] sysclkf_ce,
-	input [255:0] sysclkr_ce,
-	input [255:0] refresh,
-	input [255:0] irq_n,
-	input [255:0] rom_addr,
-	input [255:0] rom_q,
-	input [255:0] rom_ce_n,
-	input [255:0] rom_oe_n,
-	input [255:0] rom_word,
-	input [255:0] bsram_addr,
-	input [255:0] bsram_d,
-	input [255:0] bsram_q,
-	input [255:0] bsram_ce_n,
-	input [255:0] bsram_oe_n,
-	input [255:0] bsram_we_n,
-	input [255:0] map_active,
-	input [255:0] map_ctrl,
-	input [255:0] rom_mask,
-	input [255:0] bsram_mask,
-	input [255:0] turbo,
-	input [255:0] fastrom,
-	input [255:0] ss_busy,
-	input [255:0] ss_wr,
-	input [255:0] ss_do
-);
-endmodule
-
-module CX4Map(
-	input [255:0] mclk,
-	input [255:0] rst_n,
-	input [255:0] ca,
-	input [255:0] di,
-	input [255:0] do,
-	input [255:0] cpurd_n,
-	input [255:0] cpuwr_n,
-	input [255:0] pa,
-	input [255:0] pard_n,
-	input [255:0] pawr_n,
-	input [255:0] romsel_n,
-	input [255:0] ramsel_n,
-	input [255:0] sysclkf_ce,
-	input [255:0] sysclkr_ce,
-	input [255:0] refresh,
-	input [255:0] irq_n,
-	input [255:0] rom_addr,
-	input [255:0] rom_q,
-	input [255:0] rom_ce_n,
-	input [255:0] rom_oe_n,
-	input [255:0] rom_word,
-	input [255:0] bsram_addr,
-	input [255:0] bsram_d,
-	input [255:0] bsram_q,
-	input [255:0] bsram_ce_n,
-	input [255:0] bsram_oe_n,
-	input [255:0] bsram_we_n,
-	input [255:0] map_active,
-	input [255:0] map_ctrl,
-	input [255:0] rom_mask,
-	input [255:0] bsram_mask
 );
 endmodule
 

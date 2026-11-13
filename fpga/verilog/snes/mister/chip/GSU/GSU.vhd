@@ -961,9 +961,7 @@ begin
 	process(CLK, RST_N)
 	begin
 		if RST_N = '0' then
-			MULT_ACCESS_CNT <= "010";
 			MULT_WAIT <= '0';
-			MULTST <= MULTST_IDLE;
 		elsif falling_edge(CLK) then
 			if EN = '1' then
 				if CPU_EN = '1' then
@@ -985,6 +983,14 @@ begin
 				MULT_WAIT <= DI(3);
 				LMULT <= DI(4);
 			end if;
+		end if;
+	end process; 
+
+	process(CLK, RST_N)
+	begin
+		if RST_N = '0' then
+			MULT_ACCESS_CNT <= "010";
+			MULTST <= MULTST_IDLE;
 		elsif rising_edge(CLK) then
 			if EN = '1' then
 				case MULTST is
@@ -1026,21 +1032,13 @@ begin
 	variable ROM_CYCLES : unsigned(2 downto 0);
 	begin
 		if RST_N = '0' then
-			ROMDR <= (others => '0');
-			ROM_ACCESS_CNT <= "010";
 			ROM_LOAD_PEND <= '0';
 			ROM_LOAD_WAIT <= '0';
 			ROM_FETCH_PEND <= '0';
 			ROM_FETCH_WAIT <= '0';
 			ROM_CACHE_WAIT <= '0';
-			ROM_LOAD_START <= '0';
-			ROM_FETCH_START <= '0';
-			ROM_LOAD_END <= '0';
 			ROM_FETCH_EN <= '0';
 			ROM_CACHE_EN <= '0';
-			R14_CHANGE_LATCH <= '0';
-			ROMST <= ROMST_IDLE;
-			FLAG_R <= '0';
 		elsif falling_edge(CLK) then
 			if GO = '1' then
 				ROM_FETCH_WAIT <= '0';
@@ -1111,6 +1109,21 @@ begin
 					when others => null;
 				end case;
 			end if;
+		end if;
+	end process; 
+
+	process(CLK, RST_N)
+	variable ROM_CYCLES : unsigned(2 downto 0);
+	begin
+		if RST_N = '0' then
+			ROMDR <= (others => '0');
+			ROM_ACCESS_CNT <= "010";
+			ROM_LOAD_START <= '0';
+			ROM_FETCH_START <= '0';
+			ROM_LOAD_END <= '0';
+			R14_CHANGE_LATCH <= '0';
+			ROMST <= ROMST_IDLE;
+			FLAG_R <= '0';
 		elsif rising_edge(CLK) then
 			if GO = '1' then
 				ROM_LOAD_START <= '0';
@@ -1301,10 +1314,6 @@ begin
 		variable RAM_CYCLES : unsigned(2 downto 0);
 	begin
 		if RST_N = '0' then
-			RAMADDR <= (others => '0');
-			RAMDR <= (others => '0');
-			RAM_WORD <= '0';
-			RAM_BYTES <= '0';
 			RAM_LOAD_PEND <= '0';
 			RAM_SAVE_PEND <= '0';
 			RAM_PCF_PEND <= '0';
@@ -1315,30 +1324,6 @@ begin
 			RAM_PCF_WAIT <= '0';
 			RAM_FETCH_WAIT <= '0';
 			RAM_CACHE_WAIT <= '0';
-			RAM_SAVE_START <= '0';
-			RAM_LOAD_START <= '0';
-			RAM_PCF_START <= '0';
-			RAM_RPIX_START <= '0';
-			RAM_FETCH_START <= '0';
-			RAM_SAVE_END <= '0';
-			RAM_LOAD_END <= '0';
-			RAM_PCF_END <= '0';
-			RAM_PCF_EXEC <= '0';
-			RAM_RPIX_EXEC <= '0';
-			RAM_ACCESS_CNT <= "001";
-			RAMST <= RAMST_IDLE;
-			PCF_RW <= '0';
-
-			POR_TRANS <= '0';
-			POR_DITH <= '0';
-			POR_HN <= '0';
-			POR_FH <= '0';
-			POR_OBJ <= '0';
-			COLR <= (others => '0');
-			PIX_CACHE <= (others => ((others =>(others => '0')),(others => '0'),(others => '0')));
-			PCF_RD_DATA <= (others => '0');
-			RPIX_DATA <= (others => '0');
-			BPP_CNT <= (others => '0');
 		elsif falling_edge(CLK) then
 			if GO = '1' then
 				RAM_FETCH_WAIT <= '0';
@@ -1449,6 +1434,45 @@ begin
 					when others => null;
 				end case;
 			end if;
+		end if;
+	end process; 
+
+	process(CLK, RST_N)
+		variable RAM_LOAD_WORD : std_logic;
+		variable RAM_STORE_WORD : std_logic;
+		variable NEW_COLOR : std_logic_vector(7 downto 0);
+		variable COL_DITH : std_logic_vector(7 downto 0);
+		variable RAM_CYCLES : unsigned(2 downto 0);
+	begin
+		if RST_N = '0' then
+			RAMADDR <= (others => '0');
+			RAMDR <= (others => '0');
+			RAM_WORD <= '0';
+			RAM_BYTES <= '0';
+			RAM_SAVE_START <= '0';
+			RAM_LOAD_START <= '0';
+			RAM_PCF_START <= '0';
+			RAM_RPIX_START <= '0';
+			RAM_FETCH_START <= '0';
+			RAM_SAVE_END <= '0';
+			RAM_LOAD_END <= '0';
+			RAM_PCF_END <= '0';
+			RAM_PCF_EXEC <= '0';
+			RAM_RPIX_EXEC <= '0';
+			RAM_ACCESS_CNT <= "001";
+			RAMST <= RAMST_IDLE;
+			PCF_RW <= '0';
+
+			POR_TRANS <= '0';
+			POR_DITH <= '0';
+			POR_HN <= '0';
+			POR_FH <= '0';
+			POR_OBJ <= '0';
+			COLR <= (others => '0');
+			PIX_CACHE <= (others => ((others =>(others => '0')),(others => '0'),(others => '0')));
+			PCF_RD_DATA <= (others => '0');
+			RPIX_DATA <= (others => '0');
+			BPP_CNT <= (others => '0');
 		elsif rising_edge(CLK) then
 			SS_RAM_LOAD_WORD <= RAM_LOAD_WORD; -- for save state
 			SS_RAM_STORE_WORD <= RAM_STORE_WORD;

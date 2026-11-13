@@ -4,7 +4,14 @@
 // - ROM and WRAM live in SDRAM (MiSTer's controller, clocked at 4x clk_sys).
 // - VRAM and ARAM are block RAM.
 // - Cartridge battery RAM (BSRAM) is the external asynchronous SRAM.
-module snes_top (
+module snes_top #(
+	// Enhancement chips. OBC1 and S-RTC are always included.
+	parameter bit USE_DSPn = 1'b1,    // DSP-1/2/3/4, ST010/011
+	parameter bit USE_CX4 = 1'b1,
+	parameter bit USE_GSU = 1'b1,     // Super FX
+	parameter bit USE_SA1 = 1'b1,
+	parameter bit USE_SDD1 = 1'b0
+) (
 	input             clk_sys,      // SNES master clock (~21.47 MHz)
 	input             clk_mem,      // 4x clk_sys, phase-aligned
 
@@ -125,11 +132,11 @@ wire        JOY_STRB, JOY1_CLK, JOY2_CLK, JOY1_P6, JOY2_P6;
 
 main #(
 	.USE_DLH(1'b1),
-	.USE_CX4(1'b0),
-	.USE_SDD1(1'b0),
-	.USE_GSU(1'b0),
-	.USE_SA1(1'b0),
-	.USE_DSPn(1'b0),
+	.USE_CX4(USE_CX4),
+	.USE_SDD1(USE_SDD1),
+	.USE_GSU(USE_GSU),
+	.USE_SA1(USE_SA1),
+	.USE_DSPn(USE_DSPn),
 	.USE_SPC7110(1'b0),
 	.USE_BSX(1'b0),
 	.USE_SUFAMI(1'b0),

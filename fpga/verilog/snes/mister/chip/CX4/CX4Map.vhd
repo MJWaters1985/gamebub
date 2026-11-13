@@ -109,7 +109,7 @@ begin
 	CART_ADDR <= CX4_A(22) & not ROM_CE2_N & CX4_A(20 downto 16) & CX4_A(14 downto 0);
 	BRAM_ADDR <= CX4_A(20 downto 16) & CX4_A(14 downto 0);
 
-	ROM_ADDR <= CART_ADDR and ROM_MASK(22 downto 0);
+	ROM_ADDR <= ("0" & CART_ADDR) and ROM_MASK(22 downto 0);
 	ROM_CE_N <= ROM_CE1_N and ROM_CE2_N;
 	ROM_WORD	<= '0';
 

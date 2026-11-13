@@ -69,7 +69,9 @@ CORE_FILES: dict[str, list[str]] = {
         f"{_SNES}/snes_top.sv",
         f"{_SNES}/sdram_snes.sv",
         f"{_SNES}/codes_stub.v",
+        f"{_SNES}/rom_init_pkg.vhd",
         f"{_SNES}/bram.vhd",
+        f"{_SNES}/chip_ip.vhd",
         f"{_SNES_MISTER}/main.v",
         f"{_SNES_MISTER}/ioport.sv",
         *[
@@ -81,10 +83,15 @@ CORE_FILES: dict[str, list[str]] = {
                 "SPC700/BCDAdj", "SPC700/MCode", "SPC700/MulDiv", "SPC700/SPC700",
                 "PPU_PKG", "DSP_PKG", "CEGen", "CPU", "DSP", "PPU", "SMP", "SNES", "SWRAM",
                 "chip/SRTC", "chip/DSP/OBC1", "chip/DSP/DSPn", "chip/DSP/DSP_LHRomMap",
+                "chip/CX4/CX4", "chip/CX4/CX4Map",
+                "chip/GSU/GSU_PKG", "chip/GSU/GSU", "chip/GSU/GSUMap",
+                "chip/SA1/SA1", "chip/SA1/SA1Map",
+                "chip/SDD1/Decoder", "chip/SDD1/InputMgr", "chip/SDD1/SDD1", "chip/SDD1/SDD1Map",
             ]
         ],
     ],
 }
+CORE_FILES["net.gamebub.core.snes.HandheldSnesSdd1"] = CORE_FILES["net.gamebub.core.snes.HandheldSnes"]
 
 
 def get_git_revision() -> str:

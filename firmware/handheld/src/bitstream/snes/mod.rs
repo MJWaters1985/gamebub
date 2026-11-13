@@ -3,7 +3,7 @@
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use esp_idf_svc::hal::units::Hertz;
@@ -46,6 +46,17 @@ struct CartridgeConfig {
 }
 
 impl CartridgeConfig {
+    /// The bitstream that has this cartridge's enhancement chip, or the chip's name if
+    /// there's none.
+    fn bitstream(&self) -> Result<&'static str, &'static str> {
+        match self.rom_type >> 4 {
+            0x5 => Ok("snes_sdd1.bit.hs"),
+            0xD => Err("SPC7110"),
+            // None, DSP-1/2/3/4, ST010/011, CX4, SA-1, Super FX, OBC1, S-RTC
+            _ => Ok("snes.bit.hs"),
+        }
+    }
+
     fn rom_mask(&self) -> u32 {
         (1024u32 << self.rom_size) - 1
     }
@@ -311,6 +322,20 @@ impl Bitstream for Snes {
 impl CoreHandler for Snes {
     fn as_legacy_bitstream(&mut self) -> &mut dyn Bitstream {
         self
+    }
+
+    fn get_bitstream_override(&mut self, files: &[(u16, &Path)]) -> Result<Option<PathBuf>, String> {
+        let Some((_, rom)) = files.iter().find(|(id, _)| *id == FILE_ROM) else {
+            return Ok(None);
+        };
+        let mut file = File::open(rom).map_err(|e| e.to_string())?;
+        let cartridge = detect_cartridge(&mut file).map_err(|e| e.to_string())?;
+        match cartridge.bitstream() {
+            Ok(name) => Ok(Some(crate::util::get_system_file_path(name))),
+            Err(chip) => Err(format!(
+                "This game needs the {chip} chip,\nwhich isn't supported yet."
+            )),
+        }
     }
 
     fn on_after_program(&mut self) {
