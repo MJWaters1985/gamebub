@@ -24,8 +24,14 @@ def read_mif(path: Path) -> list[int]:
     depth = int(re.search(r"DEPTH\s*=\s*(\d+)", text).group(1))
     words = [0] * depth
     body = text.split("CONTENT BEGIN", 1)[1]
-    for address, value in re.findall(r"([0-9A-Fa-f]+)\s*:\s*([0-9A-Fa-f]+)\s*;", body):
-        words[int(address, 16)] = int(value, 16)
+    # "addr : value;" or "[first..last] : value;"
+    for first, last, address, value in re.findall(
+        r"(?:\[([0-9A-Fa-f]+)\.\.([0-9A-Fa-f]+)\]|([0-9A-Fa-f]+))\s*:\s*([0-9A-Fa-f]+)\s*;", body
+    ):
+        if address:
+            first = last = address
+        for a in range(int(first, 16), int(last, 16) + 1):
+            words[a] = int(value, 16)
     return words
 
 
