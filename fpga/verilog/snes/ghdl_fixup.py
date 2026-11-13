@@ -18,8 +18,13 @@ When several GHDL outputs are compiled together, the same VHDL entity can
 appear in more than one of them. With `--prefix`, every module except the top
 one is renamed with that prefix so the files don't clash.
 
+With `--keep-case`, the top module's ports keep their VHDL spelling instead,
+and `--rename <old>=<new>` renames individual ones (for Verilog that mixes
+both spellings, like the NES core's T65 instance).
+
 Usage: python3 ghdl_fixup.py <file.v> --top <module> [--prefix <prefix>]
                              [--param <name>=<value> ...] [--tie <port>=<value> ...]
+                             [--keep-case] [--rename <old>=<new> ...]
 (rewrites the file in place)
 """
 
@@ -87,7 +92,7 @@ def tie_port(lines, start, port, value):
     raise SystemExit(f"--tie: input {port} not found")
 
 
-def fix_top(lines, top, params):
+def fix_top(lines, top, params, keep_case=False, renames=None):
     start = next(i for i, line in enumerate(lines) if re.match(rf"module {top}\b", line))
     end = next(i for i in range(start, len(lines)) if lines[i].startswith("endmodule"))
     header_end = next(i for i in range(start, end) if ");" in lines[i])
@@ -96,9 +101,18 @@ def fix_top(lines, top, params):
         m = re.search(r"(input|output|inout)\s+(\[[^\]]*\]\s*)?(\w+)", line)
         if m:
             ports.add(m.group(3))
+    renames = renames or {}
+    for old in renames:
+        if old not in ports:
+            raise SystemExit(f"--rename: port {old} not found")
     pattern = re.compile(r"\b(" + "|".join(sorted(ports)) + r")\b")
+    def new_name(m):
+        name = m.group(1)
+        if name in renames:
+            return renames[name]
+        return name if keep_case else name.lower()
     for i in range(start + 1, end):
-        lines[i] = pattern.sub(lambda m: m.group(1).lower(), lines[i])
+        lines[i] = pattern.sub(new_name, lines[i])
     if params:
         decls = ", ".join(f"parameter {p}" for p in params)
         lines[start] = lines[start].replace(f"module {top}", f"module {top} #({decls})", 1)
@@ -111,11 +125,14 @@ parser.add_argument("--top", required=True)
 parser.add_argument("--prefix")
 parser.add_argument("--param", action="append", default=[])
 parser.add_argument("--tie", action="append", default=[])
+parser.add_argument("--keep-case", action="store_true")
+parser.add_argument("--rename", action="append", default=[])
 args = parser.parse_args()
 
 with open(args.path) as f:
     lines = fixup(f.readlines())
-lines = fix_top(lines, args.top, args.param)
+lines = fix_top(lines, args.top, args.param, args.keep_case,
+                dict(r.split("=", 1) for r in args.rename))
 for tie in args.tie:
     port, value = tie.split("=", 1)
     start = next(i for i, line in enumerate(lines) if re.match(rf"module {args.top}\b", line))

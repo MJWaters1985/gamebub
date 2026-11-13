@@ -128,7 +128,7 @@ architecture rtl of controller is
     end component;
 
     -- the array which caches instrument number of each channel.
-    type inst_array is array (ch_type'range) of integer range 0 to 15;
+    type inst_array is array (ch_type) of integer range 0 to 15;
     signal inst_cache : inst_array;
 
     type kl_array is array (0 to 15) of std_logic_vector(5 downto 0);
@@ -342,6 +342,7 @@ begin   -- rtl
                                     user_voice_tmp.rr := data(3 downto 0);
                                     user_voice_wr <= '1';
                                 end if;
+                            when others => null;
                         end case;
 
                         user_voice_wdata <= user_voice_tmp;
@@ -510,6 +511,7 @@ begin   -- rtl
                     end if;
                 end if;
 
+                when others => null;
             end case;
 
         end if; end if;

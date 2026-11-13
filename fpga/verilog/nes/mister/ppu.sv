@@ -204,11 +204,11 @@ reg is_even_frame = 0; // 1 indicates even frame.
 assign evenframe = is_even_frame;
 
 // Dendy is 291 to 310
-wire [8:0] vblank_start_sl;
-wire [8:0] vblank_end_sl;
-wire [8:0] vsync_start_sl;
+reg [8:0] vblank_start_sl;
+reg [8:0] vblank_end_sl;
+reg [8:0] vsync_start_sl;
 wire [8:0] last_sl;
-wire skip_en;
+reg skip_en;
 reg [3:0] rendering_sr;
 
 always_comb begin
@@ -511,7 +511,7 @@ module OAMEval(
 	input         Savestate_OAMRdEn,
 	input         Savestate_OAMWrEn,
 	input  [7:0]  Savestate_OAMWriteData,
-	output [7:0]  Savestate_OAMReadData
+	output reg [7:0] Savestate_OAMReadData
 );
 
 wire [63:0] SS_OAMEVAL;
@@ -981,7 +981,7 @@ wire [3:0] y_f = temp_y[3:0] ^ {flip_y, flip_y, flip_y, flip_y};
 assign load = {load_pix1, load_pix2, load_x, load_attr};
 assign load_in = {pix1_latch, pix2_latch, load_temp, load_temp[1:0], load_temp[5]};
 
-wire [7:0] load_temp;
+reg [7:0] load_temp;
 always_comb begin
 	case (count)
 		0: load_temp = temp_y;
@@ -1213,7 +1213,7 @@ module debug_dots(
 	input w2006,
 	input r2007,
 	input w2007,
-	output [5:0] new_color
+	output reg [5:0] new_color
 );
 
 always_comb begin
@@ -1320,7 +1320,7 @@ module PPU(
 	input         debug_dots,
 	input         reset,            // input clock  21.48 MHz / 4. 1 clock cycle = 1 pixel
 	input         cold_reset,       // power cycle
-	inout   [1:0] sys_type,         // System type. 0 = NTSC 1 = PAL 2 = Dendy 3 = Vs.
+	input   [1:0] sys_type,         // System type. 0 = NTSC 1 = PAL 2 = Dendy 3 = Vs.
 	input   [3:0] vs_ppu_type,      // NES 2.0 Vs. RGB PPU type
 	output  [5:0] color,            // output color value, one pixel outputted every clock
 	input   [7:0] din,              // input data from bus
@@ -1330,7 +1330,7 @@ module PPU(
 	input         write,            // write
 	output reg    nmi,              // one while inside vblank
 	output        vram_r,           // read from vram active
-	output        vram_r_ex,        // use extra sprite address
+	output reg    vram_r_ex,        // use extra sprite address
 	output        vram_w,           // write to vram active
 	output [13:0] vram_addr,        // vram address
 	output [13:0] vram_a_ex,        // vram address for extra sprites
@@ -1452,7 +1452,7 @@ wire is_vbe_sl;
 
 wire clear_signal = is_pre_render_line;
 
-wire [13:0] vram_a;
+reg [13:0] vram_a;
 reg [7:0] vram_a_byte;
 
 wire video_sync, video_burst, video_picture_n;

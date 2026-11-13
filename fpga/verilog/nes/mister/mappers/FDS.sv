@@ -438,7 +438,7 @@ assign romoffset=diskpos + sideoffset;
 
 // BIOS patches
 localparam BIOS_PATCHES_CNT = 33;
-wire [23:0] BIOS_PATCHES[BIOS_PATCHES_CNT] = '{
+logic [23:0] BIOS_PATCHES[BIOS_PATCHES_CNT] = '{
 	// Wait for button press before loading disk
 	'hEEE2_09,                       // Don't branch here otherwise no music
 
@@ -463,7 +463,7 @@ wire [23:0] BIOS_PATCHES[BIOS_PATCHES_CNT] = '{
 };
 
 localparam BIOS_PATCHES2_CNT = 18;
-wire [23:0] BIOS_PATCHES2[BIOS_PATCHES2_CNT] = '{
+logic [23:0] BIOS_PATCHES2[BIOS_PATCHES2_CNT] = '{
 	// Remove some delays
 	//'hE652_EA, 'hE653_EA, 'hE654_EA, // NOP <- This delay is needed for SMB2J Level 4-4 end
 	'hE655_EA, 'hE656_EA, 'hE657_EA,
@@ -714,7 +714,7 @@ wire [19:0] wave_pitch = $unsigned(temp3[11:4]) * wave_frequency;
 // Volume math
 wire [11:0] mul_out = wave_latch * (vol_pwm_lat[5] ? 6'd32 : vol_pwm_lat);
 
-wire [15:0] level_out;
+reg [15:0] level_out;
 assign audio_out = level_out[11:0];
 
 always_comb begin

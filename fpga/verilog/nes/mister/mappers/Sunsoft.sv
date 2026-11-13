@@ -394,7 +394,9 @@ end else if (ce) begin
 
 end
 
-wire output_a, output_b, output_c;
+reg output_c;
+reg  output_b;
+reg  output_a;
 
 always_comb begin
 	case ({tone_dis_a, noise_dis_a})
@@ -425,7 +427,7 @@ assign audio_out =
 	{output_c ? ss5b_amp_lut[envelope_c] : 8'h0, 5'b0} ;
 
 // Logarithmic amplification table in 1.5db steps
-wire [7:0] ss5b_amp_lut[0:31] = '{
+logic [7:0] ss5b_amp_lut[0:31] = '{
 	8'd0,  8'd0,  8'd1,  8'd1,  8'd1,   8'd1,   8'd2,   8'd2,
 	8'd3,  8'd3,  8'd4,  8'd5,  8'd6,   8'd7,   8'd9,   8'd11,
 	8'd13, 8'd15, 8'd18, 8'd22, 8'd26,  8'd31,  8'd37,  8'd44,
@@ -529,7 +531,7 @@ assign audio_b      = enable ? {1'b0, audio_in[15:1]} : 16'hZ;
 wire [21:0] prg_aout, chr_aout;
 wire prg_allow;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 reg irq;
 reg [15:0] flags_out = {12'h0, 1'b1, 3'b0};
@@ -709,9 +711,9 @@ assign audio_b      = enable ? {1'b0, audio_in[15:1]} : 16'hZ;
 
 wire [21:0] prg_aout, chr_aout;
 wire prg_allow;
-wire ram_enable;
+reg ram_enable;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 reg [15:0] flags_out = {12'h0, 1'b1, 3'b0};
 

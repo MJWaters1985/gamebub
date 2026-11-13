@@ -22,6 +22,8 @@ class Sim:
     hdl_files: tuple[str, ...] = ()
     # Script converting VHDL sources to Verilog, run with an output directory
     vhdl_convert: str | None = None
+    # Extra Verilator options
+    verilator_options: tuple[str, ...] = ()
 
 
 COMMON_FILES: list[str] = [
@@ -80,6 +82,52 @@ SIMS: list[Sim] = [
             "verilog/snes/mister/ioport.sv",
         ),
         vhdl_convert="verilog/snes/ghdl_synth.sh",
+    ),
+    Sim(
+        name="nes",
+        main_class=None,
+        top_module="nes_top",
+        files=[
+            "sim/nes/simulator.hpp",
+            "sim/nes/simulator.cpp",
+        ],
+        hdl_files=(
+            "verilog/nes/mister/regs_savestates.sv",
+            "verilog/nes/nes_top.sv",
+            "verilog/nes/sdram_nes.sv",
+            "verilog/nes/bram_nes.sv",
+            "verilog/nes/nes_sim_stubs.sv",
+            "verilog/nes/mister/gameloader.sv",
+            "verilog/nes/mister/nes.v",
+            "verilog/nes/mister/cart.sv",
+            "verilog/nes/mister/ppu.sv",
+            "verilog/nes/mister/apu.sv",
+            "verilog/nes/mister/video.sv",
+            "verilog/nes/mister/compat.v",
+            "verilog/nes/mister/EEPROM_24C0x.sv",
+            "verilog/nes/mister/cheatcodes.sv",
+            "verilog/nes/mister/composite_board.sv",
+            "verilog/nes/mister/miracle.sv",
+            "verilog/nes/mister/zapper.sv",
+            "verilog/nes/mister/keyboard.sv",
+            "verilog/nes/mister/dsp.v",
+            "verilog/nes/mister/sys/iir_filter.v",
+            "verilog/nes/mister/mappers/FDS.sv",
+            "verilog/nes/mister/mappers/JYCompany.sv",
+            "verilog/nes/mister/mappers/MMC1.sv",
+            "verilog/nes/mister/mappers/MMC2.sv",
+            "verilog/nes/mister/mappers/MMC3.sv",
+            "verilog/nes/mister/mappers/MMC5.sv",
+            "verilog/nes/mister/mappers/Mapper99.sv",
+            "verilog/nes/mister/mappers/Namco.sv",
+            "verilog/nes/mister/mappers/Sachen.sv",
+            "verilog/nes/mister/mappers/Sunsoft.sv",
+            "verilog/nes/mister/mappers/VRC.sv",
+            "verilog/nes/mister/mappers/generic.sv",
+            "verilog/nes/mister/mappers/misc.sv",
+        ),
+        vhdl_convert="verilog/nes/ghdl_synth.sh",
+        verilator_options=("-GCLEAR_RAM=0",),
     ),
 ]
 
@@ -159,6 +207,7 @@ def build(
             "-Wno-UNOPTFLAT",
             "-CFLAGS -O2",
         ]
+    options += list(sim.verilator_options)
 
     edam = {
         "name": sim.name,

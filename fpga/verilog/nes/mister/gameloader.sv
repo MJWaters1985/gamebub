@@ -34,6 +34,7 @@ reg [24:0] bytes_left;
 wire [7:0] prgrom = ines[4];	// Number of 16384 byte program ROM pages
 wire [7:0] chrrom = ines[5];	// Number of 8192 byte character ROM pages (0 indicates CHR RAM)
 wire [3:0] chrram = ines[11][3:0]; // NES 2.0 CHR-RAM size shift count (64 << count)
+wire is_nes20 = (ines[7][3:2] == 2'b10);
 wire has_chr_ram = ~is_nes20 ? (chrrom == 0) : |chrram;
 
 assign mem_data = (state == S_CLEARRAM || (~copybios && state == S_COPYBIOS)) ? (clearval && ~(state == S_COPYBIOS) ? (mapper == 8'd232 ? 8'h00 : cleardata) : 8'h00) : indata;
@@ -42,7 +43,6 @@ assign mem_write = (((bytes_left != 0) && (state == S_LOADPRG || state == S_LOAD
 	|| ((bytes_left != 0) && ((state == S_CLEARRAM) || (state == S_COPYBIOS) || (state == S_COPYPLAY)) && clearclk == 4'h2);
 
 // detect iNES2.0 compliant header
-wire is_nes20 = (ines[7][3:2] == 2'b10);
 wire is_nes20_prg = (is_nes20 && (ines[9][3:0] == 4'hF));
 wire is_nes20_chr = (is_nes20 && (ines[9][7:4] == 4'hF));
 

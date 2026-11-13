@@ -556,7 +556,8 @@ module DmcChan #(parameter [9:0] SSREG_INDEX_DMC1, parameter [9:0] SSREG_INDEX_D
 	assign dma_req = ~have_buffer & enable_3;
 	logic dmc_clock;
 
-	assign dma_address[15] = 1;
+	logic [14:0] dma_address_lo;
+	assign dma_address = {1'b1, dma_address_lo};
 
 	logic reload_next;
 	always_ff @(posedge clk) begin
@@ -582,7 +583,7 @@ module DmcChan #(parameter [9:0] SSREG_INDEX_DMC1, parameter [9:0] SSREG_INDEX_D
 						enable <= DIN[4];
 
 						if (DIN[4] && ~enable) begin
-							dma_address[14:0] <= {1'b1, sample_address[7:0], 6'h00};
+							dma_address_lo <= {1'b1, sample_address[7:0], 6'h00};
 							bytes_remaining <= {sample_length, 4'h0};
 						end
 					end
@@ -620,14 +621,14 @@ module DmcChan #(parameter [9:0] SSREG_INDEX_DMC1, parameter [9:0] SSREG_INDEX_D
 			// The data is technically clocked at phi2, but because of our implementation, to
 			// ensure the right data is latched, we do it on the falling edge of phi2.
 			if (dma_ack) begin
-				dma_address[14:0] <= dma_address[14:0] + 1'd1;
+				dma_address_lo <= dma_address_lo + 1'd1;
 				have_buffer <= 1;
 				sample_buffer <= dma_data;
 
 				if (|bytes_remaining)
 					bytes_remaining <= bytes_remaining - 1'd1;
 				else begin
-					dma_address[14:0] <= {1'b1, sample_address[7:0], 6'h0};
+					dma_address_lo <= {1'b1, sample_address[7:0], 6'h0};
 					bytes_remaining <= {sample_length, 4'h0};
 					enable <= loop;
 					if (~loop & irq_enable)
@@ -662,7 +663,7 @@ module DmcChan #(parameter [9:0] SSREG_INDEX_DMC1, parameter [9:0] SSREG_INDEX_D
 			enable_1                <= SS_DMC1[   50]; // 0;
 			enable_2                <= SS_DMC1[   51]; // 0;
 			enable_3                <= SS_DMC1[   52]; // 0;
-			dma_address[14:0]       <= SS_DMC2[14: 0]; // 15'h0000;
+			dma_address_lo       <= SS_DMC2[14: 0]; // 15'h0000;
 			if (SaveStateBus_load) begin
 				dmc_lsfr       <= SS_DMC2[23:15]; // reset value handled seperate below
 				loop           <= SS_DMC2[   24];
@@ -704,7 +705,7 @@ module DmcChan #(parameter [9:0] SSREG_INDEX_DMC1, parameter [9:0] SSREG_INDEX_D
 	assign SS_DMC1_BACK[   52] = enable_3;
 	assign SS_DMC1_BACK[63:53] = 11'b0; // free to be used
 
-	assign SS_DMC2_BACK[14: 0] = dma_address[14:0];
+	assign SS_DMC2_BACK[14: 0] = dma_address_lo;
 	assign SS_DMC2_BACK[23:15] = dmc_lsfr;
 	assign SS_DMC2_BACK[   24] = loop;
 	assign SS_DMC2_BACK[28:25] = frequency;

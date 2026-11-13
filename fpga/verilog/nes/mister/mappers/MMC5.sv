@@ -43,7 +43,7 @@ module MMC5(
 	input         Savestate_MAPRAMRdEn,
 	input         Savestate_MAPRAMWrEn,
 	input  [7:0]  Savestate_MAPRAMWriteData,
-	output [7:0]  Savestate_MAPRAMReadData
+	output reg [7:0]  Savestate_MAPRAMReadData
 );
 
 assign prg_aout_b   = enable ? prg_aout : 22'hZ;
@@ -68,7 +68,8 @@ reg [7:0] chr_data, prg_dout;
 wire vram_ce;
 wire [15:0] flags_out = {12'h0, 1'b1, 1'b0, prg_bus_write, has_chr_dout};
 wire irq;
-wire prg_bus_write, has_chr_dout;
+reg prg_bus_write;
+wire has_chr_dout;
 wire [15:0] audio = audio_in;
 
 reg [1:0] prg_mode, chr_mode;

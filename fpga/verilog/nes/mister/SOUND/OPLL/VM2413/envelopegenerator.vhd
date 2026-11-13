@@ -189,6 +189,7 @@ begin
                         when Finish =>
                             egtmp(egtmp'high downto egtmp'high -1) := "00";
                             egtmp(egtmp'high-2 downto 0) := (others=>'1');
+                        when others => null;
                     end case;
 
                     -- SD and HH
@@ -234,6 +235,7 @@ begin
                                 egphase := egphase + dphase(egphase'range);
                             when Finish =>
                                 null;
+                            when others => null;
                         end case;
 
                     end if;
@@ -254,6 +256,7 @@ begin
                             end if;
                         when Finish =>
                             egphase := (others => '1');
+                        when others => null;
                     end case;
 
                     if lastkey(conv_integer(slot)) = '0' and key = '1' then

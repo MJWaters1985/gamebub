@@ -483,7 +483,7 @@ module namco163_sound(
 	input         Savestate_MAPRAMRdEn,    
 	input         Savestate_MAPRAMWrEn,    
 	input  [7:0]  Savestate_MAPRAMWriteData,
-	output [7:0]  Savestate_MAPRAMReadData
+	output reg [7:0]  Savestate_MAPRAMReadData
 );
 
 reg carry;

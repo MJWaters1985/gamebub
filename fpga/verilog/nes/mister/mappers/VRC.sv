@@ -46,7 +46,7 @@ assign audio_b      = enable ? {1'b0, audio_in[15:1]} : 16'hZ;
 wire [21:0] prg_aout, chr_aout;
 wire prg_allow;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 reg [15:0] flags_out = {12'h0, 1'b1, 3'b0};
 
@@ -305,7 +305,7 @@ assign audio_b      = enable ? {1'b0, audio_in[15:1]} : 16'hZ;
 wire [21:0] prg_aout, chr_aout;
 wire prg_allow;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 wire irq;
 reg [15:0] flags_out = {12'h0, 1'b1, 3'b0};
@@ -1052,7 +1052,7 @@ wire ack;
 wire ce_ym2143 = ce | (ce_count==4'd5);
 wire signed [13:0] ym2143audio;
 wire wr_audio = wren && (addr_in[15:6]==10'b1001_0000_00) && (addr_in[4:0]==5'b1_0000); //0x9010 or 0x9030
-eseopll ym2143vrc7 (clk,~enable, ce_ym2143,wr_audio,ce_ym2143,ack,wr_audio,{15'b0,addr_in[5]},data_in,ym2143audio);
+eseopll ym2143vrc7 (.clk21m(clk), .reset(~enable), .clkena(ce_ym2143), .enawait(wr_audio), .req(ce_ym2143), .ack(ack), .wrt(wr_audio), .adr({15'b0,addr_in[5]}), .dbo(data_in), .wav(ym2143audio));
 
 // The strategy here:
 // VRC7 sound is very low, and the top bit is seldom (if ever) used. It's output as signed with

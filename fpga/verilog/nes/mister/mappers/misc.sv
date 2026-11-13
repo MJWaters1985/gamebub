@@ -2094,7 +2094,7 @@ if (~enable) begin
 	chr_bank_hi[5] <= 0;
 	chr_bank_hi[6] <= 0;
 	chr_bank_hi[7] <= 0;
-	prg_bank = 0;
+	prg_bank <= 0;
 	mirroring <= 2'b0;
 end else if (SaveStateBus_load) begin
 	chr_bank_lo[0] <= SS_MAP1[ 7: 0];

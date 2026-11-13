@@ -102,7 +102,7 @@ wire [21:0] prg_aout;
 reg [21:0] chr_aout;
 wire prg_allow;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 reg [7:0] chr_dout, prg_dout;
 wire vram_ce;
 wire [15:0] flags_out = {12'h0, 1'b1, 1'b0, prg_bus_write, 1'b0};
@@ -137,7 +137,7 @@ reg [7:0] accumtest;
 
 reg old_a12;
 reg irq_enable;
-wire irq_source;
+reg irq_source;
 assign irq = irq_pending && irq_enable;
 reg irq_pending;
 reg irq_en;
@@ -154,7 +154,7 @@ always @(posedge clk) begin
 		// Could be bank_mode[2] = 0 or prg_bank[3] = FF
 		// Outer bank might be an issue as well...
 		// Needed for Tiny Toons 6 and Warioland II.
-		bank_mode[2] = 1'b0;
+		bank_mode[2] <= 1'b0;
 	end else if (SaveStateBus_load) begin
 		chr_bank[0]   <= SS_MAP1[15: 0];
 		chr_bank[1]   <= SS_MAP1[31:16];
@@ -336,7 +336,7 @@ always @* begin
 end
 
 // Compute PRG address to read from.
-wire [1:0] prg_reg;
+reg [1:0] prg_reg;
 always @* begin
 	casez({prg_6xxx, bank_mode[1:0]})
 		3'b000: prg_reg = {2'b11};                       // $8000-$FFFF
@@ -347,7 +347,7 @@ always @* begin
 end
 wire [7:0] bank_val = (!bank_mode[2] && prg_reg == 2'b11) ? 8'hFF : prg_bank[prg_reg];
 wire [6:0] bank_order = bank_mode[1:0] == 2'b11 ? {bank_val[0], bank_val[1], bank_val[2], bank_val[3], bank_val[4], bank_val[5], bank_val[6]} : bank_val[6:0];
-wire [5:0] prg_sel;
+reg [5:0] prg_sel;
 always @* begin
 	casez({prg_6xxx, bank_mode[1:0]})
 		3'b000: prg_sel = {bank_order[3:0], prg_ain[14:13]}; //
@@ -370,7 +370,7 @@ end else if (SaveStateBus_load) begin
 end else if (~paused && chr_read) begin
 	chr_latch[chr_ain_o[12]] <= outer_bank[7] && (((chr_ain_o & 14'h2ff8) == 14'h0fd8) ? 1'd0 : ((chr_ain_o & 14'h2ff8) == 14'h0fe8) ? 1'd1 : chr_latch[chr_ain_o[12]]);
 end
-wire [2:0] chr_reg;
+reg [2:0] chr_reg;
 always @* begin
 	casez(bank_mode[4:3])
 		2'b00: chr_reg = {3'b000};                                   // $0000-$1FFF
@@ -380,7 +380,7 @@ always @* begin
 	endcase
 end
 wire [12:0] chr_val = chr_bank[chr_reg][12:0];
-wire [12:0] chr_sel;
+reg [12:0] chr_sel;
 always @* begin
 	casez({romtables, bank_mode[4:3]})
 		3'b000: chr_sel = {chr_val[9:0],  chr_ain[12:10]};    //

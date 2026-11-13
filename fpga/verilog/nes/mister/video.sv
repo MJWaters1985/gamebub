@@ -71,7 +71,7 @@ end
 
 assign ce_pix = pix_ce;
 // Kitrinx 34 palette by Kitrinx
-wire [23:0] pal_kitrinx_lut[64] = '{
+logic [23:0] pal_kitrinx_lut[64] = '{
 	'h666666, 'h01247B, 'h1B1489, 'h39087C, 'h520257, 'h5C0725, 'h571300, 'h472300,
 	'h2D3300, 'h0E4000, 'h004500, 'h004124, 'h003456, 'h000000, 'h000000, 'h000000,
 	'hADADAD, 'h2759C9, 'h4845DB, 'h6F34CA, 'h922B9B, 'hA1305A, 'h9B4018, 'h885400,
@@ -83,7 +83,7 @@ wire [23:0] pal_kitrinx_lut[64] = '{
 };
 
 // Smooth palette from FirebrandX
-wire [23:0] pal_smooth_lut[64] = '{
+logic [23:0] pal_smooth_lut[64] = '{
 	'h6A6D6A, 'h001380, 'h1E008A, 'h39007A, 'h550056, 'h5A0018, 'h4F1000, 'h3D1C00,
 	'h253200, 'h003D00, 'h004000, 'h003924, 'h002E55, 'h000000, 'h000000, 'h000000,
 	'hB9BCB9, 'h1850C7, 'h4B30E3, 'h7322D6, 'h951FA9, 'h9D285C, 'h983700, 'h7F4C00,
@@ -95,7 +95,7 @@ wire [23:0] pal_smooth_lut[64] = '{
 };
 
 // PC-10 Better by Kitrinx
-wire [23:0] pal_pc10_lut[64] = '{
+logic [23:0] pal_pc10_lut[64] = '{
 	'h6D6D6D, 'h10247C, 'h0A06B3, 'h6950C2, 'h6A0F62, 'h831264, 'h872F0F, 'h774C11,
 	'h5E490F, 'h2C430A, 'h1E612A, 'h258011, 'h164244, 'h000000, 'h000000, 'h000000,
 	'hB6B6B6, 'h2767C0, 'h1F48DA, 'h7114DA, 'h8A17DC, 'hB71987, 'hB0150F, 'hB37219,
@@ -107,7 +107,7 @@ wire [23:0] pal_pc10_lut[64] = '{
 };
 
 // Wavebeam by NakedArthur
-wire [23:0] pal_wavebeam_lut[64] = '{
+logic [23:0] pal_wavebeam_lut[64] = '{
 	'h6B6B6B, 'h001B88, 'h21009A, 'h40008C, 'h600067, 'h64001E, 'h590800, 'h481600,
 	'h283600, 'h004500, 'h004908, 'h00421D, 'h003659, 'h000000, 'h000000, 'h000000,
 	'hB4B4B4, 'h1555D3, 'h4337EF, 'h7425DF, 'h9C19B9, 'hAC0F64, 'hAA2C00, 'h8A4B00,
@@ -119,7 +119,7 @@ wire [23:0] pal_wavebeam_lut[64] = '{
 };
 
 // Sony CXA by FirebrandX
-wire [23:0] pal_sonycxa_lut[64] = '{
+logic [23:0] pal_sonycxa_lut[64] = '{
 	'h585858, 'h00238C, 'h00139B, 'h2D0585, 'h5D0052, 'h7A0017, 'h7A0800, 'h5F1800,
 	'h352A00, 'h093900, 'h003F00, 'h003C22, 'h00325D, 'h000000, 'h000000, 'h000000,
 	'hA1A1A1, 'h0053EE, 'h153CFE, 'h6028E4, 'hA91D98, 'hD41E41, 'hD22C00, 'hAA4400,
@@ -177,9 +177,10 @@ reg  hblank, vblank;
 reg  [8:0] h, v;
 wire [8:0] hc = disengaged ? h : count_h;
 wire [8:0] vc = disengaged ? v : count_v;
-wire [8:0] vblank_start, vblank_end, hblank_start, hblank_end, hsync_start, hsync_end;
-wire [8:0] vblank_start_sl, vblank_end_sl, vsync_start_sl;
-wire hblank_period;
+reg  [8:0] vblank_start, vblank_end;
+wire [8:0] hblank_start, hblank_end, hsync_start, hsync_end;
+reg  [8:0] vblank_start_sl, vblank_end_sl, vsync_start_sl;
+reg hblank_period;
 
 always_comb begin
 	case (sys_type)
@@ -338,28 +339,28 @@ module vs_palette_lut
 	output reg [3:0] color_math
 );
 
-wire [5:0] lut_2c04_0001[64] = '{
+logic [5:0] lut_2c04_0001[64] = '{
 	6'h35, 6'h23, 6'h16, 6'h22, 6'h1C, 6'h09, 6'h1D, 6'h15, 6'h20, 6'h00, 6'h27, 6'h05, 6'h04, 6'h28, 6'h08, 6'h20,
 	6'h21, 6'h3E, 6'h1F, 6'h29, 6'h3C, 6'h32, 6'h36, 6'h12, 6'h3F, 6'h2B, 6'h2E, 6'h1E, 6'h3D, 6'h2D, 6'h24, 6'h01,
 	6'h0E, 6'h31, 6'h33, 6'h2A, 6'h2C, 6'h0C, 6'h1B, 6'h14, 6'h2E, 6'h07, 6'h34, 6'h06, 6'h13, 6'h02, 6'h26, 6'h2E,
 	6'h2E, 6'h19, 6'h10, 6'h0A, 6'h39, 6'h03, 6'h37, 6'h17, 6'h0F, 6'h11, 6'h0B, 6'h0D, 6'h38, 6'h25, 6'h18, 6'h3A
 };
 
-wire [5:0] lut_2c04_0002[64] = '{
+logic [5:0] lut_2c04_0002[64] = '{
 	6'h2E, 6'h27, 6'h18, 6'h39, 6'h3A, 6'h25, 6'h1C, 6'h31, 6'h16, 6'h13, 6'h38, 6'h34, 6'h20, 6'h23, 6'h3C, 6'h0B,
 	6'h0F, 6'h21, 6'h06, 6'h3D, 6'h1B, 6'h29, 6'h1E, 6'h22, 6'h1D, 6'h24, 6'h0E, 6'h2B, 6'h32, 6'h08, 6'h2E, 6'h03,
 	6'h04, 6'h36, 6'h26, 6'h33, 6'h11, 6'h1F, 6'h10, 6'h02, 6'h14, 6'h3F, 6'h00, 6'h09, 6'h12, 6'h2E, 6'h28, 6'h20,
 	6'h3E, 6'h0D, 6'h2A, 6'h17, 6'h0C, 6'h01, 6'h15, 6'h19, 6'h2E, 6'h2C, 6'h07, 6'h37, 6'h35, 6'h05, 6'h0A, 6'h2D
 };
 
-wire [5:0] lut_2c04_0003[64] = '{
+logic [5:0] lut_2c04_0003[64] = '{
 	6'h14, 6'h25, 6'h3A, 6'h10, 6'h0B, 6'h20, 6'h31, 6'h09, 6'h01, 6'h2E, 6'h36, 6'h08, 6'h15, 6'h3D, 6'h3E, 6'h3C,
 	6'h22, 6'h1C, 6'h05, 6'h12, 6'h19, 6'h18, 6'h17, 6'h1B, 6'h00, 6'h03, 6'h2E, 6'h02, 6'h16, 6'h06, 6'h34, 6'h35,
 	6'h23, 6'h0F, 6'h0E, 6'h37, 6'h0D, 6'h27, 6'h26, 6'h20, 6'h29, 6'h04, 6'h21, 6'h24, 6'h11, 6'h2D, 6'h2E, 6'h1F,
 	6'h2C, 6'h1E, 6'h39, 6'h33, 6'h07, 6'h2A, 6'h28, 6'h1D, 6'h0A, 6'h2E, 6'h32, 6'h38, 6'h13, 6'h2B, 6'h3F, 6'h0C
 };
 
-wire [5:0] lut_2c04_0004[64] = '{
+logic [5:0] lut_2c04_0004[64] = '{
 	6'h18, 6'h03, 6'h1C, 6'h28, 6'h2E, 6'h35, 6'h01, 6'h17, 6'h10, 6'h1F, 6'h2A, 6'h0E, 6'h36, 6'h37, 6'h0B, 6'h39,
 	6'h25, 6'h1E, 6'h12, 6'h34, 6'h2E, 6'h1D, 6'h06, 6'h26, 6'h3E, 6'h1B, 6'h22, 6'h19, 6'h04, 6'h2E, 6'h3A, 6'h21,
 	6'h05, 6'h0A, 6'h07, 6'h02, 6'h13, 6'h14, 6'h00, 6'h15, 6'h0C, 6'h3D, 6'h11, 6'h0F, 6'h0D, 6'h38, 6'h2D, 6'h24,

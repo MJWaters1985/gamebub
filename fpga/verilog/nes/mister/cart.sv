@@ -2512,7 +2512,7 @@ vrc6_mixed snd_vrc6 (
 );
 
 
-wire [1023:0] me;
+reg [1023:0] me;
 
 always @* begin
 	me = 1024'd0;

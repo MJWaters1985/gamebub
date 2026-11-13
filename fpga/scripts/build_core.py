@@ -93,6 +93,49 @@ CORE_FILES: dict[str, list[str]] = {
 }
 CORE_FILES["net.gamebub.core.snes.HandheldSnesSdd1"] = CORE_FILES["net.gamebub.core.snes.HandheldSnes"]
 
+_NES = "verilog/nes"
+_NES_MISTER = f"{_NES}/mister"
+CORE_FILES["net.gamebub.core.nes.HandheldNes"] = [
+    f"{_NES}/nes.xdc",
+    f"{_NES_MISTER}/regs_savestates.sv",
+    f"{_NES}/nes_top.sv",
+    f"{_NES}/sdram_nes.sv",
+    f"{_NES}/bram_nes.sv",
+    *[
+        f"{_NES_MISTER}/{name}"
+        for name in [
+            "gameloader.sv", "nes.v", "cart.sv", "ppu.sv", "apu.sv", "video.sv", "compat.v",
+            "EEPROM_24C0x.sv", "cheatcodes.sv", "composite_board.sv", "miracle.sv",
+            "zapper.sv", "keyboard.sv", "dsp.v", "sys/iir_filter.v",
+            "mappers/FDS.sv", "mappers/JYCompany.sv", "mappers/MMC1.sv", "mappers/MMC2.sv",
+            "mappers/MMC3.sv", "mappers/MMC5.sv", "mappers/Mapper99.sv", "mappers/Namco.sv",
+            "mappers/Sachen.sv", "mappers/Sunsoft.sv", "mappers/VRC.sv",
+            "mappers/generic.sv", "mappers/misc.sv",
+            "bus_savestates.vhd", "savestates.vhd", "statemanager.vhd",
+            "t65/T65_Pack.vhd", "t65/T65_MCode.vhd", "t65/T65_ALU.vhd", "t65/T65.vhd",
+            "SOUND/OPLL/VM2413/vm2413.vhd",
+            *[
+                f"SOUND/OPLL/VM2413/{n}.vhd"
+                for n in [
+                    "attacktable", "controller", "envelopegenerator", "envelopememory",
+                    "feedbackmemory", "lineartable", "operator", "opll", "outputgenerator",
+                    "outputmemory", "phasegenerator", "phasememory", "registermemory",
+                    "sinetable", "slotcounter", "temporalmixer", "voicememory", "voicerom",
+                ]
+            ],
+            "SOUND/OPLL/eseopll.vhd",
+        ]
+    ],
+]
+
+
+def vhdl_file_type(file: str) -> str:
+    # bram.vhd uses the shared-variable RAM template, and VM2413 uses names
+    # that are VHDL-2008 keywords: both are VHDL-93.
+    if file.endswith("/bram.vhd") or "/OPLL/" in file:
+        return "vhdlSource"
+    return "vhdlSource-2008"
+
 
 def get_git_revision() -> str:
     try:
@@ -178,8 +221,7 @@ def build(
             ".xdc": "xdc",
             ".v": "verilogSource",
             ".sv": "systemVerilogSource",
-            # bram.vhd uses the shared-variable RAM template (VHDL-93)
-            ".vhd": "vhdlSource" if file.endswith("/bram.vhd") else "vhdlSource-2008",
+            ".vhd": vhdl_file_type(file),
         }[Path(file).suffix]
         files.append(dict(name=ROOT_PATH / file, file_type=file_type))
 

@@ -47,7 +47,7 @@ assign audio_b      = enable ? {1'b0, audio_in[15:1]} : 16'hZ;
 wire [21:0] prg_aout, chr_aout;
 wire prg_allow;
 wire chr_allow;
-wire vram_a10;
+reg vram_a10;
 wire vram_ce;
 wire [15:0] flags_out = {12'd0, 1'b1, 1'b0, prg_bus_write, 1'b0};
 
@@ -90,7 +90,7 @@ end else if (ce && prg_write) begin
 			1: chr_bank_1 <= prg_din[2:0];  // Select 2 KB CHR bank at PPU $0800-$0FFF;
 			2: begin
 			   		chr_bank_2 <= prg_din[2:0];  // Select 2 KB CHR bank at PPU $1000-$17FF;
-					if (mapper150) prg_bank = {2'b00, prg_din[0]};
+					if (mapper150) prg_bank <= {2'b00, prg_din[0]};
 			   end
 			3: chr_bank_3 <= prg_din[2:0];  // Select 2 KB CHR bank at PPU $1800-$1FFF;
 			4: chr_bank_o <= prg_din[2:0];  // Outer CHR bank
@@ -113,8 +113,8 @@ assign SS_MAP1_BACK[26:24] = mirroring;
 assign SS_MAP1_BACK[63:27] = 37'b0; // free to be used
 
 // The CHR bank to load. Each increment here is 1kb. So valid values are 0..255.
-wire [2:0] chr_bank;
-wire [2:0] chr_banko;
+reg [2:0] chr_bank;
+reg [2:0] chr_banko;
 reg [8:0] chrsel;
 always @* begin
 	casez({mirroring[0], mapper137 ? chr_ain[11:10] : chr_ain[12:11]})
