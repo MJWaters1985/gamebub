@@ -123,6 +123,51 @@ against reference images. Test ROMs come from
     --roms testroms/gba-tests --bios-gba gba.bios.bin
 ```
 
+### SNES core
+
+The SNES core is the MiSTer SNES core (srg320/SNES_MiSTer, vendored unchanged
+apart from small portability patches in `fpga/verilog/snes/mister`, GPL-3.0)
+inside a Game Bub wrapper (`verilog/snes/snes_top.sv`,
+`core/snes/HandheldSnes.scala`). It's built as two bitstreams, because all the
+enhancement chips don't fit in the FPGA together:
+
+| Bitstream | Core class | Cartridges |
+|---|---|---|
+| `snes.bit.hs` | `net.gamebub.core.snes.HandheldSnes` | Plain carts, DSP-1/2/3/4, OBC1, CX4, Super FX, SA-1 |
+| `snes_sdd1.bit.hs` | `net.gamebub.core.snes.HandheldSnesSdd1` | S-DD1 (Street Fighter Alpha 2, Star Ocean) |
+
+SPC7110 carts aren't supported. The firmware reads the ROM header and picks the
+bitstream. Build them like the other cores (the main one takes about 25
+minutes):
+
+```sh
+for core in snes:HandheldSnes snes_sdd1:HandheldSnesSdd1; do
+  .venv/bin/python scripts/build_core.py --name ${core%%:*} --target gamebub_rev4 \
+      --build-root build/${core%%:*} --core-class net.gamebub.core.snes.${core#*:}
+done
+```
+
+The internal system data partition is too small for them, so the firmware
+loads both from **`/system` on the SD card**: copy `snes.bit.hs` and
+`snes_sdd1.bit.hs` there (they're not part of the UF2).
+
+The DSP and CX4 ROMs come from the MiSTer `.mif` files via
+`verilog/snes/rom_init_pkg.vhd`; regenerate it with
+`python3 verilog/snes/gen_rom_init.py` if those files change.
+
+The simulator needs [GHDL](https://github.com/ghdl/ghdl) 5 (with its synthesis
+support, e.g. Ubuntu's `ghdl` package) to convert the VHDL to Verilog
+(`verilog/snes/ghdl_synth.sh`, run by `build_sim.py`):
+
+```sh
+.venv/bin/python scripts/build_sim.py snes --build-root build/sim-snes
+build/sim-snes/Vsnes_top --headless --frames 600 --screenshot out.ppm \
+    --input 300:start:5 game.sfc
+```
+
+Useful test ROMs: [PeterLemon/SNES](https://github.com/PeterLemon/SNES)
+(CPU, PPU, GSU and bank tests).
+
 ### Debugging physical GBA cartridges
 
 The GBA core logs physical cartridge ROM reads in the header region (and the
