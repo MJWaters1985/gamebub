@@ -357,8 +357,10 @@ end
 // with WE# low from the first to the second clk_mem falling edge. The second
 // half of every cycle reads the current address, and the data is registered at
 // the end of it: the same one-cycle read latency as block RAM.
-// The host gets cycles in which the console doesn't select BSRAM.
-wire use_host = host_sram_req & ~host_sram_ack & BSRAM_CE_N;
+// The host gets cycles in which the console doesn't select BSRAM, and all of
+// them while the console is paused (when the SA-1 and GSU hold their RAM
+// selected, but don't write).
+wire use_host = host_sram_req & ~host_sram_ack & (BSRAM_CE_N | ~enable);
 wire bsram_write = use_host ? host_sram_write : ~BSRAM_CE_N & ~BSRAM_WE_N;
 wire [17:0] bsram_addr = use_host ? host_sram_addr : BSRAM_ADDR[18:1];
 
