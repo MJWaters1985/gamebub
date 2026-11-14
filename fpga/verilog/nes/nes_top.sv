@@ -10,7 +10,8 @@
 // (bram_override) use a block RAM instead.
 
 module nes_top #(
-	parameter CLEAR_RAM = 1   // clear RAM after loading (slow; the simulator skips it)
+	parameter CLEAR_RAM = 1,  // clear RAM after loading (slow; the simulator skips it)
+	parameter TRACE_FROM = 0  // simulation: trace CPU writes from this frame (0: off)
 ) (
 	input             clk_sys,      // 21.477 MHz master clock
 	input             clk_mem,      // 4x clk_sys, for the SDRAM controller
@@ -285,6 +286,22 @@ NES nes (
 	.SAVE_out_be     (),
 	.SAVE_out_done   (1'b0)
 );
+
+`ifdef VERILATOR
+// Simulation-only trace of CPU writes to the PPU, mapper and PRG RAM, from frame TRACE_FROM
+// (0: off).
+reg [15:0] dbg_frame = 0;
+reg        dbg_vblank;
+always @(posedge clk) begin
+	dbg_vblank <= nes_vblank;
+	if (nes_vblank & ~dbg_vblank) dbg_frame <= dbg_frame + 1'd1;
+	if (TRACE_FROM != 0 && dbg_frame >= TRACE_FROM && nes.cpu_ce && nes.mw_int &&
+			(nes.addr[15] || nes.addr[15:13] == 3'b001 || nes.addr[15:13] == 3'b011))
+		$display("f%0d sl%0d c%0d %04x <= %02x", dbg_frame, scanline, cycle, nes.addr, nes.dbus);
+	if (TRACE_FROM != 0 && dbg_frame == TRACE_FROM + 40 && nes.cpu_ce && nes.mr_int)
+		$display("f%0d sl%0d c%0d %04x -> %02x", dbg_frame, scanline, cycle, nes.addr, nes.internal_data_bus);
+end
+`endif
 
 // Controller 1 shift register (the core strobes and clocks it)
 always @(posedge clk) begin
