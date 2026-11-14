@@ -21,7 +21,6 @@ use crate::{
 };
 pub use info::CoreFile;
 pub use info::CoreInfo;
-pub use info::CoreListEntry;
 use browse::{Anchor, EntryKey, Target};
 use settings::CoreSettings;
 
@@ -71,7 +70,6 @@ pub const CORE_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 pub struct CoreManager {
     stage: Stage,
-    listed_cores: bool,
     core_info: Option<info::CoreInfo>,
     core_handler: CoreHandlerImpl,
     core_settings: Option<CoreSettings>,
@@ -185,7 +183,6 @@ impl CoreManager {
     fn new() -> Self {
         CoreManager {
             core_info: None,
-            listed_cores: false,
             stage: Stage::Idle,
             core_handler: CoreHandlerImpl::None,
             core_settings: None,
@@ -199,17 +196,6 @@ impl CoreManager {
 
     pub fn lock() -> MutexGuard<'static, Self> {
         CORE_MANAGER.lock().unwrap()
-    }
-
-    /// Find and list all cores (UI)
-    pub fn list_cores(&mut self) {
-        if self.listed_cores {
-            // Already sent the list to the UI, ignore duplicate request.
-            return;
-        }
-
-        let list = info::list_cores();
-        ui::send(ui::Message::CoreList(list));
     }
 
     /// Start the process of running a specific core (by ID).
@@ -591,8 +577,6 @@ impl CoreManager {
 
             // Get the file path
             let mut path = self.selected_files[i].clone();
-
-            // TODO if asset path is not none, construct path based on that
 
             // Path to load from, if different from the path to save to.
             let mut load_path = None;

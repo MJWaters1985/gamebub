@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use super::super::slint::Backend;
-use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString};
 
 use crate::{
     device::Device,
@@ -44,20 +44,10 @@ impl Model for FileListModel {
 }
 
 impl UiState {
-    /// Set up the "Cores" screen.
+    /// Set up the core file selection screen (ScreenId::Cores).
     pub(super) fn setup_cores(&mut self, state: &Rc<RefCell<UiState>>, _device: &mut Device) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
-
-        backend.on_core_list_fetch(move || {
-            worker::send(worker::Message::FetchCoreList);
-        });
-
-        let state_ = state.clone();
-        backend.on_core_run(move |core_id| {
-            let mut state = state_.borrow_mut();
-            state.cores_handle_run(core_id);
-        });
 
         backend.on_core_file_select_selected(move |index| {
             worker::send(worker::Message::CoreFileChoose(index as usize));
@@ -75,7 +65,6 @@ impl UiState {
         backend.on_core_file_select_cancel(move || {
             let state = state_.borrow();
             let root = state.root.unwrap();
-            root.invoke_set_title("Cores".into());
             root.global::<Backend>().set_core_file_select_active(false);
             worker::send(worker::Message::CoreFileCancelled);
         });
@@ -90,35 +79,6 @@ impl UiState {
             };
             root.invoke_set_screen(ScreenId::Settings);
         });
-    }
-
-    pub fn cores_handle_run(&mut self, core_id: SharedString) {
-        let core_id = core_id.to_string();
-        kvs::keys::LAST_CORE.set(&core_id);
-        let root = self.root.unwrap();
-        root.global::<Backend>().set_game_can_load_rom(true);
-        worker::send(worker::Message::RunCore(core_id));
-    }
-
-    pub fn cores_list(&mut self, list: Vec<crate::core::CoreListEntry>) {
-        let last_core = kvs::keys::LAST_CORE.get();
-        let selected_index = last_core
-            .and_then(|last_core| list.iter().position(|x| x.id.as_str() == last_core))
-            .unwrap_or(0);
-
-        let list = ModelRc::from(Rc::new(VecModel::from(
-            list.into_iter()
-                .map(|item| crate::ui::slint::CoreListEntry {
-                    core_id: item.id.as_str().into(),
-                    core_name: item.name.as_str().into(),
-                    core_author: item.author.as_str().into(),
-                })
-                .collect::<Vec<_>>(),
-        )));
-        let root = self.root.unwrap();
-        let backend = root.global::<Backend>();
-        backend.set_core_list_index(selected_index as i32);
-        backend.set_core_list(list);
     }
 
     pub fn cores_file_select_begin(&mut self, label: String) {

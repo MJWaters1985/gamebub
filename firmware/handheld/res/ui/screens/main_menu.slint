@@ -5,7 +5,6 @@ import { Button } from "../components/button.slint";
 enum ButtonId {
     Cart,
     Rom,
-    Cores,
     Settings,
     Tools,
 }
@@ -24,8 +23,6 @@ export component MainMenuScreen inherits ScreenBase {
                     btn-cart.focus();
                 } else if (MainMenu.last-focus == ButtonId.Rom) {
                     btn-rom.focus();
-                } else if (MainMenu.last-focus == ButtonId.Cores) {
-                    btn-cores.focus();
                 } else if (MainMenu.last-focus == ButtonId.Settings) {
                     btn-settings.focus();
                 } else if (MainMenu.last-focus == ButtonId.Tools) {
@@ -62,7 +59,7 @@ export component MainMenuScreen inherits ScreenBase {
                 spacing: 4px;
 
                 btn-cart := Button {
-                    width: (parent.width - 8px) / 3;
+                    width: (parent.width - 4px) / 2;
                     height: 25% * root.height;
                     text: "Run Cartridge";
                     on-right => {
@@ -83,7 +80,7 @@ export component MainMenuScreen inherits ScreenBase {
                 }
 
                 btn-rom := Button {
-                    width: (parent.width - 8px) / 3;
+                    width: (parent.width - 4px) / 2;
                     height: 25% * root.height;
                     text: Backend.sdcard-mounted ? "Run ROM" : "No microSD card";
                     disabled: !Backend.sdcard-mounted;
@@ -91,38 +88,14 @@ export component MainMenuScreen inherits ScreenBase {
                         btn-cart.focus();
                         accept
                     }
-                    on-right => {
-                        btn-cores.focus();
-                        accept
-                    }
                     on-down => {
-                        btn-settings.focus();
+                        btn-tools.focus();
                         MainMenu.last-focus = ButtonId.Rom;
                         accept
                     }
                     on-pressed => {
                         MainMenu.last-focus = ButtonId.Rom;
                         Global.set-screen(ScreenId.Library);
-                    }
-                }
-
-                btn-cores := Button {
-                    width: (parent.width - 8px) / 3;
-                    height: 25% * root.height;
-                    text: Backend.sdcard-mounted ? "Cores" : "No microSD card";
-                    disabled: !Backend.sdcard-mounted;
-                    on-left => {
-                        btn-rom.focus();
-                        accept
-                    }
-                    on-down => {
-                        btn-tools.focus();
-                        MainMenu.last-focus = ButtonId.Cores;
-                        accept
-                    }
-                    on-pressed => {
-                        MainMenu.last-focus = ButtonId.Cores;
-                        Global.set-screen(ScreenId.Cores);
                     }
                 }
             }
@@ -155,7 +128,7 @@ export component MainMenuScreen inherits ScreenBase {
                     height: 15% * root.height;
                     on-up => {
                         if Backend.sdcard-mounted {
-                            btn-cores.focus();
+                            btn-rom.focus();
                         }
                         MainMenu.last-focus = ButtonId.Tools;
                         accept

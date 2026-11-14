@@ -259,7 +259,6 @@ impl Gba {
                     id: FILE_CONFIG_OVERRIDE,
                     label: "Config Override".try_into().unwrap(),
                     extensions: [".json".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: true,
@@ -277,7 +276,6 @@ impl Gba {
                     id: FILE_ROM,
                     label: "ROM".try_into().unwrap(),
                     extensions: [".gba".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: true,
@@ -295,7 +293,6 @@ impl Gba {
                     id: FILE_SAVE,
                     label: "Save".try_into().unwrap(),
                     extensions: [".sav".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: false,
@@ -313,7 +310,6 @@ impl Gba {
                     id: FILE_BIOS,
                     label: "BIOS".try_into().unwrap(),
                     extensions: [".bin".try_into().unwrap()].into_iter().collect(),
-                    filename: None, // TODO
 
                     optional: false,
                     read_only: true,

@@ -134,7 +134,6 @@ impl Gameboy {
                     extensions: [".gb".try_into().unwrap(), ".gbc".try_into().unwrap()]
                         .into_iter()
                         .collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: true,
@@ -152,7 +151,6 @@ impl Gameboy {
                     id: 1,
                     label: "Save".try_into().unwrap(),
                     extensions: [".sav".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: false,
@@ -170,7 +168,6 @@ impl Gameboy {
                     id: 2,
                     label: "BIOS CGB".try_into().unwrap(),
                     extensions: [".bin".try_into().unwrap()].into_iter().collect(),
-                    filename: None, // TODO
 
                     optional: false,
                     read_only: true,
@@ -188,7 +185,6 @@ impl Gameboy {
                     id: 3,
                     label: "BIOS DMG".try_into().unwrap(),
                     extensions: [".bin".try_into().unwrap()].into_iter().collect(),
-                    filename: None, // TODO
 
                     optional: false,
                     read_only: true,

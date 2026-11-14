@@ -87,8 +87,6 @@ pub enum Message {
     DockEnd,
     /// Take a UI screenshot
     Screenshot,
-    /// Core info listing
-    CoreList(Vec<crate::core::CoreListEntry>),
     /// Open core file selection screen
     CoreFileSelectBegin { label: String },
     /// Update core file selection list
@@ -387,9 +385,6 @@ impl UI {
                     Ok(f) => log::info!("Saved UI screenshot to {f}"),
                     Err(e) => log::error!("Screenshot error: {e}"),
                 }
-            }
-            Message::CoreList(list) => {
-                self.state.borrow_mut().cores_list(list);
             }
             Message::CoreFileSelectBegin { label } => {
                 self.state.borrow_mut().cores_file_select_begin(label);

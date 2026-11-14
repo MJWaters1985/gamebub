@@ -30,10 +30,6 @@ pub enum Message {
     /// The idle timer has expired
     IdleTimerExpired,
 
-    /// Fetch the list of cores
-    FetchCoreList,
-    /// Start running a core (ID)
-    RunCore(String),
     /// Run a core (ID) with a ROM file, skipping the file browser
     RunRom { core_id: String, path: std::path::PathBuf },
     /// Exit the current core (or cancel loading)
@@ -139,8 +135,6 @@ fn dispatch(message: Message) {
                 Device::lock().power_off();
             }
         }
-        Message::FetchCoreList => CoreManager::lock().list_cores(),
-        Message::RunCore(id) => CoreManager::lock().run_core(&id, false),
         Message::RunRom { core_id, path } => CoreManager::lock().run_core_with_rom(&core_id, path),
         Message::ExitCore => CoreManager::lock().exit_core(),
         Message::ReloadCore => CoreManager::lock().reload_core(),

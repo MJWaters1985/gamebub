@@ -1,18 +1,7 @@
 use arrayvec::{ArrayString, ArrayVec};
-use serde::Deserialize;
-use std::{fs::File, io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::device::drivers::fpga;
-
-// pub const DIR_CORES: &str = "/sdcard/cores/";
-pub const DIR_CORES: &str = "/dev/null";
-
-#[derive(Deserialize)]
-pub struct CoreListEntry {
-    pub id: ArrayString<32>,
-    pub name: ArrayString<32>,
-    pub author: ArrayString<32>,
-}
 
 #[allow(unused)]
 pub struct CoreInfo {
@@ -27,16 +16,12 @@ pub struct CoreInfo {
 pub struct CoreFile {
     pub id: u16,
     pub label: ArrayString<16>,
-    /// If set, the file will be loaded from this path relative to the asset path.
-    pub filename: Option<ArrayString<32>>,
 
     /// List of file extensions (optional).
     pub extensions: ArrayVec<ArrayString<8>, 4>,
 
     /// If true, the core will still run if the file is not loaded.
     pub optional: bool,
-    /// If true, file will be loaded at core start and saved at core end.
-    // persistent: bool,
     /// If true, file is treated as read-only, won't be saved at core end.
     pub read_only: bool,
     /// If true, the file path is selected by the user (filtered by extensions).
@@ -47,13 +32,10 @@ pub struct CoreFile {
     pub initialize: bool,
 
     /// The address to load the file to.
-    /// TODO: support hex-string
     pub address: u32,
     /// Maximum size of the file.
-    /// TODO: support hex-string
     pub max_size: u32,
     /// Exact size of the file.
-    /// TODO: support hex-string
     pub exact_size: u32,
     /// Maximum read/write speed when loading/saving the file (in KB/s)
     pub max_transfer_speed: u32,
@@ -72,152 +54,13 @@ impl CoreInfo {
     }
 }
 
-/// Get a list of all available cores.
-pub fn list_cores() -> Vec<CoreListEntry> {
-    // Start with built-in cores.
-    let mut cores = vec![
-        CoreListEntry {
-            id: "Game-Bub.GB".try_into().unwrap(),
-            name: "Game Boy / Game Boy Color".try_into().unwrap(),
-            author: "Game Bub".try_into().unwrap(),
-        },
-        CoreListEntry {
-            id: "Game-Bub.GBA".try_into().unwrap(),
-            name: "Game Boy Advance".try_into().unwrap(),
-            author: "Game Bub".try_into().unwrap(),
-        },
-        CoreListEntry {
-            id: "Game-Bub.NES".try_into().unwrap(),
-            name: "NES".try_into().unwrap(),
-            author: "Game Bub".try_into().unwrap(),
-        },
-        CoreListEntry {
-            id: "Game-Bub.SNES".try_into().unwrap(),
-            name: "Super Nintendo".try_into().unwrap(),
-            author: "Game Bub".try_into().unwrap(),
-        },
-    ];
-
-    // Iterate over possible core directories.
-    if let Ok(entries) = std::fs::read_dir(DIR_CORES) {
-        for entry in entries {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(_) => {
-                    log::warn!("Failed to list core file");
-                    continue;
-                }
-            };
-
-            // Skip non-directories
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                continue;
-            }
-
-            let mut path = entry.path();
-            path.push("core.json");
-
-            let file = match File::open(&path) {
-                Ok(file) => file,
-                Err(_) => {
-                    log::warn!("Failed to open core file");
-                    continue;
-                }
-            };
-
-            /// Helper struct to extract only high-level info from core
-            #[derive(Deserialize)]
-            struct MinimalCoreInfo {
-                metadata: CoreListEntry,
-            }
-
-            let reader = BufReader::with_capacity(256, file);
-            match serde_json::from_reader::<_, MinimalCoreInfo>(reader) {
-                Ok(info) => cores.push(info.metadata),
-                Err(e) => {
-                    let filename = path.file_name().unwrap_or_default();
-                    log::warn!("Error parsing core file {filename:?}: {e:?}");
-                    continue;
-                }
-            };
-        }
-    }
-
-    cores.sort_by(|a, b| a.name.cmp(&b.name));
-    cores
-}
-
-/// Get full information for a core.
-/// TODO: better error type?
+/// Get full information for a built-in core.
 pub fn get_core(id: &str) -> Result<CoreInfo, String> {
-    // Handle built-in cores.
     match id {
-        "Game-Bub.GB" => return Ok(crate::bitstream::gameboy::Gameboy::get_core_info()),
-        "Game-Bub.GBA" => return Ok(crate::bitstream::gba::Gba::get_core_info()),
-        "Game-Bub.SNES" => return Ok(crate::bitstream::snes::Snes::get_core_info()),
-        "Game-Bub.NES" => return Ok(crate::bitstream::nes::Nes::get_core_info()),
-        _ => {}
+        "Game-Bub.GB" => Ok(crate::bitstream::gameboy::Gameboy::get_core_info()),
+        "Game-Bub.GBA" => Ok(crate::bitstream::gba::Gba::get_core_info()),
+        "Game-Bub.SNES" => Ok(crate::bitstream::snes::Snes::get_core_info()),
+        "Game-Bub.NES" => Ok(crate::bitstream::nes::Nes::get_core_info()),
+        _ => Err(format!("Unknown core {id}")),
     }
-
-    #[derive(Deserialize)]
-    struct JsonCoreMetadata {
-        pub id: ArrayString<32>,
-        pub name: ArrayString<32>,
-        pub author: ArrayString<32>,
-    }
-
-    #[derive(Deserialize)]
-    struct JsonCoreBitstream {
-        pub target: ArrayString<16>,
-        pub filename: ArrayString<32>,
-    }
-
-    #[derive(Deserialize)]
-    struct JsonCoreInfo {
-        metadata: JsonCoreMetadata,
-        bitstreams: Vec<JsonCoreBitstream>,
-    }
-
-    let mut core_dir = PathBuf::from(DIR_CORES);
-    core_dir.push(id);
-
-    // Read core.json
-    let file = File::open(&core_dir.join("core.json")).map_err(|_| "Failed to open core.json")?;
-    let reader = BufReader::with_capacity(256, file);
-    let json_core: JsonCoreInfo =
-        serde_json::from_reader(reader).map_err(|e| format!("Failed to parse core.json: {e}"))?;
-
-    // Find the right bitstream (TODO: use a visitor that extracts the right one).
-    let bitstream = json_core
-        .bitstreams
-        .iter()
-        .find_map(|b| {
-            if b.target.as_str() == get_device_target() && b.filename.ends_with(".bit") {
-                Some(b.filename)
-            } else {
-                None
-            }
-        })
-        .ok_or("No compatible bitstream")?;
-
-    Ok(CoreInfo {
-        id: json_core.metadata.id,
-        name: json_core.metadata.name,
-        author: json_core.metadata.author,
-        files: ArrayVec::new(), // TODO
-        bitstream: core_dir.join(bitstream),
-    })
-}
-
-fn get_device_target() -> &'static str {
-    #[cfg(feature = "rev1")]
-    const TARGET: &'static str = "gamebub_rev1";
-    #[cfg(feature = "rev2")]
-    const TARGET: &'static str = "gamebub_rev2";
-    #[cfg(feature = "rev3")]
-    const TARGET: &'static str = "gamebub_rev3";
-    #[cfg(feature = "rev4")]
-    const TARGET: &'static str = "gamebub_rev4";
-
-    TARGET
 }

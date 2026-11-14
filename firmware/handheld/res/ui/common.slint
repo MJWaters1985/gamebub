@@ -7,7 +7,7 @@ import {
     SettingDatetime,
 } from "screens/settings/types.slint";
 import { FileListEntry } from "components/file_list.slint";
-import { CoreSubscreen, CoreListEntry } from "screens/cores/types.slint";
+import { CoreSubscreen } from "screens/cores/types.slint";
 
 export enum ScreenId {
     Setup,
@@ -103,8 +103,6 @@ export global Backend {
     in property <ScreenId> settings-return-screen: ScreenId.MainMenu;
 
     in-out property <CoreSubscreen> core-subscreen;
-    in property <[CoreListEntry]> core-list;
-    in-out property <int> core-list-index;
     in property <string> core-file-select-label: "";
     in property <[FileListEntry]> core-file-select-list: [];
     in property <string> core-file-select-path: "/fake/path/";
@@ -113,7 +111,6 @@ export global Backend {
     in-out property <int> core-file-select-index: 0;
     // True while a core is waiting for the user to select a file.
     in property <bool> core-file-select-active: false;
-    in-out property <int> core-selected-index: 0;
     in-out property <string> core-error;
     in property <percent> core-progress: 0%;
     in property <bool> core-is-loading: false;
@@ -212,8 +209,6 @@ export global Backend {
     callback cart-tool-action(int);
     callback cart-tool-confirm();
     callback cart-tool-exit();
-    callback core-list-fetch();
-    callback core-run(string);
     callback core-file-select-selected(int);
     callback core-file-select-up();
     callback core-file-select-cancel();

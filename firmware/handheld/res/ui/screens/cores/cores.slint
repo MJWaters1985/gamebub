@@ -1,74 +1,25 @@
 import { Global, ScreenId, Backend } from "../../common.slint";
 import { ScreenBase } from "../../components/screen.slint";
-import { TextListView } from "../../components/list_view.slint";
-import { ControlHint } from "../../components/control_hint.slint";
-import { CoreList } from "core_list.slint";
-import { CoreDetails } from "core_detail.slint";
-import { CoreSubscreen, CoreListEntry } from "types.slint";
+import { CoreSubscreen } from "types.slint";
 import { CoreFileSelect } from "core_file_select.slint";
 import { CoreError } from "core_error.slint";
 
+// File selection and load errors for a core being started (from Run ROM, Run Cartridge or the
+// game menu's Load ROM).
 export component CoresScreen inherits ScreenBase {
-    title: Backend.core-file-select-active ? "Select " + Backend.core-file-select-label : "Cores";
+    title: Backend.core-file-select-active ? "Select " + Backend.core-file-select-label : "Error";
 
-    in property <[CoreListEntry]> cores: Backend.core-list;
-    private property <int> selected-core: Backend.core-selected-index;
+    // Where to go when file selection is cancelled or an error is dismissed: back to Run ROM if
+    // the game was started from a file, otherwise the main menu.
+    function leave() {
+        Global.set-screen(Backend.game-can-load-rom && Backend.sdcard-mounted ? ScreenId.Library : ScreenId.MainMenu);
+    }
 
     init => {
-        if Backend.core-list.length == 0 {
-            Backend.core-list-fetch();
-        }
         if (!Backend.core-error.is-empty) {
             Backend.core-subscreen = CoreSubscreen.Error;
-        } else if (Backend.core-file-select-active) {
-            // Returning from the settings in the middle of file selection.
-            Backend.core-subscreen = CoreSubscreen.FileSelect;
         } else {
-            Backend.core-file-select-list = [];
-            Backend.core-file-select-label = "";
-            Backend.core-subscreen = CoreSubscreen.List;
-        }
-    }
-
-    if Backend.core-subscreen == CoreSubscreen.List: CoreList {
-        cores: root.cores;
-        width: 100%;
-        height: 100%;
-
-        init => {
-            self.focus();
-        }
-
-        on-cancel => {
-            Global.set-screen(ScreenId.MainMenu);
-            Backend.core-subscreen = CoreSubscreen.List;
-        }
-        on-core-selected(i) => {
-            Backend.core-selected-index = i;
-            Backend.core-run(cores[selected-core].core-id);
-            // Backend.core-subscreen = CoreSubscreen.Detail;
-        }
-    }
-
-    if Backend.core-subscreen == CoreSubscreen.Detail: CoreDetails {
-        width: 100%;
-        height: 100%;
-
-        init => {
-            // TODO: adjust screen title if coming back from File Select
-            self.focus();
-        }
-
-        core-name: cores[selected-core].core-name;
-        core-author: cores[selected-core].core-author;
-
-        on-cancel => {
-            // Backend.core-subscreen = CoreSubscreen.Detail;
-            Backend.core-subscreen = CoreSubscreen.List;
-        }
-        on-run => {
-            Backend.core-run(cores[selected-core].core-id);
-            // TODO: show loading screen?
+            Backend.core-subscreen = CoreSubscreen.FileSelect;
         }
     }
 
@@ -80,8 +31,8 @@ export component CoresScreen inherits ScreenBase {
             self.focus();
         }
         on-cancel => {
-            Backend.core-subscreen = CoreSubscreen.List;
             Backend.core-file-select-cancel();
+            root.leave();
         }
     }
 
@@ -96,9 +47,8 @@ export component CoresScreen inherits ScreenBase {
         }
         on-confirm => {
             Backend.core-error = "";
-            // Backend.core-subscreen = CoreSubscreen.Detail;
-            Backend.core-subscreen = CoreSubscreen.List;
             Backend.core-file-select-cancel();
+            root.leave();
         }
     }
 }

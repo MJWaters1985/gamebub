@@ -274,7 +274,6 @@ impl Snes {
                     extensions: [".sfc".try_into().unwrap(), ".smc".try_into().unwrap()]
                         .into_iter()
                         .collect(),
-                    filename: None,
 
                     optional: false,
                     read_only: true,
@@ -293,7 +292,6 @@ impl Snes {
                     id: FILE_SAVE,
                     label: "Save".try_into().unwrap(),
                     extensions: [".srm".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: false,

@@ -99,7 +99,6 @@ impl Nes {
                     id: FILE_ROM,
                     label: "ROM".try_into().unwrap(),
                     extensions: [".nes".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: false,
                     read_only: true,
@@ -119,7 +118,6 @@ impl Nes {
                     id: FILE_SAVE,
                     label: "Save".try_into().unwrap(),
                     extensions: [".sav".try_into().unwrap()].into_iter().collect(),
-                    filename: None,
 
                     optional: true,
                     read_only: false,
