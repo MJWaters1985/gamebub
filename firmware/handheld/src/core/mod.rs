@@ -1168,16 +1168,30 @@ impl CoreManager {
 
 /// Point a core's remembered file paths and favorites at a ROM's new path, after it has been
 /// renamed (only while no core is running, which keeps its settings in memory).
-pub fn rename_rom_in_settings(core_id: &str, old: &Path, new: &Path) {
+fn settings_path(core_id: &str) -> PathBuf {
     let mut path = PathBuf::from(DIR_SETTINGS);
     path.push(core_id);
     path.add_extension("json");
-    let Ok(file) = File::open(&path) else {
-        return;
-    };
-    let Ok(mut settings) =
-        serde_json::from_reader::<_, CoreSettings>(BufReader::with_capacity(256, file))
-    else {
+    path
+}
+
+/// A core's saved settings (None if there are none yet, or they can't be read).
+fn read_core_settings(core_id: &str) -> Option<CoreSettings> {
+    let file = File::open(settings_path(core_id)).ok()?;
+    serde_json::from_reader(BufReader::with_capacity(256, file)).ok()
+}
+
+fn write_core_settings(core_id: &str, settings: &CoreSettings) -> Result<(), String> {
+    if !Path::new(DIR_SETTINGS).exists() {
+        std::fs::create_dir(DIR_SETTINGS).map_err(|e| e.to_string())?;
+    }
+    let file = File::create(settings_path(core_id)).map_err(|e| e.to_string())?;
+    serde_json::to_writer(BufWriter::with_capacity(256, file), settings).map_err(|e| e.to_string())
+}
+
+/// Update the paths in a core's settings (last files and favorites) after a ROM is renamed.
+pub fn rename_rom_in_settings(core_id: &str, old: &Path, new: &Path) {
+    let Some(mut settings) = read_core_settings(core_id) else {
         return;
     };
     let mut changed = false;
@@ -1189,14 +1203,33 @@ pub fn rename_rom_in_settings(core_id: &str, old: &Path, new: &Path) {
         }
     }
     if changed {
-        let result = File::create(&path).map_err(|e| e.to_string()).and_then(|file| {
-            serde_json::to_writer(BufWriter::with_capacity(256, file), &settings)
-                .map_err(|e| e.to_string())
-        });
-        if let Err(e) = result {
-            log::warn!("Couldn't update {}: {e}", path.display());
+        if let Err(e) = write_core_settings(core_id, &settings) {
+            log::warn!("Couldn't update the {core_id} settings: {e}");
         }
     }
+}
+
+/// A core's favorite files (the file browser's favorites).
+pub fn core_favorites(core_id: &str) -> Vec<PathBuf> {
+    read_core_settings(core_id).map(|s| s.favorites).unwrap_or_default()
+}
+
+/// Add a file to a core's favorites, or remove it. Returns whether it's now a favorite.
+/// Only call this while the core isn't loaded: a loaded core keeps its own copy of the settings.
+pub fn toggle_core_favorite(core_id: &str, path: &Path) -> Result<bool, String> {
+    let mut settings = read_core_settings(core_id).unwrap_or_default();
+    let added = match settings.favorites.iter().position(|p| p == path) {
+        Some(i) => {
+            settings.favorites.remove(i);
+            false
+        }
+        None => {
+            settings.favorites.push(path.to_path_buf());
+            true
+        }
+    };
+    write_core_settings(core_id, &settings)?;
+    Ok(added)
 }
 
 /// Path for a save file in the saves directory, e.g. `/sdcard/saves/gba/Game.sav`.

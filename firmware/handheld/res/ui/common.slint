@@ -158,6 +158,8 @@ export global Backend {
     callback library-run-game(int);
     callback library-close();
     callback library-clear-boxart();
+    // Add the game to the favorites, or remove it
+    callback library-toggle-favorite(int);
 
     // Wi-Fi screen. View: 0 menu, 1 busy, 2 networks, 3 password, 4 result
     in-out property <int> wifi-view: 0;

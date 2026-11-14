@@ -107,6 +107,9 @@ this fork's changes and a link to this repository.
   - Names are shown without the trailing No-Intro tags ("Pokemon - Gold Version"); a long
     name scrolls when highlighted.
   - L and R move the highlight up or down one screenful.
+  - **Favorites**, first in the system list: the favorites of every core in one list, with
+    box art, each started with its own core. **Select** on a game adds it or removes it. They
+    are the file browser's favorites, so a game marked in either place is in both.
   - Box art is shown at up to 120x120 (e.g. 120x80 for landscape GBA covers), the size of the
     downloaded thumbnails; with too little free memory it's shrunk (by averaging) and marked
     "Reduced".

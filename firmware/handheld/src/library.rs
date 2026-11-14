@@ -40,6 +40,8 @@ pub struct Game {
     /// Name shown in the list (the file name without its extension)
     pub name: String,
     pub path: PathBuf,
+    /// System it's listed under (its core and box art folder)
+    pub system: System,
 }
 
 impl System {
@@ -60,7 +62,7 @@ impl System {
                     return None;
                 }
                 let name = Path::new(&file_name).file_stem()?.to_string_lossy().into_owned();
-                Some(Game { name, path: entry.path() })
+                Some(Game { name, path: entry.path(), system: *self })
             })
             .take(MAX_GAMES)
             .collect();
@@ -91,6 +93,43 @@ impl System {
     pub fn thumbnail_path(&self, game_name: &str) -> PathBuf {
         Path::new(DIR_BOXART).join(self.folder).join(format!("{game_name}.thumb"))
     }
+}
+
+impl Game {
+    /// Path of the game's box art thumbnail.
+    pub fn thumbnail_path(&self) -> PathBuf {
+        self.system.thumbnail_path(&self.name)
+    }
+}
+
+/// The favorites of every core (the file browser's favorites), as games, sorted by name.
+/// A favorite in `/roms/<system>/` is listed under that system; one elsewhere under the first
+/// system of its core that has its extension. Files that no longer exist are left out.
+pub fn favorites() -> Vec<Game> {
+    let mut core_ids: Vec<&str> = SYSTEMS.iter().map(|s| s.core_id).collect();
+    core_ids.dedup();
+    let mut games: Vec<Game> = core_ids
+        .into_iter()
+        .flat_map(|core_id| {
+            crate::core::core_favorites(core_id).into_iter().filter_map(move |path| {
+                let file_name = path.file_name()?.to_string_lossy().into_owned();
+                let ours = |s: &&System| s.core_id == core_id && has_extension(&file_name, s.extensions);
+                let system = SYSTEMS
+                    .iter()
+                    .filter(ours)
+                    .find(|s| path.parent() == Some(s.rom_dir().as_path()))
+                    .or_else(|| SYSTEMS.iter().find(ours))?;
+                if !path.is_file() {
+                    return None;
+                }
+                let name = path.file_stem()?.to_string_lossy().into_owned();
+                Some(Game { name, path, system: *system })
+            })
+        })
+        .take(MAX_GAMES)
+        .collect();
+    games.sort_by(|a, b| natural_cmp(&a.name, &b.name));
+    games
 }
 
 /// Free memory to leave after loading a thumbnail.

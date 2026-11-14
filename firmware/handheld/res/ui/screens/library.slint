@@ -4,7 +4,7 @@ import { TextListView } from "../components/list_view.slint";
 import { ControlHint } from "../components/control_hint.slint";
 import { StatusMessage, StatusKind } from "../components/status_message.slint";
 
-// "Run ROM": pick a system, then a game from /roms/<system>.
+// "Run ROM": pick Favorites or a system, then a game from the favorites or /roms/<system>.
 export component LibraryScreen inherits ScreenBase {
     title: Backend.library-view == 0 ? "Run ROM" : Backend.library-system-name;
     forward-focus: i-focus-scope;
@@ -79,6 +79,9 @@ export component LibraryScreen inherits ScreenBase {
             key-pressed(event) => {
                 if event.text == "b" {
                     Backend.library-open();
+                    accept
+                } else if event.text == "Select" && !event.repeat {
+                    Backend.library-toggle-favorite(games.focus-item);
                     accept
                 } else {
                     reject
@@ -189,6 +192,11 @@ export component LibraryScreen inherits ScreenBase {
                     ControlHint {
                         label: "Back";
                         button: "b";
+                    }
+
+                    ControlHint {
+                        label: "Favorite";
+                        button: "select";
                     }
 
                     ControlHint {
