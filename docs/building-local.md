@@ -168,6 +168,34 @@ build/sim-snes/Vsnes_top --headless --frames 600 --screenshot out.ppm \
 Useful test ROMs: [PeterLemon/SNES](https://github.com/PeterLemon/SNES)
 (CPU, PPU, GSU and bank tests).
 
+### NES core
+
+The NES core is the MiSTer NES core (MiSTer-devel/NES_MiSTer, vendored in
+`fpga/verilog/nes/mister` with small portability patches, GPL-3.0) inside a Game
+Bub wrapper (`verilog/nes/nes_top.sv`, `core/nes/HandheldNes.scala`). The core
+parses the iNES/NES 2.0 header itself; the firmware streams the whole `.nes` file
+to it and loads the `.sav` into its battery RAM.
+
+```sh
+.venv/bin/python scripts/build_core.py --name nes --target gamebub_rev4 \
+    --build-root build/nes --core-class net.gamebub.core.nes.HandheldNes
+```
+
+Like the SNES bitstreams, `nes.bit.hs` is loaded from **`/system` on the SD
+card** and isn't part of the UF2.
+
+The simulator also needs GHDL (for the T65 CPU and the VRC7 sound chip):
+
+```sh
+.venv/bin/python scripts/build_sim.py nes --build-root build/sim-nes
+build/sim-nes/Vnes_top --headless --frames 600 --screenshot out.ppm \
+    --input 300:start:5 game.nes
+```
+
+To log the CPU's writes from a given frame on (and its reads 40 frames later),
+add `"-GTRACE_FROM=<frame>"` to the NES entry's `verilator_options` in
+`build_sim.py`.
+
 ### Debugging physical GBA cartridges
 
 The GBA core logs physical cartridge ROM reads in the header region (and the

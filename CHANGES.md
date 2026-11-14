@@ -54,7 +54,7 @@ this fork's changes and a link to this repository.
 
 ## New features
 
-- **Super Nintendo core** (Cores → Super Nintendo, or Run ROM → Super Nintendo), a port of
+- **Super Nintendo core** (Run ROM → Super Nintendo), a port of
   the [MiSTer SNES core](https://github.com/srg320/SNES_MiSTer) by srg320.
   - Plays `.sfc` and `.smc` files (copier headers are skipped), LoROM, HiROM and ExHiROM,
     with battery saves in `.srm` files.
@@ -72,6 +72,22 @@ this fork's changes and a link to this repository.
     to the No-Intro name, so the libretro thumbnails match. **Set Up SD Card** creates
     `/roms/Super Nintendo` and `/boxart/Super Nintendo`; Check ROMs skips Super Nintendo
     games for now.
+- **NES core** (Run ROM → NES), a port of the
+  [MiSTer NES core](https://github.com/MiSTer-devel/NES_MiSTer).
+  - Plays `.nes` files (iNES and NES 2.0 headers) with the mappers the MiSTer core
+    supports, including MMC1–MMC5, VRC2/4/6/7, Namco 163, Sunsoft FME-7 and their
+    expansion audio. Battery saves are `.sav` files. Famicom Disk System (`.fds`) games
+    aren't supported yet.
+  - **Needs an extra file on the SD card**: copy `nes.bit.hs` from the release into
+    `/system`, like the Super Nintendo files.
+  - Tested on hardware with a personal library: the games tried so far start. Saving and
+    reloading isn't tested yet. Kid Dracula (World) (Castlevania Anniversary Collection)
+    keeps its translated text in its battery save, so it needs the `.sav` that comes with
+    it.
+  - **Download Box Art** identifies NES ROMs by their CRC32 (without the 16-byte header)
+    against the No-Intro database and renames them, their saves and box art to the No-Intro
+    name. **Set Up SD Card** creates `/roms/NES` and `/boxart/NES`; Check ROMs skips NES
+    games for now.
 - **Wi-Fi** (Settings → Wi-Fi). The radio was unused; Wi-Fi is only turned on for a task and
   then off again.
   - **Network**: scan for networks and enter the password with an on-screen keyboard (D-pad
@@ -84,7 +100,7 @@ this fork's changes and a link to this repository.
   have it, from the [libretro thumbnail library](https://thumbnails.libretro.com) via the
   [images.weserv.nl](https://images.weserv.nl) image proxy (only the game's name is sent),
   saved as 120×120 thumbnails in `/boxart/<system>/`.
-- **Run ROM** on the home screen (between Run Cartridge and Cores): pick a system, then a
+- **Run ROM** on the home screen (next to Run Cartridge): pick a system, then a
   game from `/roms/Game Boy`, `/roms/Game Boy Color` or `/roms/Game Boy Advance`, sorted by
   name, with its box art (from `/boxart/<system>/<game>.thumb`). Games start directly with
   the right core, without the file browser. Remembers the last system and game.
@@ -148,6 +164,9 @@ this fork's changes and a link to this repository.
   saving time changes automatically. The device clock still keeps UTC; local time is used
   for Date and Time in Settings, the clock of GBA games without a saved clock, file times on
   the SD card and the clock sync message.
+- **Cores removed from the home screen.** Run ROM does the same job with box art and
+  without the file browser; the per-core settings are the same as in Settings. The
+  in-game Load ROM still opens the file browser.
 - **Set Up SD Card** (Tools). Game Bub reads FAT32 (or FAT16) cards, not exFAT.
   - **Create missing folders**: `/roms/<system>`, `/boxart/<system>`, `/saves`, `/system`
     and `/settings`. Existing files are kept.
@@ -260,6 +279,10 @@ by srg320 and contributors (GPL-3.0); its cartridge detection follows MiSTer's, 
 [agg23's Analogue Pocket port](https://github.com/agg23/openfpga-SNES) was a reference. The
 Super Nintendo ROM database comes from the No-Intro DAT in
 [libretro-database](https://github.com/libretro/libretro-database).
+
+The NES core is the [MiSTer NES core](https://github.com/MiSTer-devel/NES_MiSTer) by the
+MiSTer-devel contributors (GPL-3.0); [agg23's Analogue Pocket port](https://github.com/agg23/openfpga-NES)
+was a reference. The NES ROM database comes from the No-Intro DAT in libretro-database.
 
 The physical-cartridge read timing work and simulation model build on
 [ghogan42/gamebub](https://github.com/ghogan42/gamebub). The Cartridge Manager uses the
