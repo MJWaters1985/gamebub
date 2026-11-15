@@ -32,6 +32,7 @@ class SmsTop(gameGear: Boolean) extends BlackBox(Map("GG" -> IntParam(if (gameGe
 
   val io = IO(new Bundle {
     val clk_sys = Input(Clock())
+    val clk_mem = Input(Clock())
 
     val reset = Input(Bool())
     val enable = Input(Bool())
@@ -125,8 +126,9 @@ class HandheldSmsBase(gameGear: Boolean) extends Module with Core {
     divide = 2,
     multiply = 34.375,
     clockOutConfig = Seq(
-      MMCM.ClockOut(16), // System (SMS master clock; also the SDRAM controller)
-      MMCM.ClockOut(16, phase = 180.0), // SDRAM chip clock
+      MMCM.ClockOut(16), // System (SMS master clock)
+      MMCM.ClockOut(8), // SDRAM controller (2x)
+      MMCM.ClockOut(8, phase = 180.0), // SDRAM chip clock
       MMCM.ClockOut(displayDivider), // Display
       MMCM.ClockOut(5), // Host SPI
     )
@@ -134,8 +136,9 @@ class HandheldSmsBase(gameGear: Boolean) extends Module with Core {
   mmcm.io.clockIn := io.clocks.clockIn50M
   mmcm.io.powerDown := false.B
   io.clocks.clockOutSystem := mmcm.io.clockOuts(0)
-  io.clocks.clockOutDisplay := mmcm.io.clockOuts(2)
-  io.clocks.clockOutSpi := mmcm.io.clockOuts(3)
+  val clockMem = mmcm.io.clockOuts(1)
+  io.clocks.clockOutDisplay := mmcm.io.clockOuts(3)
+  io.clocks.clockOutSpi := mmcm.io.clockOuts(4)
   io.clocks.locked := mmcm.io.locked
 
   val regCoreSetup = RegInit(false.B)
@@ -233,6 +236,7 @@ class HandheldSmsBase(gameGear: Boolean) extends Module with Core {
 
   // SMS / Game Gear
   sms.io.clk_sys := clock
+  sms.io.clk_mem := clockMem
   // The console stays in reset until the host runs it (games load while it's
   // halted; the loader isn't affected by this reset).
   sms.io.reset := regCoreReset || regCoreResetOnce || reset.asBool
@@ -354,7 +358,7 @@ class HandheldSmsBase(gameGear: Boolean) extends Module with Core {
   io.audio.right := audioFilter.io.out(1)
 
   // SDRAM
-  io.sdram.clock := mmcm.io.clockOuts(1)
+  io.sdram.clock := mmcm.io.clockOuts(2)
   io.sdram.cke := sms.io.sdram_cke
   io.sdram.cs := sms.io.sdram_cs_n
   io.sdram.ras := sms.io.sdram_ras_n

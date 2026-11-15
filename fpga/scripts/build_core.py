@@ -172,13 +172,15 @@ _SMS = "verilog/sms"
 _SMS_MISTER = f"{_SMS}/mister"
 CORE_FILES["net.gamebub.core.sms.HandheldSms"] = [
     f"{_SMS}/sms_top.sv",
+    # The Genesis core's SDRAM controller (instead of mister/sdram.sv)
+    "verilog/genesis/mister/sdram.sv",
     f"{_SMS}/sms_core.vhd",
     # Portable spram/dpram/sprom (instead of mister/spram.vhd, dpram.vhd, sprom.vhd)
     f"{_SMS}/ram_sms.vhd",
     *[
         f"{_SMS_MISTER}/{name}"
         for name in [
-            "sdram.sv", "cheatcodes.sv", "MC8123.v", "SEGASYS1_PRGDEC.v", "parts.v",
+            "cheatcodes.sv", "MC8123.v", "SEGASYS1_PRGDEC.v", "parts.v",
             "system.vhd", "video.vhd", "io.vhd", "AudioMix.vhd", "cart_eeprom.vhd",
             "eeprom_93c46.vhd", "evolution_mapper.vhd", "evolution_rom_address.vhd",
             "mapper_ctrl.vhd", "mapper_detect.vhd", "memory_bus.vhd", "memory_decode.vhd",
