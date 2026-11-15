@@ -39,6 +39,22 @@ pub static NES: RomDatabase = RomDatabase {
     name: "NES",
 };
 
+/// Master System: plain ROM files.
+pub static SMS: RomDatabase = RomDatabase {
+    data: include_bytes!("../res/smsdb.bin"),
+    header_size: |_, _| 0,
+    save_extension: "sav",
+    name: "Master System",
+};
+
+/// Game Gear: plain ROM files.
+pub static GG: RomDatabase = RomDatabase {
+    data: include_bytes!("../res/ggdb.bin"),
+    header_size: |_, _| 0,
+    save_extension: "sav",
+    name: "Game Gear",
+};
+
 /// Genesis / Mega Drive: plain ROM files (interleaved .smd dumps aren't recognized).
 pub static GENESIS: RomDatabase = RomDatabase {
     data: include_bytes!("../res/genesisdb.bin"),

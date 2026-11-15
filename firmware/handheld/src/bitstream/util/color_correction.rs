@@ -53,6 +53,19 @@ pub mod presets {
         levels: Some([0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255, 255]),
     };
 
+    /// Cores with 4-bit linear color (Master System, Game Gear): levels 0-15 evenly spaced.
+    pub static LINEAR_4BIT: ColorCorrection = ColorCorrection {
+        in_gamma: 1.0,
+        out_gamma: 1.0,
+        luminance: 1.0,
+        matrix: [
+            1.0, 0.0, 0.0, // red
+            0.0, 1.0, 0.0, // green
+            0.0, 0.0, 1.0, // blue
+        ],
+        levels: Some([0, 17, 34, 51, 68, 85, 102, 119, 136, 153, 170, 187, 204, 221, 238, 255]),
+    };
+
     /// Identity
     pub static IDENTITY: ColorCorrection = ColorCorrection {
         in_gamma: 1.0,

@@ -31,6 +31,8 @@ fn libretro_system(system: &System) -> &'static str {
         "NES" => "Nintendo - Nintendo Entertainment System",
         "Super Nintendo" => "Nintendo - Super Nintendo Entertainment System",
         "Genesis" => "Sega - Mega Drive - Genesis",
+        "Master System" => "Sega - Master System - Mark III",
+        "Game Gear" => "Sega - Game Gear",
         _ => "Nintendo - Game Boy Advance",
     }
 }

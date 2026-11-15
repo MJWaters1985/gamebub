@@ -151,6 +151,8 @@ pub fn download_library_boxart() {
             ("Game-Bub.SNES", &crate::rom_db::SNES),
             ("Game-Bub.NES", &crate::rom_db::NES),
             ("Game-Bub.Genesis", &crate::rom_db::GENESIS),
+            ("Game-Bub.SMS", &crate::rom_db::SMS),
+            ("Game-Bub.GG", &crate::rom_db::GG),
         ];
         let mut buf = vec![0u8; 8 * 1024];
         for (core_id, db) in databases {

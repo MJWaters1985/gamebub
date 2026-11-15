@@ -11,6 +11,8 @@ Usage: python3 scripts/gen_rom_db.py path/to/system.dat out.bin [--ext .unh]
   NES:  "Nintendo - Nintendo Entertainment System.dat" --ext .unh -> res/nesdb.bin
         (the DAT lists each game twice; the .unh entry is the ROM without its header)
   Genesis: "Sega - Mega Drive - Genesis.dat" -> res/genesisdb.bin
+  Master System: "Sega - Master System - Mark III.dat" -> res/smsdb.bin
+  Game Gear: "Sega - Game Gear.dat" -> res/ggdb.bin
 
 Format (little endian):
     header:  b"SNDB", u32 version, u32 record count, u32 strings offset

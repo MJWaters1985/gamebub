@@ -168,10 +168,45 @@ CORE_FILES["net.gamebub.core.genesis.HandheldGenesis"] = [
     ],
 ]
 
+_SMS = "verilog/sms"
+_SMS_MISTER = f"{_SMS}/mister"
+CORE_FILES["net.gamebub.core.sms.HandheldSms"] = [
+    f"{_SMS}/sms_top.sv",
+    f"{_SMS}/sms_core.vhd",
+    # Portable spram/dpram/sprom (instead of mister/spram.vhd, dpram.vhd, sprom.vhd)
+    f"{_SMS}/ram_sms.vhd",
+    *[
+        f"{_SMS_MISTER}/{name}"
+        for name in [
+            "sdram.sv", "cheatcodes.sv", "MC8123.v", "SEGASYS1_PRGDEC.v", "parts.v",
+            "system.vhd", "video.vhd", "io.vhd", "AudioMix.vhd", "cart_eeprom.vhd",
+            "eeprom_93c46.vhd", "evolution_mapper.vhd", "evolution_rom_address.vhd",
+            "mapper_ctrl.vhd", "mapper_detect.vhd", "memory_bus.vhd", "memory_decode.vhd",
+            "vdp.vhd", "vdp_background.vhd", "vdp_cram.vhd", "vdp_main.vhd",
+            "vdp_sprite_shifter.vhd", "vdp_sprites.vhd",
+            "T80/T80.vhd", "T80/T80_ALU.vhd", "T80/T80_MCode.vhd", "T80/T80_Reg.vhd",
+            "T80/T80s.vhd",
+            "jt89/jt89.vhd", "jt89/jt89.v", "jt89/jt89_mixer.v", "jt89/jt89_noise.v",
+            "jt89/jt89_tone.v", "jt89/jt89_vol.v",
+            *[
+                f"VM2413/{n}.vhd"
+                for n in [
+                    "vm2413", "opll", "attacktable", "controller", "envelopegenerator",
+                    "envelopememory", "feedbackmemory", "lineartable", "operator",
+                    "outputgenerator", "outputmemory", "phasegenerator", "phasememory",
+                    "registermemory", "sinetable", "slotcounter", "temporalmixer",
+                    "voicememory", "voicerom",
+                ]
+            ],
+        ]
+    ],
+]
+CORE_FILES["net.gamebub.core.sms.HandheldGameGear"] = CORE_FILES["net.gamebub.core.sms.HandheldSms"]
+
 def vhdl_file_type(file: str) -> str:
     # bram.vhd uses the shared-variable RAM template, and VM2413 uses names
     # that are VHDL-2008 keywords: both are VHDL-93.
-    if file.endswith("/bram.vhd") or "/OPLL/" in file:
+    if file.endswith(("/bram.vhd", "/ram_sms.vhd")) or "/OPLL/" in file or "/VM2413/" in file:
         return "vhdlSource"
     return "vhdlSource-2008"
 

@@ -16,6 +16,7 @@ pub mod gameboy;
 pub mod gba;
 pub mod genesis;
 pub mod nes;
+pub mod sms;
 pub mod snes;
 
 mod util;
