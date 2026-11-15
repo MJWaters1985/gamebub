@@ -15,7 +15,7 @@ module CODES(
 	input  [128:0] code,
 	input  [ADDR_WIDTH - 1:0] addr_in,
 	input  [DATA_WIDTH - 1:0] data_in,
-	output [DATA_WIDTH - 1:0] data_out
+	output logic [DATA_WIDTH - 1:0] data_out
 );
 
 parameter ADDR_WIDTH   = 16; // Not more than 32
@@ -43,9 +43,10 @@ wire code_comp_f = code[96];
 wire code_width  = code[97] && (DATA_WIDTH == 16);
 
 // If MAX_INDEX is changes, these need to be made larger
-wire [INDEX_SIZE-1:0] index, dup_index;
+wire [INDEX_SIZE-1:0] index;
+logic [INDEX_SIZE-1:0] dup_index;
 reg [INDEX_SIZE:0] next_index;
-wire found_dup;
+logic found_dup;
 
 assign index = found_dup ? dup_index : next_index[INDEX_SIZE-1:0];
 

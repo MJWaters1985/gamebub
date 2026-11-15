@@ -111,8 +111,7 @@ architecture rtl of T80s is
 
 begin
 
-	u0 : work.T80
-	generic map(
+	u0 : entity work.T80	generic map(
 		Mode => Mode,
 		IOWait => IOWait)
 	port map(

@@ -130,6 +130,44 @@ CORE_FILES["net.gamebub.core.nes.HandheldNes"] = [
 ]
 
 
+_GEN = "verilog/genesis"
+_GEN_MISTER = f"{_GEN}/mister"
+CORE_FILES["net.gamebub.core.genesis.HandheldGenesis"] = [
+    f"{_GEN}/genesis.xdc",
+    f"{_GEN}/genesis_top.sv",
+    f"{_GEN}/bram_genesis.sv",
+    *[
+        f"{_GEN_MISTER}/{name}"
+        for name in [
+            "system.sv", "sdram.sv", "bram.vhd", "vdp_common.vhd", "vdp.vhd",
+            "gen_io.sv", "multitap.sv", "teamplayer.sv", "fourway.v",
+            # (lightgun.sv is used by MiSTer's top level only)
+            "miracle.sv", "cheatcodes.sv", "EEPROM_STM95.sv", "audio_iir_filter.v",
+            "genesis_lpf.v",
+            "FX68K/fx68k.sv", "FX68K/fx68kAlu.sv", "FX68K/uaddrPla.sv",
+            "FX68K/microrom.mem", "FX68K/nanorom.mem",
+            "T80/T80.vhd",
+            "T80/T80_ALU.vhd", "T80/T80_MCode.vhd", "T80/T80_Reg.vhd", "T80/T80s.vhd",
+            "jt89/jt89.v", "jt89/jt89_noise.v", "jt89/jt89_vol.v", "jt89/jt89_mixer.v",
+            "jt89/jt89_tone.v",
+            *[
+                f"jt12/{n}.v"
+                for n in [
+                    "jt12", "jt12_top", "jt12_acc", "jt12_single_acc", "jt12_eg", "jt12_eg_cnt",
+                    "jt12_eg_comb", "jt12_eg_step", "jt12_eg_pure", "jt12_eg_final",
+                    "jt12_eg_ctrl", "jt12_exprom", "jt12_kon", "jt12_lfo", "jt12_div",
+                    "jt12_mod", "jt12_op", "jt12_csr", "jt12_pg", "jt12_pg_inc", "jt12_pg_dt",
+                    "jt12_pg_sum", "jt12_pg_comb", "jt12_pm", "jt12_logsin", "jt12_reg",
+                    "jt12_sh", "jt12_sh_rst", "jt12_sh24", "jt12_sumch", "jt12_timers",
+                    "jt12_pcm_interpol", "jt12_mmr", "jt12_dout", "jt12_rst",
+                    "adpcm/jt10_adpcm_div", "mixer/jt12_genmix", "mixer/jt12_decim",
+                    "mixer/jt12_interpol", "mixer/jt12_comb", "mixer/jt12_fm_uprate",
+                ]
+            ],
+        ]
+    ],
+]
+
 def vhdl_file_type(file: str) -> str:
     # bram.vhd uses the shared-variable RAM template, and VM2413 uses names
     # that are VHDL-2008 keywords: both are VHDL-93.
@@ -221,9 +259,11 @@ def build(
         file_type = {
             ".xdc": "xdc",
             # MiSTer's sys/ Verilog uses SystemVerilog syntax
-            ".v": "systemVerilogSource" if "/sys/" in file else "verilogSource",
+            # (as does the Genesis core's)
+            ".v": "systemVerilogSource" if "/sys/" in file or "/genesis/" in file else "verilogSource",
             ".sv": "systemVerilogSource",
             ".vhd": vhdl_file_type(file),
+            ".mem": "mem",
         }[Path(file).suffix]
         files.append(dict(name=ROOT_PATH / file, file_type=file_type))
 

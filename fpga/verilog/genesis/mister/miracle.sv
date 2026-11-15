@@ -164,7 +164,12 @@ dpram #(9)	inbuffer
 
 	.address_b(raddrr),
 	.q_b(rdatar),
-	.wren_b(1'b0)
+	.wren_b(1'b0),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 dpram #(9)	outbuffer
@@ -177,7 +182,12 @@ dpram #(9)	outbuffer
 
 	.address_b(taddrr),
 	.q_b(tdatar),
-	.wren_b(1'b0)
+	.wren_b(1'b0),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 midi_uart miracle(

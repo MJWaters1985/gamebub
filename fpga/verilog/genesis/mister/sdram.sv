@@ -1,5 +1,6 @@
 //
 // sdram.v
+// (Game Bub: split data bus, no clock output)
 //
 // sdram controller implementation
 // Copyright (c) 2018 Sorgelig
@@ -22,7 +23,9 @@ module sdram
 (
 
 	// interface to the MT48LC16M16 chip
-	inout  reg [15:0] SDRAM_DQ,   // 16 bit bidirectional data bus
+	input      [15:0] SDRAM_DQ_IN,  // 16 bit data bus, split for the platform's I/O buffers
+	output reg [15:0] SDRAM_DQ_OUT,
+	output reg        SDRAM_DQ_DIR, // 1 = drive SDRAM_DQ_OUT
 	output reg [12:0] SDRAM_A,    // 13 bit multiplexed address bus
 	output reg        SDRAM_DQML, // byte mask
 	output reg        SDRAM_DQMH, // byte mask
@@ -31,7 +34,6 @@ module sdram
 	output reg        SDRAM_nWE,  // write enable
 	output reg        SDRAM_nRAS, // row address select
 	output reg        SDRAM_nCAS, // columns address select
-	output            SDRAM_CLK,
 	output            SDRAM_CKE,
 
 	// cpu/chipset interface
@@ -156,7 +158,7 @@ always @(posedge clk) begin
 	end
 
 	if(state == STATE_READY && ram_req) begin
-		dout <= SDRAM_DQ;
+		dout <= SDRAM_DQ_IN;
 		active <= 0;
 		ram_req <= 0;
 		if (ram_req[0]) ack0 <= req0;
@@ -208,10 +210,12 @@ localparam CMD_LOAD_MODE       = 3'b000;
 always @(posedge clk) begin
 	if(state == STATE_START) SDRAM_BA <= (mode == MODE_NORMAL) ? ba : 2'b00;
 
-	SDRAM_DQ <= 'Z;
+	SDRAM_DQ_DIR <= 0;
+	SDRAM_DQ_OUT <= data;
+	if({active,we,mode,state} == {2'b11, MODE_NORMAL, STATE_CONT}) SDRAM_DQ_DIR <= 1;
 	casex({active,we,mode,state})
 		{2'bXX, MODE_NORMAL, STATE_START}: {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= active ? CMD_ACTIVE : CMD_AUTO_REFRESH;
-		{2'b11, MODE_NORMAL, STATE_CONT }: {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE, SDRAM_DQ} <= {CMD_WRITE, data};
+		{2'b11, MODE_NORMAL, STATE_CONT }: {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_WRITE;
 		{2'b10, MODE_NORMAL, STATE_CONT }: {SDRAM_nRAS, SDRAM_nCAS, SDRAM_nWE} <= CMD_READ;
 
 		// init
@@ -232,29 +236,7 @@ always @(posedge clk) begin
 	else SDRAM_A <= 0;
 end
 
-altddio_out
-#(
-	.extend_oe_disable("OFF"),
-	.intended_device_family("Cyclone V"),
-	.invert_output("OFF"),
-	.lpm_hint("UNUSED"),
-	.lpm_type("altddio_out"),
-	.oe_reg("UNREGISTERED"),
-	.power_up_high("OFF"),
-	.width(1)
-)
-sdramclk_ddr
-(
-	.datain_h(1'b0),
-	.datain_l(1'b1),
-	.outclock(clk),
-	.dataout(SDRAM_CLK),
-	.aclr(1'b0),
-	.aset(1'b0),
-	.oe(1'b1),
-	.outclocken(1'b1),
-	.sclr(1'b0),
-	.sset(1'b0)
-);
+// Game Bub: the SDRAM clock comes from the platform's MMCM.
+
 
 endmodule

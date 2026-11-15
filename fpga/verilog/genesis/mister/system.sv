@@ -64,9 +64,10 @@ module system
 	input [128:0] GG_CODE,
 	output        GG_AVAILABLE,
 
-	input  [14:0] BRAM_A,
-	input  [15:0] BRAM_DI,
-	output [15:0] BRAM_DO,
+	// Game Bub: the save RAM is byte-wide for the host (64 KB, no SVP DRAM)
+	input  [15:0] BRAM_A,
+	input   [7:0] BRAM_DI,
+	output  [7:0] BRAM_DO,
 	input         BRAM_WE,
 	output        BRAM_CHANGE,
 
@@ -353,7 +354,12 @@ dpram #(14) vram_l1
 
 	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
 	.wren_b(LOADING),
-	.q_b(vram32_q[7:0])
+	.q_b(vram32_q[7:0]),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 dpram #(14) vram_u1
@@ -366,7 +372,12 @@ dpram #(14) vram_u1
 
 	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
 	.wren_b(LOADING),
-	.q_b(vram32_q[15:8])
+	.q_b(vram32_q[15:8]),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 dpram #(14) vram_l2
@@ -379,7 +390,12 @@ dpram #(14) vram_l2
 
 	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
 	.wren_b(LOADING),
-	.q_b(vram32_q[23:16])
+	.q_b(vram32_q[23:16]),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 dpram #(14) vram_u2
@@ -392,7 +408,12 @@ dpram #(14) vram_u2
 
 	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
 	.wren_b(LOADING),
-	.q_b(vram32_q[31:24])
+	.q_b(vram32_q[31:24]),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00)
 );
 
 reg vram_ack;
@@ -625,9 +646,9 @@ assign ROM_WDATA = MBUS_DO;
 // 64KB SRAM / 128KB SVP DRAM
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
-wire [15:0] sram_addr;
-wire [7:0] sram_di;
-wire sram_wren;
+logic [15:0] sram_addr;
+logic [7:0] sram_di;
+logic sram_wren;
 
 always_comb begin
 	if (PIER_QUIRK) begin
@@ -641,19 +662,24 @@ always_comb begin
 	end
 end
 
-dpram_dif #(17,8,16,16) sram
+// Game Bub: 64 KB, byte-wide on both ports (the SVP's 128 KB DRAM is left out).
+dpram #(16) sram
 (
 	.clock(MCLK),
 	.address_a(sram_addr),
 	.data_a(sram_di),
+	.enable_a(1'b1),
 	.wren_a(sram_wren & ~SVP_QUIRK),
 	.q_a(sram_q),
+	.cs_a(1'b1),
 
-	.address_b(LOADING ? ram_rst_a : SVP_QUIRK ? SVP_DRAM_A : BRAM_A),
+	.address_b(LOADING ? ram_rst_a[16:1] : BRAM_A),
 	// Initializes SRAM to 0x0 for Sonic 1 Remastered, all other games have SRAM initialized to 0xFF
-	.data_b(LOADING ? (SRAM00_QUIRK ? 16'h0000 : 16'hFFFF) : SVP_QUIRK ? SVP_DRAM_DO : BRAM_DI),
-	.wren_b(LOADING | SVP_DRAM_WE | BRAM_WE),
-	.q_b(BRAM_DO)
+	.data_b(LOADING ? (SRAM00_QUIRK ? 8'h00 : 8'hFF) : BRAM_DI),
+	.enable_b(1'b1),
+	.wren_b(LOADING | BRAM_WE),
+	.q_b(BRAM_DO),
+	.cs_b(1'b1)
 );
 
 wire [7:0] sram_q;
@@ -693,36 +719,16 @@ wire        SVP_DTACK_N;
 wire [15:0] SVP_DRAM_A;
 wire [15:0] SVP_DRAM_DO;
 wire        SVP_DRAM_WE;
-wire [15:0] SVP_DRAM_DI = BRAM_DO;
 
-reg SVP_CLKEN;
-always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
 
-SVP svp
-(
-	.CLK(MCLK),
-	.CE(SVP_CLKEN),
-	.RST_N(~reset & SVP_QUIRK),
-	.ENABLE(1),
-
-	.BUS_A(MBUS_A[23:1]),
-	.BUS_DO(SVP_DO),
-	.BUS_DI(MBUS_DO),
-	.BUS_SEL(SVP_SEL),
-	.BUS_RNW(MBUS_RNW),
-	.BUS_DTACK_N(SVP_DTACK_N),
-	.DMA_ACTIVE(VBUS_SEL),
-
-	.ROM_A(ROM_ADDR2),
-	.ROM_DI(ROM_DATA2),
-	.ROM_REQ(ROM_REQ2),
-	.ROM_ACK(ROM_ACK2),
-
-	.DRAM_A(SVP_DRAM_A),
-	.DRAM_DI(SVP_DRAM_DI),
-	.DRAM_DO(SVP_DRAM_DO),
-	.DRAM_WE(SVP_DRAM_WE)
-);
+// Game Bub: the SVP chip (Virtua Racing) is left out.
+assign SVP_DO = 16'h0000;
+assign SVP_DTACK_N = 1'b1;
+assign SVP_DRAM_A = 16'h0000;
+assign SVP_DRAM_DO = 16'h0000;
+assign SVP_DRAM_WE = 1'b0;
+assign ROM_ADDR2 = 24'h000000;
+assign ROM_REQ2 = 1'b0;
 
 
 //-----------------------------------------------------------------------
@@ -739,7 +745,13 @@ dpram #(15) ram68k_u
 	.q_a(ram68k_q[15:8]),
 
 	.address_b(ram_rst_a[15:1]),
-	.wren_b(LOADING)
+	.wren_b(LOADING),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00),
+	.q_b()
 );
 
 dpram #(15) ram68k_l
@@ -751,7 +763,13 @@ dpram #(15) ram68k_l
 	.q_a(ram68k_q[7:0]),
 
 	.address_b(ram_rst_a[15:1]),
-	.wren_b(LOADING)
+	.wren_b(LOADING),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00),
+	.q_b()
 );
 wire [15:0] ram68k_q;
 
@@ -1269,7 +1287,15 @@ dpram #(13) ramZ80
 	.address_a(ZBUS_A[12:0]),
 	.data_a(ZBUS_DO),
 	.wren_a(ZBUS_WE & ZRAM_SEL),
-	.q_a(ZRAM_DO)
+	.q_a(ZRAM_DO),
+	.enable_a(1'b1),
+	.cs_a(1'b1),
+	.enable_b(1'b1),
+	.cs_b(1'b1),
+	.data_b(8'h00),
+	.address_b(13'd0),
+	.wren_b(1'b0),
+	.q_b()
 );
 
 always @(posedge MCLK) begin

@@ -262,8 +262,7 @@ begin
 			 else IntE_FF2 & IntE_FF1 & IStatus & DOR(127 downto 112) & DOR(47 downto 0) & DOR(63 downto 48) & DOR(111 downto 64) &
 						std_logic_vector(PC) & std_logic_vector(SP) & std_logic_vector(R) & I & Fp & Ap & F & ACC;
 
-	mcode : work.T80_MCode
-		generic map(
+	mcode : entity work.T80_MCode		generic map(
 			Mode   => Mode,
 			Flag_C => Flag_C,
 			Flag_N => Flag_N,
@@ -330,8 +329,7 @@ begin
 			Write       => Write,
 			XYbit_undoc => XYbit_undoc);
 
-	alu : work.T80_ALU
-		generic map(
+	alu : entity work.T80_ALU		generic map(
 			Mode   => Mode,
 			Flag_C => Flag_C,
 			Flag_N => Flag_N,
@@ -610,7 +608,7 @@ begin
 						F(Flag_N) <= DI_Reg(7);
 						F(Flag_C) <= ioq(8);
 						F(Flag_H) <= ioq(8);
-						ioq := (ioq and x"7") xor ('0'&BusA);
+						ioq := (ioq and "000000111") xor ('0'&BusA);
 						F(Flag_P) <= not (ioq(0) xor ioq(1) xor ioq(2) xor ioq(3) xor ioq(4) xor ioq(5) xor ioq(6) xor ioq(7));
 					end if;
 
@@ -929,8 +927,7 @@ begin
 		end if;
 	end process;
 
-	Regs : work.T80_Reg
-		port map(
+	Regs : entity work.T80_Reg		port map(
 			Clk => CLK_n,
 			CEN => ClkEn,
 			WEH => RegWEH,
