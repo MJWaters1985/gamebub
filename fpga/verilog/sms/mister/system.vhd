@@ -784,7 +784,7 @@ begin
         ss_div_in => psg_div_in, ss_quiescent => psg_quiet2
 	);
 	
-	fm: work.opll
+	fm: entity work.opll
 	port map
 	(
 		xin		=> clk_sys,

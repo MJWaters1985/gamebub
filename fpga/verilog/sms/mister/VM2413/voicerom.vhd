@@ -46,7 +46,7 @@ end VoiceRom;
 
 architecture RTL of VoiceRom is
 
-  type VOICE_ARRAY_TYPE is array (VOICE_ID_TYPE'range) of VOICE_VECTOR_TYPE;
+  type VOICE_ARRAY_TYPE is array (VOICE_ID_TYPE) of VOICE_VECTOR_TYPE;
  
   constant base_voices : VOICE_ARRAY_TYPE := (
   -- APEK<ML>KL< TL >W<F><AR><DR><SL><RR>
