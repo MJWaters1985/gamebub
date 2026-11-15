@@ -12,6 +12,9 @@ pub struct ColorCorrection {
     luminance: f32,
     /// [Red] [Green] [Blue]
     matrix: [f32; 9],
+    /// Brightness (0-255) of each of a 16-level console's color levels, used instead of
+    /// `in_gamma` (for cores whose 4-bit color goes through a non-linear DAC).
+    levels: Option<[u8; 16]>,
 }
 
 impl ColorCorrection {
@@ -36,6 +39,20 @@ impl ColorCorrection {
 pub mod presets {
     use super::ColorCorrection;
 
+    /// Genesis / Mega Drive: the console's 4-bit color levels (3-bit color, with shadow and
+    /// highlight) through its DAC, as the MiSTer core's top level maps them.
+    pub static GENESIS: ColorCorrection = ColorCorrection {
+        in_gamma: 1.0,
+        out_gamma: 1.0,
+        luminance: 1.0,
+        matrix: [
+            1.0, 0.0, 0.0, // red
+            0.0, 1.0, 0.0, // green
+            0.0, 0.0, 1.0, // blue
+        ],
+        levels: Some([0, 27, 49, 71, 87, 103, 119, 130, 146, 157, 174, 190, 206, 228, 255, 255]),
+    };
+
     /// Identity
     pub static IDENTITY: ColorCorrection = ColorCorrection {
         in_gamma: 1.0,
@@ -46,6 +63,7 @@ pub mod presets {
             0.0, 1.0, 0.0, // green
             0.0, 0.0, 1.0, // blue
         ],
+        levels: None,
     };
 
     /// Game Boy Color and Game Boy Advance (original)
@@ -59,6 +77,7 @@ pub mod presets {
             0.1, 0.65, 0.25, // green
             0.1575, 0.1425, 0.7, // blue
         ],
+        levels: None,
     };
 
     /// GBA SP (AGS-101)
@@ -72,6 +91,7 @@ pub mod presets {
             0.0325, 0.89, 0.0775, // green
             0.001, -0.03, 1.029, // blue
         ],
+        levels: None,
     };
 
     /// Nintendo DS (original)
@@ -85,6 +105,7 @@ pub mod presets {
             0.10, 0.6375, 0.2625, // green
             0.105, 0.175, 0.72, // blue
         ],
+        levels: None,
     };
 
     /// Nintendo DS Lite
@@ -98,6 +119,7 @@ pub mod presets {
             0.025, 0.90, 0.075, // green
             0.008, -0.03, 1.022, // blue
         ],
+        levels: None,
     };
 
     /// Nintendo Switch Online GBA
@@ -111,6 +133,7 @@ pub mod presets {
             0.0575, 0.925, 0.0125, // green
             0.0575, 0.1225, 0.82, // blue
         ],
+        levels: None,
     };
 }
 
@@ -142,6 +165,14 @@ impl ColorCorrection {
             self.luminance,
             internal_depth,
         );
+        if let Some(levels) = self.levels {
+            // 4-bit input reaches the table as 5 bits (the level's bits repeated).
+            let max = ((1 << internal_depth) - 1) as f32;
+            for (i, value) in input_table.iter_mut().enumerate() {
+                let level = levels[i >> 1] as f32 / 255.0;
+                *value = (level * self.luminance * max + 0.5) as u16;
+            }
+        }
 
         const OUTPUT_TABLE_DEPTH: usize = 10;
         let output_depth = 8;

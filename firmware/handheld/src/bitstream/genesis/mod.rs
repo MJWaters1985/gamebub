@@ -212,7 +212,7 @@ impl CoreHandler for Genesis {
             .fpga
             .disable_interrupt(fpga::Irq::ModuleVblank)
             .map_err(|e| e.to_string())?;
-        color_correction::presets::IDENTITY
+        color_correction::presets::GENESIS
             .with_display_color()
             .configure(&mut device, COLOR_CORRECTION_BASE)
             .map_err(|e| e.to_string())?;
