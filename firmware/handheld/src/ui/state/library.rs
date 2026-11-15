@@ -90,11 +90,13 @@ impl UiState {
         let backend = root.global::<Backend>();
         backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
-        let systems: Vec<(System, usize)> = library::SYSTEMS
+        // Systems in alphabetical order (after Favorites).
+        let mut systems: Vec<(System, usize)> = library::SYSTEMS
             .iter()
             .filter(|s| s.rom_dir().is_dir())
             .map(|s| (*s, s.games().len()))
             .collect();
+        systems.sort_by(|a, b| crate::core::browse::natural_cmp(a.0.folder, b.0.folder));
         let favorites = library::favorites().len();
         let empty = systems.is_empty() && favorites == 0;
         backend.set_library_systems(strings(
