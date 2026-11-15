@@ -14,6 +14,7 @@ impl UiState {
         let backend = root.global::<Backend>();
 
         backend.on_tools_start_usb_drive(move || {
+            crate::ui::USB_IN_USE.store(true, std::sync::atomic::Ordering::Relaxed);
             if let Err(e) = usb::configure_usb(usb::UsbMode::ConsoleAndMassStorage) {
                 // This has been seen to fail right after a firmware update.
                 // Reset the USB stack and try once more before giving up.
@@ -38,6 +39,7 @@ impl UiState {
         });
 
         backend.on_tools_start_cart_reader(move || {
+            crate::ui::USB_IN_USE.store(true, std::sync::atomic::Ordering::Relaxed);
             usb::configure_usb(usb::UsbMode::ConsoleAndSerial).expect("USB setup failed");
             crate::cart_backup::start_task(1);
         });

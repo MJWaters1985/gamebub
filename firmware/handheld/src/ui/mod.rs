@@ -36,6 +36,9 @@ pub static FRAMES_DRAWN: std::sync::atomic::AtomicU32 = std::sync::atomic::Atomi
 
 /// Whether a game is running and has input focus (i.e. not paused in a menu).
 pub static GAME_FOCUSED: AtomicBool = AtomicBool::new(false);
+/// Set while the computer is using the device over USB (USB drive and FlashGBX modes, which
+/// end with a reboot): auto power off would cut it off mid-transfer.
+pub static USB_IN_USE: AtomicBool = AtomicBool::new(false);
 
 /// Get the automatic power off timeout, if enabled.
 fn auto_power_off_timeout() -> Option<Duration> {
@@ -201,11 +204,12 @@ impl UI {
                     worker::send(worker::Message::IdleTimerExpired);
                 }
 
-                // Don't power off while a game is being played.
+                // Don't power off while a game is being played, or while the computer is using the
+                // device over USB.
                 let Some(timeout) = auto_power_off_timeout() else {
                     return;
                 };
-                if GAME_FOCUSED.load(Ordering::Relaxed) {
+                if GAME_FOCUSED.load(Ordering::Relaxed) || USB_IN_USE.load(Ordering::Relaxed) {
                     return;
                 }
                 if idle >= timeout {
