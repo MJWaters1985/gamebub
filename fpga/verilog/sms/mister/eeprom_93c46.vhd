@@ -284,6 +284,7 @@ begin
 
                             when WAIT_STANDBY =>
                                 data_o <= '1';
+                        	when others => null;
                         end case;
                     end if;
                 else

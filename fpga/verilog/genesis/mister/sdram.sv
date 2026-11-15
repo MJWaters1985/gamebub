@@ -181,8 +181,8 @@ localparam MODE_PRE    = 2'b11;
 // initialization 
 reg [1:0] mode;
 reg [4:0] reset=5'h1f;
+reg init_old=0;
 always @(posedge clk) begin
-	reg init_old=0;
 	init_old <= init;
 
 	if(init_old & ~init) reset <= 5'h1f;

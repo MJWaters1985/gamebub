@@ -349,6 +349,7 @@ begin
 							when "01" => bank0 <= D_in;
 							when "10" => bank1 <= D_in;
 							when "11" => bank2 <= D_in;
+							when others => null;
 						end case;
 					end if;
 				elsif systeme = '1' or sc3000_en = '1' or mapper_castle = '1' or mapper_linear = '1' or mapper_dahjee_a = '1' or mapper_sega_locked = '1' then
@@ -387,6 +388,7 @@ begin
 							when "01" => bank3 <= D_in;
 							when "10" => bank0 <= D_in;
 							when "11" => bank1 <= D_in;
+							when others => null;
 						end case;
 					end if ;
 				elsif ss_freeze = '0' and mapper_manual_force = '0' and bootloader_n = '1' and WR_n='0' and MREQ_n='0' and A=x"3FFE" and sega_mapper_write_seen = '0' then
@@ -417,6 +419,7 @@ begin
 								when "01" => bank0 <= D_in;
 								when "10" => bank1 <= D_in;
 								when "11" => bank2 <= D_in ; 
+								when others => null;
 							end case;
 						end if;
 					end if;
