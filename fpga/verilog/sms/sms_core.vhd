@@ -181,8 +181,9 @@ begin
 		j2_start   => '1',
 		j2_coin    => '1',
 		j2_a3      => '1',
-		-- The Master System's Pause button (Start on the Game Gear is j1_start)
-		pause      => not (start and not gg),
+		-- The Master System's Pause button, which is also the Game Gear's Start
+		-- (port $00 bit 7), as in SMS.sv
+		pause      => not start,
 		soft_reset => '0',
 
 		E0Type     => "00",
