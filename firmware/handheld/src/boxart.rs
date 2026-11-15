@@ -30,6 +30,7 @@ fn libretro_system(system: &System) -> &'static str {
         "Game Boy Color" => "Nintendo - Game Boy Color",
         "NES" => "Nintendo - Nintendo Entertainment System",
         "Super Nintendo" => "Nintendo - Super Nintendo Entertainment System",
+        "Genesis" => "Sega - Mega Drive - Genesis",
         _ => "Nintendo - Game Boy Advance",
     }
 }

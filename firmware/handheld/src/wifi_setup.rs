@@ -150,6 +150,7 @@ pub fn download_library_boxart() {
         let databases = [
             ("Game-Bub.SNES", &crate::rom_db::SNES),
             ("Game-Bub.NES", &crate::rom_db::NES),
+            ("Game-Bub.Genesis", &crate::rom_db::GENESIS),
         ];
         let mut buf = vec![0u8; 8 * 1024];
         for (core_id, db) in databases {

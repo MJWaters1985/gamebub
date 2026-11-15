@@ -61,6 +61,7 @@ pub fn get_core(id: &str) -> Result<CoreInfo, String> {
         "Game-Bub.GBA" => Ok(crate::bitstream::gba::Gba::get_core_info()),
         "Game-Bub.SNES" => Ok(crate::bitstream::snes::Snes::get_core_info()),
         "Game-Bub.NES" => Ok(crate::bitstream::nes::Nes::get_core_info()),
+        "Game-Bub.Genesis" => Ok(crate::bitstream::genesis::Genesis::get_core_info()),
         _ => Err(format!("Unknown core {id}")),
     }
 }

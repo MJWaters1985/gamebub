@@ -39,6 +39,14 @@ pub static NES: RomDatabase = RomDatabase {
     name: "NES",
 };
 
+/// Genesis / Mega Drive: plain ROM files (interleaved .smd dumps aren't recognized).
+pub static GENESIS: RomDatabase = RomDatabase {
+    data: include_bytes!("../res/genesisdb.bin"),
+    header_size: |_, _| 0,
+    save_extension: "sav",
+    name: "Genesis",
+};
+
 impl RomDatabase {
     fn u32_at(&self, offset: usize) -> u32 {
         u32::from_le_bytes(self.data[offset..offset + 4].try_into().unwrap())

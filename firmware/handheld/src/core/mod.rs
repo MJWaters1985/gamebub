@@ -162,6 +162,7 @@ enum CoreHandlerImpl {
     Gba(crate::bitstream::gba::Gba),
     Snes(crate::bitstream::snes::Snes),
     Nes(crate::bitstream::nes::Nes),
+    Genesis(crate::bitstream::genesis::Genesis),
 }
 
 impl CoreHandlerImpl {
@@ -172,6 +173,7 @@ impl CoreHandlerImpl {
             CoreHandlerImpl::Gba(gba) => Some(gba),
             CoreHandlerImpl::Snes(snes) => Some(snes),
             CoreHandlerImpl::Nes(nes) => Some(nes),
+            CoreHandlerImpl::Genesis(genesis) => Some(genesis),
         }
     }
 }
@@ -220,6 +222,7 @@ impl CoreManager {
             "Game-Bub.GBA" => CoreHandlerImpl::Gba(crate::bitstream::gba::Gba::new()),
             "Game-Bub.SNES" => CoreHandlerImpl::Snes(crate::bitstream::snes::Snes::new()),
             "Game-Bub.NES" => CoreHandlerImpl::Nes(crate::bitstream::nes::Nes::new()),
+            "Game-Bub.Genesis" => CoreHandlerImpl::Genesis(crate::bitstream::genesis::Genesis::new()),
             _ => CoreHandlerImpl::None,
         };
 
