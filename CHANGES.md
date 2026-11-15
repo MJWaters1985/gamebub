@@ -76,8 +76,12 @@ this fork's changes and a link to this repository.
   [MiSTer NES core](https://github.com/MiSTer-devel/NES_MiSTer).
   - Plays `.nes` files (iNES and NES 2.0 headers) with the mappers the MiSTer core
     supports, including MMC1–MMC5, VRC2/4/6/7, Namco 163, Sunsoft FME-7 and their
-    expansion audio. Battery saves are `.sav` files. Famicom Disk System (`.fds`) games
-    aren't supported yet.
+    expansion audio. Battery saves are `.sav` files.
+  - **Famicom Disk System** games (`.fds`, with or without the 16-byte header) are listed
+    with the NES games and need the FDS BIOS in `/system/disksys.rom`. The disk image is
+    saved (as a `.sav` file) with whatever the game writes to it, and disk sides change
+    automatically. Tested on hardware with Super Mario Bros. 2 (Japan); disk saves and
+    side changes aren't tested yet.
   - **Needs an extra file on the SD card**: copy `nes.bit.hs` from the release into
     `/system`, like the Super Nintendo files.
   - Tested on hardware with a personal library: the games tried so far start. Saving and
@@ -103,6 +107,21 @@ this fork's changes and a link to this repository.
   - Tested on hardware: games run with sound. Saving and reloading isn't tested yet.
   - **Download Box Art** identifies Genesis ROMs against the No-Intro database and renames
     them; **Set Up SD Card** creates `/roms/Genesis` and `/boxart/Genesis`.
+- **Master System and Game Gear cores** (Run ROM → Master System, Run ROM → Game Gear),
+  ports of the [MiSTer SMS core](https://github.com/MiSTer-devel/SMS_MiSTer), which is
+  based on Ben's (ben0109) [Papilio Master System](https://github.com/ben0109/Papilio-Master-System).
+  - Plays `.sms` and `.gg` files; the core detects the cartridge mapper. Saves are `.sav`
+    files, written only once a game has used its save RAM.
+  - Two builds: `sms.bit.hs` (256x192) and `gg.bit.hs` (the Game Gear's 160x144, shown
+    at 2x). Copy both from the release into `/system`.
+  - Controls: buttons 1 and 2 are B and A (also Y and X); Start is the Master System's
+    Pause button and the Game Gear's Start.
+  - Tested on hardware: games run with sound and controls (including Sonic Spinball).
+    Saving and reloading isn't tested yet. FM sound (Japanese games) is included.
+  - **Download Box Art** identifies Master System and Game Gear ROMs against the No-Intro
+    database and renames them; **Set Up SD Card** creates their folders.
+  - The core's own source files have no stated licence; see
+    [its credits](fpga/verilog/sms/mister/CREDITS.md).
 - **Wi-Fi** (Settings → Wi-Fi). The radio was unused; Wi-Fi is only turned on for a task and
   then off again.
   - **Network**: scan for networks and enter the password with an on-screen keyboard (D-pad
@@ -326,6 +345,14 @@ includes. The Genesis ROM database comes from the No-Intro DAT in libretro-datab
 The NES core is the [MiSTer NES core](https://github.com/MiSTer-devel/NES_MiSTer) by the
 MiSTer-devel contributors (GPL-3.0); [agg23's Analogue Pocket port](https://github.com/agg23/openfpga-NES)
 was a reference. The NES ROM database comes from the No-Intro DAT in libretro-database.
+
+The Master System and Game Gear cores are based on Ben's (ben0109)
+[Master System implementation for the Papilio](https://github.com/ben0109/Papilio-Master-System),
+through the MiST port and the [MiSTer SMS core](https://github.com/MiSTer-devel/SMS_MiSTer) by
+the MiSTer-devel contributors, with the T80 (Daniel Wallner, Sorgelig), jt89 (Jose Tejada,
+GPL-3.0) and VM2413 (Mitsutaka Okazaki) cores it includes. Details and licence status:
+[fpga/verilog/sms/mister/CREDITS.md](fpga/verilog/sms/mister/CREDITS.md). The Master System
+and Game Gear ROM databases come from the No-Intro DATs in libretro-database.
 
 The physical-cartridge read timing work and simulation model build on
 [ghogan42/gamebub](https://github.com/ghogan42/gamebub). The Cartridge Manager uses the

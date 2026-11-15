@@ -212,6 +212,31 @@ twice that; the save RAM is a 64 KB block RAM the host reads and writes.
 `genesis.bit.hs` is loaded from **`/system` on the SD card** and isn't part of
 the UF2. There's no simulator for it yet.
 
+### Master System / Game Gear core
+
+The MiSTer SMS core (vendored in `fpga/verilog/sms/mister`; see its
+[CREDITS.md](../fpga/verilog/sms/mister/CREDITS.md)) is wrapped by
+`verilog/sms/sms_core.vhd` (the console with its clock enables, video timing
+and RAMs) and `verilog/sms/sms_top.sv` (loading, the Genesis core's SDRAM
+controller at 2x the master clock, save RAM, video). It's built twice:
+
+```sh
+for core in sms:HandheldSms gg:HandheldGameGear; do
+  .venv/bin/python scripts/build_core.py --name ${core%%:*} --target gamebub_rev4 \
+      --build-root build/${core%%:*} --core-class net.gamebub.core.sms.${core#*:}
+done
+```
+
+Both go in `/system` on the SD card. The simulator converts the VHDL with
+GHDL (`verilog/sms/ghdl_synth.sh`; the FM chip is a silent stub) and runs at
+about 1.4 s per frame:
+
+```sh
+.venv/bin/python scripts/build_sim.py sms --build-root build/sim-sms
+build/sim-sms/Vsms_top --headless --frames 400 --input 150:b:10 \
+    --screenshot out.ppm game.sms
+```
+
 ### Debugging physical GBA cartridges
 
 The GBA core logs physical cartridge ROM reads in the header region (and the
