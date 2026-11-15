@@ -196,6 +196,22 @@ To log the CPU's writes from a given frame on (and its reads 40 frames later),
 add `"-GTRACE_FROM=<frame>"` to the NES entry's `verilator_options` in
 `build_sim.py`.
 
+### Genesis core
+
+The Genesis core is the MiSTer Genesis core (MiSTer-devel/Genesis_MiSTer,
+vendored in `fpga/verilog/genesis/mister` without the SVP, with portability
+patches, GPL-3.0) inside a Game Bub wrapper (`verilog/genesis/genesis_top.sv`,
+`core/genesis/HandheldGenesis.scala`). It runs at 53.7 MHz with the SDRAM at
+twice that; the save RAM is a 64 KB block RAM the host reads and writes.
+
+```sh
+.venv/bin/python scripts/build_core.py --name genesis --target gamebub_rev4 \
+    --build-root build/genesis --core-class net.gamebub.core.genesis.HandheldGenesis
+```
+
+`genesis.bit.hs` is loaded from **`/system` on the SD card** and isn't part of
+the UF2. There's no simulator for it yet.
+
 ### Debugging physical GBA cartridges
 
 The GBA core logs physical cartridge ROM reads in the header region (and the

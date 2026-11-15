@@ -88,6 +88,21 @@ this fork's changes and a link to this repository.
     against the No-Intro database and renames them, their saves and box art to the No-Intro
     name. **Set Up SD Card** creates `/roms/NES` and `/boxart/NES`; Check ROMs skips NES
     games for now.
+- **Genesis / Mega Drive core** (Run ROM → Genesis), a port of the
+  [MiSTer Genesis core](https://github.com/MiSTer-devel/Genesis_MiSTer).
+  - Plays `.md`, `.gen` and `.bin` files (plain ROM dumps, not interleaved `.smd`) up to
+    10 MB, with battery saves in `.sav` files sized from the cartridge header. The region
+    comes from the header (USA first), so Europe-only games run at 50 Hz. Virtua Racing's
+    SVP chip isn't supported.
+  - Controls: Genesis A/B/C are Y/B/A, X/Y/Z are L/X/R and Mode is Select. The pad is a
+    3-button pad for now.
+  - 320x224 at 1x; 256-pixel-wide games are centered with black bars. Colors go through
+    the console's DAC levels, as on MiSTer.
+  - **Needs an extra file on the SD card**: copy `genesis.bit.hs` from the release into
+    `/system`.
+  - Tested on hardware: games run with sound. Saving and reloading isn't tested yet.
+  - **Download Box Art** identifies Genesis ROMs against the No-Intro database and renames
+    them; **Set Up SD Card** creates `/roms/Genesis` and `/boxart/Genesis`.
 - **Wi-Fi** (Settings → Wi-Fi). The radio was unused; Wi-Fi is only turned on for a task and
   then off again.
   - **Network**: scan for networks and enter the password with an on-screen keyboard (D-pad
@@ -107,6 +122,7 @@ this fork's changes and a link to this repository.
   - Names are shown without the trailing No-Intro tags ("Pokemon - Gold Version"); a long
     name scrolls when highlighted.
   - L and R move the highlight up or down one screenful.
+  - Systems are listed in alphabetical order, after Favorites.
   - **Favorites**, first in the system list: the favorites of every core in one list, with
     box art, each started with its own core. **Select** on a game adds it or removes it. They
     are the file browser's favorites, so a game marked in either place is in both.
@@ -223,6 +239,8 @@ this fork's changes and a link to this repository.
 
 ## Bug fixes
 
+- **Auto power off** no longer turns the device off in USB drive or FlashGBX mode,
+  in the middle of a transfer.
 - **Buttons stop working during animations.** The UI only read button presses when nothing
   on screen was animating, so any continuous animation would lock out the controls. It now
   checks for presses about once a frame while animating.
@@ -282,6 +300,10 @@ by srg320 and contributors (GPL-3.0); its cartridge detection follows MiSTer's, 
 [agg23's Analogue Pocket port](https://github.com/agg23/openfpga-SNES) was a reference. The
 Super Nintendo ROM database comes from the No-Intro DAT in
 [libretro-database](https://github.com/libretro/libretro-database).
+
+The Genesis core is the [MiSTer Genesis core](https://github.com/MiSTer-devel/Genesis_MiSTer)
+by the MiSTer-devel contributors (GPL-3.0), with the FX68K, T80, jt12 and jt89 cores it
+includes. The Genesis ROM database comes from the No-Intro DAT in libretro-database.
 
 The NES core is the [MiSTer NES core](https://github.com/MiSTer-devel/NES_MiSTer) by the
 MiSTer-devel contributors (GPL-3.0); [agg23's Analogue Pocket port](https://github.com/agg23/openfpga-NES)
