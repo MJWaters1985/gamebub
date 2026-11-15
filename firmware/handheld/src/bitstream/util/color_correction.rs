@@ -166,10 +166,11 @@ impl ColorCorrection {
             internal_depth,
         );
         if let Some(levels) = self.levels {
-            // 4-bit input reaches the table as 5 bits (the level's bits repeated).
+            // A 4-bit core's color reaches the 5-bit table zero-extended (0-15), so the
+            // upper half of the table is unused.
             let max = ((1 << internal_depth) - 1) as f32;
             for (i, value) in input_table.iter_mut().enumerate() {
-                let level = levels[i >> 1] as f32 / 255.0;
+                let level = levels[i.min(15)] as f32 / 255.0;
                 *value = (level * self.luminance * max + 0.5) as u16;
             }
         }
