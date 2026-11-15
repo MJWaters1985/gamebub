@@ -131,6 +131,33 @@ SIMS: list[Sim] = [
 ]
 
 
+SIMS.append(
+    Sim(
+        name="sms",
+        main_class=None,
+        top_module="sms_top",
+        files=[
+            "sim/sms/simulator.hpp",
+            "sim/sms/simulator.cpp",
+        ],
+        hdl_files=(
+            "verilog/sms/sms_top.sv",
+            "verilog/genesis/mister/sdram.sv",
+            "verilog/sms/mister/cheatcodes.sv",
+            "verilog/sms/mister/MC8123.v",
+            "verilog/sms/mister/SEGASYS1_PRGDEC.v",
+            "verilog/sms/mister/parts.v",
+            "verilog/sms/mister/jt89/jt89.v",
+            "verilog/sms/mister/jt89/jt89_mixer.v",
+            "verilog/sms/mister/jt89/jt89_noise.v",
+            "verilog/sms/mister/jt89/jt89_tone.v",
+            "verilog/sms/mister/jt89/jt89_vol.v",
+        ),
+        vhdl_convert="verilog/sms/ghdl_synth.sh",
+    )
+)
+
+
 def build(
     sim: Sim,
     build_root: Path,

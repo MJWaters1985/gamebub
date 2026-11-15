@@ -34,14 +34,14 @@ end vdp_sprites;
 
 architecture Behavioral of vdp_sprites is
 
-	constant WAITING:	std_logic_vector := "000";
-	constant COMPARE:	std_logic_vector := "001";
-	constant LOAD_N:	std_logic_vector := "010";
-	constant LOAD_X:	std_logic_vector := "011";
-	constant LOAD_0:	std_logic_vector := "100";
-	constant LOAD_1:	std_logic_vector := "101";
-	constant LOAD_2:	std_logic_vector := "110";
-	constant LOAD_3:	std_logic_vector := "111";
+	constant WAITING:	std_logic_vector(2 downto 0) := "000";
+	constant COMPARE:	std_logic_vector(2 downto 0) := "001";
+	constant LOAD_N:	std_logic_vector(2 downto 0) := "010";
+	constant LOAD_X:	std_logic_vector(2 downto 0) := "011";
+	constant LOAD_0:	std_logic_vector(2 downto 0) := "100";
+	constant LOAD_1:	std_logic_vector(2 downto 0) := "101";
+	constant LOAD_2:	std_logic_vector(2 downto 0) := "110";
+	constant LOAD_3:	std_logic_vector(2 downto 0) := "111";
 
 	signal state:		std_logic_vector(2 downto 0) := WAITING;
 	signal count:		integer range 0 to 64;
