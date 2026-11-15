@@ -294,8 +294,9 @@ def build(
         file_type = {
             ".xdc": "xdc",
             # MiSTer's sys/ Verilog uses SystemVerilog syntax
-            # (as does the Genesis core's)
-            ".v": "systemVerilogSource" if "/sys/" in file or "/genesis/" in file else "verilogSource",
+            # (as do the Genesis and SMS cores')
+            ".v": "systemVerilogSource" if "/sys/" in file or "/genesis/" in file or "/sms/" in file
+            else "verilogSource",
             ".sv": "systemVerilogSource",
             ".vhd": vhdl_file_type(file),
             ".mem": "mem",
