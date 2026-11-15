@@ -45,8 +45,8 @@ class AudioFilterChain(
   })
 
   require(
-    cicR >= ((firTaps / 2) + 3),
-    s"cicR ($cicR) must be >= FIR cycles (${(firTaps / 2) + 3})"
+    cicR >= ((firTaps / 2) + 4),
+    s"cicR ($cicR) must be >= FIR cycles (${(firTaps / 2) + 4})"
   )
 
   val intermediateBits = dataBits + 2

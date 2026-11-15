@@ -7,6 +7,7 @@ object FirFilter {
   object State extends ChiselEnum {
     val idle = Value
     val compute = Value
+    val drain = Value
     val output = Value
   }
 
@@ -64,8 +65,10 @@ object FirFilter {
  * Serial symmetric FIR filter: one multiply-accumulate per clock cycle, exploiting
  * linear-phase coefficient symmetry with a pre-adder (maps to a single DSP slice).
  *
- * A new input sample may be presented (valid && ready) at most once every
- * (numTaps / 2 + 3) cycles; one output sample is produced per input sample.
+ * The pre-added pair and its coefficient are registered before the multiply-accumulate
+ * (so it meets timing at the Genesis core's 53.7 MHz). A new input sample may be presented
+ * (valid && ready) at most once every (numTaps / 2 + 4) cycles; one output sample is
+ * produced per input sample.
  */
 class FirFilter(
   dataBits: Int,
@@ -103,6 +106,15 @@ class FirFilter(
   val k = RegInit(0.U(log2Ceil(half).W))
   val acc = RegInit(0.S(accBits.W))
 
+  // Multiply-accumulate pipeline stage
+  val macValid = RegInit(false.B)
+  val pairReg = Reg(SInt((dataBits + 1).W))
+  val coeffReg = Reg(SInt(coeffBits.W))
+  macValid := false.B
+  when (macValid) {
+    acc := acc + (pairReg * coeffReg)
+  }
+
   val outReg = RegInit(0.S(dataBits.W))
   val outValid = RegInit(false.B)
   outValid := false.B
@@ -132,13 +144,20 @@ class FirFilter(
       val x1 = samples.read(tapIndex(k))
       val x2 = samples.read(tapIndex((numTaps - 1).U - k))
       val pair = Mux(k === center.U, x1, x1 +& x2)
-      acc := acc + (pair * coeffRom(k))
+      pairReg := pair
+      coeffReg := coeffRom(k)
+      macValid := true.B
       when (k === center.U) {
         writeIndex := Mux(writeIndex === (numTaps - 1).U, 0.U, writeIndex + 1.U)
-        state := State.output
+        state := State.drain
       } .otherwise {
         k := k + 1.U
       }
+    }
+
+    // The last product is accumulated.
+    is (State.drain) {
+      state := State.output
     }
 
     is (State.output) {
