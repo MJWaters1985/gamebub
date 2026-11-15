@@ -4,7 +4,7 @@
 --
 -- Behaviour matches the altsyncram configuration they replace: address
 -- registered, output unregistered (one cycle of read latency), and
--- read-during-write on a port returns the new data. The registered-output
+-- read-during-write on a port returns the new data (except as below). The registered-output
 -- options (outdata_reg_*) are honoured. Memory initialisation files aren't
 -- supported: the only RAM that has one, the save RAM (nvram_ff.mif, all
 -- 0xFF), is filled by the wrapper, and the only ROM (sprom, the boot ROM) is
@@ -86,10 +86,20 @@ ARCHITECTURE SYN OF dpram IS
 	shared variable ram : ram_t;
 	signal qa0, qa1, qb0, qb1 : std_logic_vector(width_a-1 downto 0);
 BEGIN
+	-- With mixed_port_rdwr = "OLD_DATA" (the VDP's VRAM: the CPU writes on port
+	-- A while the VDP reads on port B), port A is read-first, so a port B read
+	-- of the address port A writes in the same cycle returns the old data, as
+	-- altsyncram guarantees (a write-first port leaves the collision undefined
+	-- on Xilinx block RAM). Port A then reads old data during its own writes.
 	process (clock_a)
 	begin
 		if rising_edge(clock_a) then
-			if wren_a = '1' then
+			if mixed_port_rdwr = "OLD_DATA" then
+				qa0 <= ram(to_integer(unsigned(address_a)));
+				if wren_a = '1' then
+					ram(to_integer(unsigned(address_a))) := data_a;
+				end if;
+			elsif wren_a = '1' then
 				ram(to_integer(unsigned(address_a))) := data_a;
 				qa0 <= data_a;
 			else
