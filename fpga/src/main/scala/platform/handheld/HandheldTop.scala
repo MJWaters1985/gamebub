@@ -942,7 +942,9 @@ class HandheldTop[T <: Core](coreFactory: () => T, revision: Revision) extends M
     val activeDisplayFrame = XpmCdcSingle(io.clock_av, displayReadingFrame.asBool).asUInt
     val framebufferX = RegInit(0.U(log2Ceil(videoWidth).W))
     val framebufferY = RegInit(0.U(log2Ceil(videoHeight).W))
-    val framebufferWriteIndex = RegInit(0.U(1.W))
+    // Start writing the buffer the display isn't reading (it starts on 0), or every frame
+    // would conflict with it and be dropped.
+    val framebufferWriteIndex = RegInit(1.U(1.W))
     val regFrameStarted = RegInit(false.B)
     val regDropFrame = RegInit(false.B)
 
