@@ -1,7 +1,7 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
 
-package jt89 is
+package jt89_pkg is
 
 component jt89
 port

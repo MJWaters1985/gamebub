@@ -3,7 +3,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL; 
 --use IEEE.STD_LOGIC_ARITH.ALL;
 -- use IEEE.STD_LOGIC_UNSIGNED.ALL; 
-use work.jt89.all;
+use work.jt89_pkg.all;
 
 entity system is
 	generic (
