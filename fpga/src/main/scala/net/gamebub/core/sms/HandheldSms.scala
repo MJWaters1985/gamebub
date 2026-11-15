@@ -354,7 +354,7 @@ class HandheldSmsBase(gameGear: Boolean) extends Module with Core {
   io.audio.right := audioFilter.io.out(1)
 
   // SDRAM
-  io.sdram.clock := mmcm.io.clockOuts(2)
+  io.sdram.clock := mmcm.io.clockOuts(1)
   io.sdram.cke := sms.io.sdram_cke
   io.sdram.cs := sms.io.sdram_cs_n
   io.sdram.ras := sms.io.sdram_ras_n
