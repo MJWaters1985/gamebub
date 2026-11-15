@@ -2,6 +2,10 @@
 //!
 //! The core reads the iNES header itself: the ROM file is streamed to it whole, then the
 //! battery save (if any) is loaded into the cartridge RAM.
+//!
+//! Famicom Disk System games (.fds) are streamed the same way, after the FDS BIOS from
+//! /system/disksys.rom. The core keeps the disk image in its save RAM area (from offset 16),
+//! so the save file is the disk as the game has written it.
 
 use std::{
     fs::File,
@@ -25,6 +29,8 @@ const REG_DOWNLOAD_TYPE: u32 = 0x0000_0000;
 const REG_DOWNLOAD: u32 = 0x0000_0004;
 const REG_LOADER_STATUS: u32 = 0x0000_0008;
 const REG_SYS_TYPE: u32 = 0x0000_000C;
+/// Highest FDS disk side (number of sides - 1), for automatic disk changes
+const REG_MAX_DISK_SIDE: u32 = 0x0000_0010;
 const COLOR_CORRECTION_BASE: u32 = 0x5000_0000;
 
 /// REG_LOADER_STATUS bits
@@ -33,12 +39,19 @@ const LOADER_FAIL: u32 = 1 << 1;
 
 /// REG_DOWNLOAD_TYPE values
 const DOWNLOAD_NES: u32 = 0;
+const DOWNLOAD_FDS: u32 = 1;
+const DOWNLOAD_BIOS: u32 = 2;
+
+/// Bytes per FDS disk side (without the 16-byte fwNES header)
+const FDS_SIDE_SIZE: u32 = 65500;
+/// The FDS BIOS, on the SD card
+const FDS_BIOS: &str = "disksys.rom";
 
 const FILE_ROM: u16 = 0;
 const FILE_SAVE: u16 = 1;
 
 /// Largest battery RAM the core keeps (and the save window's size).
-const MAX_SAVE_SIZE: u32 = 128 * 1024;
+const MAX_SAVE_SIZE: u32 = 256 * 1024;
 /// How long the core may take to clear its RAM after loading a game.
 const LOADER_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -98,7 +111,9 @@ impl Nes {
                 CoreFile {
                     id: FILE_ROM,
                     label: "ROM".try_into().unwrap(),
-                    extensions: [".nes".try_into().unwrap()].into_iter().collect(),
+                    extensions: [".nes".try_into().unwrap(), ".fds".try_into().unwrap()]
+                        .into_iter()
+                        .collect(),
 
                     optional: false,
                     read_only: true,
@@ -137,6 +152,37 @@ impl Nes {
             .collect(),
             bitstream: crate::util::get_system_file_path("nes.bit.hs"),
         }
+    }
+
+    /// Send the FDS BIOS (/system/disksys.rom) to the core, which keeps it for disk games.
+    fn load_fds_bios(&self) -> Result<(), String> {
+        let path = crate::util::get_system_file_path(FDS_BIOS);
+        let mut bios = std::fs::read(&path).map_err(|_| {
+            "Famicom Disk System games need the FDS BIOS in /system/disksys.rom.".to_string()
+        })?;
+        // A 16-byte header, if any, is skipped; the BIOS is 8 KB.
+        if bios.len() == 8192 + 16 {
+            bios.drain(..16);
+        }
+        if bios.len() != 8192 {
+            return Err("/system/disksys.rom isn't an 8 KB FDS BIOS.".to_string());
+        }
+        {
+            let mut device = Device::lock();
+            for (register, value) in [(REG_DOWNLOAD_TYPE, DOWNLOAD_BIOS), (REG_DOWNLOAD, 1)] {
+                device.fpga.write_u32(register, value).map_err(|e| e.to_string())?;
+            }
+            // The loader takes a byte every 4 cycles, so stay well below 5 MB/s.
+            for chunk in bios.chunks(1024) {
+                let command = fpga::SpiCommand::new(fpga::FpgaSpiWordSize::Bits32);
+                device
+                    .fpga
+                    .spi_write(Some(Hertz(10_000_000)), command, 0x3000_0000, chunk)
+                    .map_err(|e| e.to_string())?;
+            }
+            device.fpga.write_u32(REG_DOWNLOAD, 0).map_err(|e| e.to_string())?;
+        }
+        self.wait_for_loader()
     }
 
     /// Wait for the core to finish loading the game (it clears RAM afterwards).
@@ -183,13 +229,29 @@ impl CoreHandler for Nes {
             let mut header = [0u8; 16];
             file.read_exact(&mut header).map_err(|_| "I/O")?;
             file.seek(SeekFrom::Start(0)).map_err(|_| "I/O")?;
-            let cartridge = parse_header(&header).ok_or("Not an iNES (.nes) file.")?;
+            let size = file.metadata().map_err(|_| "I/O")?.len() as u32;
+            let (cartridge, download_type) = if let Some(cartridge) = parse_header(&header) {
+                (cartridge, DOWNLOAD_NES)
+            } else if &header[0..4] == b"FDS\x1a" || size % FDS_SIDE_SIZE == 0 {
+                // Famicom Disk System: the disk image goes in the save RAM area.
+                let disk = if &header[0..4] == b"FDS\x1a" { size - 16 } else { size };
+                let sides = disk.div_ceil(FDS_SIDE_SIZE).clamp(1, 4);
+                self.load_fds_bios()?;
+                let cartridge = Cartridge { mapper: 20, save_size: (16 + disk).min(MAX_SAVE_SIZE), sys_type: 0 };
+                Device::lock()
+                    .fpga
+                    .write_u32(REG_MAX_DISK_SIDE, sides - 1)
+                    .map_err(|e| e.to_string())?;
+                (cartridge, DOWNLOAD_FDS)
+            } else {
+                return Err("Not an iNES (.nes) or FDS (.fds) file.".to_string());
+            };
             log::info!("NES cartridge: {:?}", cartridge);
             self.cartridge = Some(cartridge);
 
             let mut device = Device::lock();
             for (register, value) in [
-                (REG_DOWNLOAD_TYPE, DOWNLOAD_NES),
+                (REG_DOWNLOAD_TYPE, download_type),
                 (REG_SYS_TYPE, cartridge.sys_type as u32),
                 (REG_DOWNLOAD, 1),
             ] {

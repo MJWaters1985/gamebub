@@ -19,6 +19,7 @@ module nes_top #(
 	input             enable,       // 0 pauses the console
 	input             sdram_init,   // hold high until the SDRAM has powered up
 	input       [1:0] sys_type,     // 0 = NTSC, 1 = PAL, 2 = Dendy
+	input       [1:0] max_diskside, // FDS: number of disk sides - 1
 
 	// Game loading: a byte stream, as the file appears on disk.
 	input             dl_en,        // high for the whole file
@@ -238,7 +239,7 @@ NES nes (
 	.fds_busy        (1'b0),
 	.fds_eject       (1'b0),
 	.fds_auto_eject  (1'b1),
-	.max_diskside    (2'd3),
+	.max_diskside    (max_diskside),
 	.fds_fast        (1'b1),
 	.cpumem_addr     (cpu_addr),
 	.cpumem_read     (cpu_read),
