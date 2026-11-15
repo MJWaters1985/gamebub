@@ -31,7 +31,7 @@ pub const SYSTEMS: [System; 8] = [
     System { folder: "Game Boy", extensions: &[".gb", ".sgb"], core_id: "Game-Bub.GB" },
     System { folder: "Game Boy Color", extensions: &[".gbc", ".gb"], core_id: "Game-Bub.GB" },
     System { folder: "Game Boy Advance", extensions: &[".gba"], core_id: "Game-Bub.GBA" },
-    System { folder: "NES", extensions: &[".nes"], core_id: "Game-Bub.NES" },
+    System { folder: "NES", extensions: &[".nes", ".fds"], core_id: "Game-Bub.NES" },
     System { folder: "Super Nintendo", extensions: &[".sfc", ".smc"], core_id: "Game-Bub.SNES" },
     System { folder: "Genesis", extensions: &[".md", ".gen", ".bin"], core_id: "Game-Bub.Genesis" },
     System { folder: "Master System", extensions: &[".sms"], core_id: "Game-Bub.SMS" },

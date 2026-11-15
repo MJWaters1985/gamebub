@@ -38,6 +38,7 @@ class NesTop extends BlackBox {
     val enable = Input(Bool())
     val sdram_init = Input(Bool())
     val sys_type = Input(UInt(2.W))
+    val max_diskside = Input(UInt(2.W))
 
     val dl_en = Input(Bool())
     val dl_type = Input(UInt(2.W))
@@ -143,6 +144,7 @@ class HandheldNes extends Module with Core {
   val regDownloadType = RegInit(0.U(2.W))
   val regDownload = RegInit(false.B)
   val regSysType = RegInit(0.U(2.W))
+  val regMaxDiskSide = RegInit(3.U(2.W))
 
   val nes = Module(new NesTop)
 
@@ -173,6 +175,7 @@ class HandheldNes extends Module with Core {
       0x0004 -> RegisterMap.Entry.rw(regDownload),
       0x0008 -> RegisterMap.Entry.r(loaderStatus),
       0x000C -> RegisterMap.Entry.rw(regSysType),
+      0x0010 -> RegisterMap.Entry.rw(regMaxDiskSide),
 
       0x2000 -> RegisterMap.Entry.w(regCoreResetOnce),
     )
@@ -235,6 +238,7 @@ class HandheldNes extends Module with Core {
   nes.io.reset := regCoreReset || regCoreResetOnce || reset.asBool
   nes.io.enable := regCoreFocus
   nes.io.sys_type := regSysType
+  nes.io.max_diskside := regMaxDiskSide
 
   // Let the SDRAM power up for ~200 us before the controller initializes it.
   val sdramInitTimer = RegInit(0.U(13.W))
