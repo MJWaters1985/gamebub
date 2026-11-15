@@ -237,6 +237,24 @@ this fork's changes and a link to this repository.
   combine the settings with the core's color profile; the boot bitstream gets the same
   color correction stage as the cores. With every setting at default, colors are unchanged.
 
+## Fixes from upstream
+
+Picked from the official project's development branches (v1.1-beta and handheld),
+without its new core framework and input protocol:
+
+- **Less display tearing**: a frame the core starts while the screen is still showing
+  that buffer is dropped instead of drawn over (e.g. when a Game Boy game turns the LCD
+  off and on).
+- **Display timing**: fixed back-porch math in the Rev 4 screen driver.
+- **GBA**: WarioWare: Twisted's Mode 7 cutscene artifacts (from an earlier upstream
+  affine fix), a valid bit for the ROM cache, and 2 MHz serial timing for the GBA
+  Wireless Adapter.
+- **Rev 4's second SDRAM chip** (64 MB in all) can be used by cores; the current cores
+  use one.
+- **Home** can't interrupt a game while it's loading; the in-game menu is hidden while
+  the Power menu is open; faster seeking in large files (FatFS fast seek).
+- More robust clock constraints in the FPGA build.
+
 ## Bug fixes
 
 - **Auto power off** no longer turns the device off in USB drive or FlashGBX mode,
