@@ -365,3 +365,23 @@ GAMES["tetris-dx"] = dict(
     frame=lambda pc: bytes([0xCD, 0x06, 0x3F]),                     # call update
     tracks=[(s, 0, f"Song {i + 1:02d}") for i, s in enumerate(TETRIS_DX_SONGS)],
 )
+
+# Kirby Tilt 'n' Tumble (USA): no disassembly to build; traced in the user's dump. The engine
+# (the Super Mario Land 2 family) is in four banks that the game updates every frame, with its
+# variables in WRAM bank 7 at $DE00: bank $0E plays songs $01-$3F, bank $0F songs $40-$7F
+# (banks $11/$14 are effects). $4000 init, $4006 update, a song starts when its id is written
+# to $DE68. Banks are selected with the game's $0986. Songs are the distinct entries of each
+# bank's song table ($4043); not yet identified, so numbered.
+KTNT_SONGS = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06] + list(range(0x08, 0x13)) + \
+    list(range(0x40, 0x4C)) + [0x4F, 0x50, 0x54, 0x63, 0x64, 0x65, 0x66, 0x7F]
+WRAM7 = bytes([0x3E, 0x07, 0xE0, 0x70])
+WRAM1 = bytes([0x3E, 0x01, 0xE0, 0x70])
+GAMES["kirby-tilt-n-tumble"] = dict(
+    title="KIRBY TNT", version=0, checksum=0x5186, name="Kirby Tilt 'n' Tumble",
+    init=lambda pc: WRAM7 + bytes([0x3E, 0x0E, 0xCD, 0x86, 0x09,      # bank $0E
+                                   0xCD, 0x00, 0x40]) + WRAM1,       # call init
+    start=lambda pc: bytes([0x47]) + WRAM7 + bytes([0x78, 0xEA, 0x68, 0xDE]) + WRAM1,  # [$DE68] = song
+    frame=lambda pc: WRAM7 + bytes([0x3E, 0x0E, 0xCD, 0x86, 0x09, 0xCD, 0x06, 0x40,    # bank $0E update
+                                    0x3E, 0x0F, 0xCD, 0x86, 0x09, 0xCD, 0x06, 0x40]) + WRAM1,  # bank $0F
+    tracks=[(s, 0, f"Song {i + 1:02d}") for i, s in enumerate(KTNT_SONGS)],
+)
