@@ -163,14 +163,25 @@ fn fat_config(format_if_mount_failed: bool) -> esp_idf_sys::esp_vfs_fat_sdmmc_mo
     }
 }
 
+/// Mount attempts: (bus speed in kHz, wait before the attempt in ms). A card that hasn't
+/// finished resetting (e.g. switched back on before the power rail fully drained) can miss its
+/// first commands, and a marginal card or contact may manage the default speed but not high
+/// speed, so a failed first attempt is retried, then retried at 20 MHz.
+const ATTEMPTS: &[(u32, u64)] = &[
+    (esp_idf_sys::SDMMC_FREQ_HIGHSPEED, 0),
+    (esp_idf_sys::SDMMC_FREQ_HIGHSPEED, 50),
+    (esp_idf_sys::SDMMC_FREQ_DEFAULT, 150),
+    (esp_idf_sys::SDMMC_FREQ_DEFAULT, 300),
+];
+
 fn mount(path: &str, pins: SlotPins, format_if_mount_failed: bool) -> Result<Sdcard, EspError> {
-    let host_config = esp_idf_sys::sdmmc_host_t {
+    let mut host_config = esp_idf_sys::sdmmc_host_t {
         flags: SDMMC_HOST_FLAG_1BIT
             | SDMMC_HOST_FLAG_4BIT
             | SDMMC_HOST_FLAG_DDR
             | SDMMC_HOST_FLAG_DEINIT_ARG,
         slot: 1,
-        max_freq_khz: esp_idf_sys::SDMMC_FREQ_HIGHSPEED as c_int,
+        max_freq_khz: ATTEMPTS[0].0 as c_int,
         io_voltage: 3.3,
         init: Some(esp_idf_sys::sdmmc_host_init),
         set_bus_width: Some(esp_idf_sys::sdmmc_host_set_bus_width),
@@ -224,15 +235,37 @@ fn mount(path: &str, pins: SlotPins, format_if_mount_failed: bool) -> Result<Sdc
 
     log::info!("Mounting sdcard on slot {}", host_config.slot);
     let mut card: *mut esp_idf_sys::sdmmc_card_t = std::ptr::null_mut();
-    let sdmmc_mount_result = unsafe {
-        esp_idf_sys::esp_vfs_fat_sdmmc_mount(
-            mount_point.as_ptr(),
-            &host_config,
-            &slot_config as *const esp_idf_sys::sdmmc_slot_config_t as *const c_void,
-            &mount_config,
-            &mut card,
-        )
-    };
+    let mut sdmmc_mount_result = esp_idf_sys::ESP_FAIL;
+    for (i, &(freq_khz, wait_ms)) in ATTEMPTS.iter().enumerate() {
+        std::thread::sleep(std::time::Duration::from_millis(wait_ms));
+        host_config.max_freq_khz = freq_khz as c_int;
+        // On failure this unmounts and deinitializes the host again, so it can simply be retried.
+        sdmmc_mount_result = unsafe {
+            esp_idf_sys::esp_vfs_fat_sdmmc_mount(
+                mount_point.as_ptr(),
+                &host_config,
+                &slot_config as *const esp_idf_sys::sdmmc_slot_config_t as *const c_void,
+                &mount_config,
+                &mut card,
+            )
+        };
+        match sdmmc_mount_result {
+            esp_idf_sys::ESP_OK => {
+                if i > 0 {
+                    log::warn!("SD card mounted on attempt {} at {} kHz", i + 1, freq_khz);
+                }
+                break;
+            }
+            // The card answered but has no usable file system: retrying won't change that.
+            esp_idf_sys::ESP_FAIL => break,
+            code => log::warn!(
+                "SD card mount attempt {} at {} kHz failed: {}",
+                i + 1,
+                freq_khz,
+                EspError::from(code).map_or(code.to_string(), |e| e.to_string())
+            ),
+        }
+    }
     EspError::convert(sdmmc_mount_result)?;
 
     // Configure TinyUSB MSC driver with the sdcard. This doesn't actually expose it
