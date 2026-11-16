@@ -186,3 +186,55 @@ GAMES["pokemon-silver"] = dict(gsc(0x3D4F, 0x3D98, 0x3D6B, GSC_NAMES),
                                title="POKEMON_SLVAAXE", version=0, checksum=0x0DAE, name="Pokemon Silver")
 GAMES["pokemon-crystal-rev1"] = dict(gsc(0x3B4E, 0x3B97, 0x3B6A, CRYSTAL_NAMES),
                                      title="PM_CRYSTAL", version=1, checksum=0x18D2, name="Pokemon Crystal")
+
+# The Legend of Zelda: Oracle of Ages / Oracle of Seasons (USA, Australia): Stewmath/oracles-disasm.
+# The sound engine in bank $39 starts with a jump table: $4000 init, $4003 updateSound, $4006
+# playSound (A = sound). The games run updateSound from a timer interrupt at ~59.4 Hz; once a
+# frame is within 1%. Home initSound sets the engine's bank variables and calls its init.
+# Song ids from constants/common/music.s (blank ones left out).
+ORACLE_COMMON = {
+    0x01: "Title Screen", 0x02: "Minigame", 0x06: "Essence", 0x09: "Game Over",
+    0x0D: "Essence Room", 0x0E: "Indoors", 0x0F: "Fairy Fountain", 0x10: "Get Essence",
+    0x11: "File Select", 0x1B: "Final Dungeon", 0x1C: "Onox's Castle", 0x1D: "Room of Rites",
+    0x1E: "Maku Tree", 0x1F: "Sadness", 0x20: "Triumphant", 0x21: "Disaster", 0x23: "Pirates",
+    0x27: "Rosa's Date", 0x29: "Credits 1", 0x2A: "Credits 2", 0x2B: "Maple",
+    0x2C: "Maple's Game", 0x2D: "Miniboss", 0x2E: "Boss", 0x2F: "Side View", 0x31: "Crazy Dance",
+    0x32: "Final Boss", 0x33: "Twinrova", 0x34: "Ganon", 0x36: "Cave", 0x38: "Zelda Saved",
+    0x39: "Great Moblin", 0x3C: "Syrup's Shop", 0x3E: "Goron Cave", 0x3F: "Intro 1",
+    0x40: "Intro 2", 0x46: "Black Tower Entrance", 0x4A: "Pre-Credits",
+}
+ORACLE_AGES = {**ORACLE_COMMON, **{
+    0x03: "Overworld (Present)", 0x04: "Overworld (Past)", 0x05: "Crescent Island",
+    0x07: "Ambi's Palace", 0x08: "Nayru", 0x0A: "Lynna City", 0x0B: "Lynna Village",
+    0x0C: "Zora Village", 0x12: "Maku Path", 0x13: "Spirit's Grave", 0x14: "Wing Dungeon",
+    0x15: "Moonlit Grotto", 0x16: "Skull Dungeon", 0x17: "Crown Dungeon", 0x18: "Mermaid's Cave",
+    0x19: "Jabu-Jabu's Belly", 0x1A: "Ancient Tomb", 0x22: "Underwater",
+    0x24: "Symmetry (Present)", 0x25: "Symmetry (Past)", 0x26: "Tokay House",
+    0x28: "Black Tower", 0x30: "Fairy Forest", 0x35: "Ralph",
+}}
+ORACLE_SEASONS = {**ORACLE_COMMON, **{
+    0x03: "Overworld", 0x04: "Temple Remains", 0x05: "Tarm Ruins", 0x07: "Unused",
+    0x08: "Carnival", 0x0A: "Horon Village", 0x0B: "Hide and Seek", 0x0C: "Sunken City",
+    0x12: "Hero's Cave", 0x13: "Gnarled Root", 0x14: "Snake's Remains",
+    0x15: "Poison Moth's Lair", 0x16: "Dancing Dragon", 0x17: "Unicorn's Cave",
+    0x18: "Ancient Ruins", 0x19: "Explorer's Crypt", 0x1A: "Sword & Shield Maze",
+    0x22: "Subrosian Dance", 0x25: "Unused 2", 0x26: "Subrosian Shop", 0x28: "Subrosia",
+    0x35: "Samasa Desert", 0x3D: "Song of Storms",
+}}
+
+
+def oracle(init_sound, names):
+    return dict(
+        init=lambda pc: bytes([0xCD, lo(init_sound), hi(init_sound)]),  # call initSound
+        start=lambda pc: bytes([0x47, 0x3E, 0x39, 0xEA, 0x22, 0x22,     # ld b,a ; bank $39
+                                0x78, 0xCD, 0x06, 0x40]),               # ld a,b ; call playSound
+        frame=lambda pc: bytes([0x3E, 0x39, 0xEA, 0x22, 0x22,           # bank $39
+                                0xCD, 0x03, 0x40]),                     # call updateSound
+        tracks=[(i, 0, names[i]) for i in sorted(names)],
+    )
+
+
+GAMES["oracle-of-ages"] = dict(oracle(0x0CB7, ORACLE_AGES),
+                               title="ZELDA NAYRUAZ8E", version=0, checksum=0xA132, name="Oracle of Ages")
+GAMES["oracle-of-seasons"] = dict(oracle(0x0C93, ORACLE_SEASONS),
+                                  title="ZELDA DIN", version=0, checksum=0xFE8F, name="Oracle of Seasons")
