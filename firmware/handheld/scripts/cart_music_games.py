@@ -282,3 +282,38 @@ GAMES["pokemon-tcg"] = dict(
                             0xCD, 0x03, 0x40]),                     # call SoundTimerHandler
     first=1, tracks=[(i + 1, 0, n) for i, n in enumerate(POKECARD_NAMES)],
 )
+
+# Tetris (World) (Rev 1): kaspermeerts/tetris (the dump matches its build). InitAudio ($7FF3),
+# a song starts when its id is written to wNewMusicID ($DFE8), and the main loop calls
+# UpdateAudio ($7FF0) once a frame. Ids from MusicPointers.
+TETRIS_NAMES = [
+    "High Score", "Stage Clear", "Title Screen", "Game Over", "A-Type Music", "B-Type Music",
+    "C-Type Music", "Danger", "Round Over", "B-Type Jingle 1", "B-Type Jingle 2",
+    "B-Type Jingle 3", "B-Type Jingle 4", "B-Type Jingle 5", "B-Type Jingle 6",
+    "Rocket Launch", "Victory",
+]
+
+GAMES["tetris-rev1"] = dict(
+    title="TETRIS", version=1, checksum=0x16BF, name="Tetris",
+    init=lambda pc: POKEMON_RB["init"](pc) + bytes([0xCD, 0xF3, 0x7F]),  # NR50/51 ; call InitAudio
+    start=lambda pc: bytes([0xEA, 0xE8, 0xDF]),                         # ld [wNewMusicID],a
+    frame=lambda pc: bytes([0xCD, 0xF0, 0x7F]),                         # call UpdateAudio
+    first=1, tracks=[(i + 1, 0, n) for i, n in enumerate(TETRIS_NAMES)],
+)
+
+# Super Mario Land 2: 6 Golden Coins (USA, Europe) (Rev 2): froggestspirit/marioland2 (Rev 0),
+# checked against the Rev 2 dump (bank 4 is the same). The sound engine keeps its variables in
+# cartridge RAM ($A400-$A5FF, which the game uses as work RAM, not save data): enable cart RAM,
+# init ($04:$4000 clears that area and turns sound on), a song starts when its id is written to
+# $A468, and _UpdateSound ($04:$4030) runs once a frame. Ids 1-$2A; no song list is documented
+# yet, so the songs are numbered.
+GAMES["sml2-rev2"] = dict(
+    title="MARIOLAND2", version=2, checksum=0xFAEE, name="Super Mario Land 2",
+    init=lambda pc: bytes([0x3E, 0x0A, 0xEA, 0x00, 0x00,            # enable cart RAM
+                           0x3E, 0x04, 0xEA, 0x00, 0x21,            # bank 4
+                           0xCD, 0x00, 0x40]),                      # call init
+    start=lambda pc: bytes([0xEA, 0x68, 0xA4]),                     # ld [$A468],a
+    frame=lambda pc: bytes([0x3E, 0x04, 0xEA, 0x00, 0x21,           # bank 4
+                            0xCD, 0x30, 0x40]),                     # call _UpdateSound
+    first=1, tracks=[(i, 0, f"Song {i:02d}") for i in range(1, 0x2B)],
+)
