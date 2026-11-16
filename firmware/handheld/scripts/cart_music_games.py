@@ -317,3 +317,19 @@ GAMES["sml2-rev2"] = dict(
                             0xCD, 0x30, 0x40]),                     # call _UpdateSound
     first=1, tracks=[(i, 0, f"Song {i:02d}") for i in range(1, 0x2B)],
 )
+
+# Kirby's Dream Land (USA, Europe): huderlem/kirbydreamland (the dump matches its build). The
+# engine is in bank 5: InitSoundEngine ($4C4A), PlaySong's worker ($4DC5, A = song) and
+# HandleTimer ($4E0B, run by the timer at ~60.2 Hz; once a frame is within 1%). Songs are
+# $00-$12 of the sound table at $05:$79F3 (the 3-4 channel entries; the rest are effects).
+# Stage songs named from StageAttributes; the others are numbered.
+KDL_NAMES = {0x00: "Bubbly Clouds", 0x01: "Green Greens", 0x06: "Float Islands",
+             0x08: "Mt. Dedede Intro", 0x0C: "Castle Lololo", 0x11: "Mt. Dedede"}
+GAMES["kirby-dream-land"] = dict(
+    title="KIRBY DREAM LAND", version=0, checksum=0xADF9, name="Kirby's Dream Land",
+    init=lambda pc: bytes([0x3E, 0x05, 0xEA, 0x00, 0x20, 0xCD, 0x4A, 0x4C]),  # bank 5 ; call InitSoundEngine
+    start=lambda pc: bytes([0x47, 0x3E, 0x05, 0xEA, 0x00, 0x20, 0x78,         # bank 5
+                            0xCD, 0xC5, 0x4D]),                               # call PlaySong worker
+    frame=lambda pc: bytes([0x3E, 0x05, 0xEA, 0x00, 0x20, 0xCD, 0x0B, 0x4E]), # bank 5 ; call HandleTimer
+    first=0, tracks=[(i, 0, KDL_NAMES.get(i, f"Song {i:02d}")) for i in range(0x13)],
+)
