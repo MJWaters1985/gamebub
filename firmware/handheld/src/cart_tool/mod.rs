@@ -44,7 +44,6 @@ enum Action {
     SaveToSd,
     SaveToCart,
     SetClock,
-    PlayMusic,
     ReadAgain,
 }
 
@@ -55,7 +54,6 @@ impl Action {
             Self::SaveToSd => "Save: Cartridge to SD Card",
             Self::SaveToCart => "Save: SD Card to Cartridge",
             Self::SetClock => "Set cartridge clock to now",
-            Self::PlayMusic => "Play music",
             Self::ReadAgain => "Read cartridge again",
         }
     }
@@ -75,6 +73,52 @@ pub fn start() {
         Worker::new().run(rx);
         *SENDER.lock().unwrap() = None;
     });
+}
+
+/// Tools > Cartridge Music: read the inserted Game Boy cartridge's header, then run the
+/// cartridge with its music player (/system/cart-music, see
+/// bitstream::gameboy::cart_music_player_path) in place of the boot ROM. Progress and problems
+/// go to the Tools task view.
+pub fn play_music() {
+    task("Reading cartridge...", None);
+    crate::jobs::run(|| match find_music_player() {
+        Ok(player) => {
+            *crate::bitstream::gameboy::CART_MUSIC_PLAYER.lock().unwrap() = Some(player);
+            task("", Some((true, "Playing the cartridge's music.".into())));
+            crate::worker::send(crate::worker::Message::RunCartridge);
+        }
+        Err(e) => {
+            log::error!("Cartridge Music: {e:#}");
+            task("", Some((false, format!("{e:#}"))));
+        }
+    });
+}
+
+fn task(label: &str, result: Option<(bool, String)>) {
+    ui::send(ui::Message::Task(crate::wifi_setup::TaskUpdate {
+        label: label.to_string(),
+        progress: -1.0,
+        result,
+    }));
+}
+
+fn find_music_player() -> anyhow::Result<std::path::PathBuf> {
+    use anyhow::Context;
+    if SENDER.lock().unwrap().is_some() {
+        anyhow::bail!("The Cartridge Manager is still running.");
+    }
+    let mut reader = Link::open().context("Couldn't start the cartridge reader")?;
+    // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
+    let _ = reader.power_cycle();
+    let info = cart::identify(&mut reader);
+    reader.close();
+    let info = info.context("No cartridge could be read")?;
+    if info.mode != link::CartMode::Dmg {
+        anyhow::bail!("Cartridge Music plays Game Boy and Game Boy Color cartridges.");
+    }
+    crate::bitstream::gameboy::cart_music_player_path(info.header()).with_context(|| {
+        format!("There's no music player for {} on the SD card (/system/cart-music).", info.name())
+    })
 }
 
 /// Send a request to the Cartridge Manager.
@@ -114,25 +158,12 @@ impl Worker {
         while let Ok(request) = rx.recv() {
             match request {
                 Request::Exit => break,
-                Request::Action(i) if matches!(self.actions.get(i), Some(Action::PlayMusic)) => {
-                    // Run the cartridge with its music player in place of the boot ROM.
-                    let player = self.info.as_ref().and_then(|info| {
-                        crate::bitstream::gameboy::cart_music_player_path(info.header())
-                    });
-                    *crate::bitstream::gameboy::CART_MUSIC_PLAYER.lock().unwrap() = player;
-                    if let Some(link) = self.link.take() {
-                        link.close();
-                    }
-                    crate::worker::send(crate::worker::Message::RunCartridge);
-                    return;
-                }
                 Request::Action(i) => match self.actions.get(i).copied() {
                     Some(Action::DumpRom) => self.dump_rom(),
                     Some(Action::SaveToSd) => self.save_to_sd(false),
                     Some(Action::SaveToCart) => self.save_to_cart(false),
                     Some(Action::SetClock) => self.set_clock(),
                     Some(Action::ReadAgain) => self.identify(),
-                    Some(Action::PlayMusic) => {} // handled above
                     None => self.show_menu(),
                 },
                 Request::Confirm => self.confirmed(),
@@ -252,11 +283,6 @@ impl Worker {
         }
         if self.clock.is_some() {
             self.actions.push(Action::SetClock);
-        }
-        if info.mode == link::CartMode::Dmg
-            && crate::bitstream::gameboy::cart_music_player_path(info.header()).is_some()
-        {
-            self.actions.push(Action::PlayMusic);
         }
         self.actions.push(Action::ReadAgain);
         send(Update::Menu {

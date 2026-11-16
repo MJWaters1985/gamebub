@@ -11,7 +11,8 @@ export component ToolsScreen inherits ScreenBase {
         "Mount SD Card over USB",
         "Set Up SD Card",
         "FlashGBX Cartridge Backup / Restore",
-        "Debug battery info"
+        "Debug battery info",
+        "Cartridge Music"
     ];
     private property <int> selected-tool: -1;
 
@@ -341,6 +342,56 @@ export component ToolsScreen inherits ScreenBase {
                     vertical-stretch: 1;
                     kind: Backend.task-result-ok ? StatusKind.success : StatusKind.error;
                     title: Backend.task-result-ok ? "Done" : "Problem";
+                    text: Backend.task-result;
+                }
+
+                HorizontalLayout {
+                    alignment: start;
+
+                    ControlHint {
+                        label: "Back";
+                        button: "b";
+                    }
+                }
+            }
+        }
+
+        // Cartridge Music: play the inserted Game Boy cartridge's music with its own sound driver
+        if selected-tool == 6: FocusScope {
+            init => {
+                self.focus();
+                Backend.task-done = false;
+                Backend.task-label = "Reading cartridge...";
+                Backend.task-progress = -1;
+                Backend.tools-cart-music();
+            }
+            key-released(event) => {
+                if event.text == "b" && Backend.task-done {
+                    root.selected-tool = -1;
+                    accept
+                } else {
+                    reject
+                }
+            }
+
+            // Busy: no icon and no hints (no buttons work), centered like the other messages.
+            if !Backend.task-done: StatusMessage {
+                padding-left: 8px;
+                padding-right: 8px;
+                title: Backend.task-label;
+                text: "Don't remove the cartridge.";
+            }
+
+            // Status icon and message centered above the button hints, which stay on the bottom edge.
+            if Backend.task-done: VerticalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                spacing: 6px;
+
+                StatusMessage {
+                    vertical-stretch: 1;
+                    kind: Backend.task-result-ok ? StatusKind.success : StatusKind.error;
+                    title: Backend.task-result-ok ? "Cartridge Music" : "Problem";
                     text: Backend.task-result;
                 }
 

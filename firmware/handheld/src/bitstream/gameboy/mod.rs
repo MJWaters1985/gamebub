@@ -54,8 +54,8 @@ pub enum GameboyError {
     FpgaError(#[from] crate::device::drivers::fpga::Error),
 }
 
-/// Set before running a cartridge to play its music instead of the game (Cartridge Manager >
-/// Play music): the Game Boy Color boot ROM is replaced with this music player program, made
+/// Set before running a cartridge to play its music instead of the game (Tools > Cartridge
+/// Music): the Game Boy Color boot ROM is replaced with this music player program, made
 /// for the cartridge by scripts/gen_music_player.py, which drives the cartridge's own sound
 /// driver.
 pub static CART_MUSIC_PLAYER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);

@@ -48,6 +48,7 @@ impl UiState {
             Device::lock().reboot();
         });
 
+        backend.on_tools_cart_music(|| crate::cart_tool::play_music());
         backend.on_cart_tool_start(|| crate::cart_tool::start());
         backend.on_cart_tool_action(|i| {
             crate::cart_tool::request(crate::cart_tool::Request::Action(i.max(0) as usize))
