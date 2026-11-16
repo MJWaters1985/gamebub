@@ -198,7 +198,8 @@ def build(game):
     # draw: "NN/MM" on row 6, name on row 8 (columns 0-19), during vertical blank
     a.label("draw")                                            # hl = the entry (from name_ptr)
     a.b(0xE5); a.b(0xAF); a.ref16(0xEA, VAR_REDRAW)
-    a.ref16(0x21, 0x9800 + 6 * 32 + 7)
+    wide = count > 99                                          # three digits
+    a.ref16(0x21, 0x9800 + 6 * 32 + (6 if wide else 7))
     a.ref16(0xFA, VAR_TRACK); a.b(0x3C); a.ref16(0xCD, "put2")   # track number (1-based)
     a.b(0x3E, FONT_CHARS.index("/")); a.b(0x22)
     a.b(0x3E, count); a.ref16(0xCD, "put2")
@@ -219,8 +220,12 @@ def build(game):
     a.label("name_done")
     a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0xC9)
 
-    # put2: write A (0-99) as two digits at [hl+]
+    # put2: write A (0-99, or 0-255 when wide) as digits at [hl+] (glyph 1 + n = digit n)
     a.label("put2")
+    if wide:
+        a.b(0x0E, 0xFF)
+        a.label("hundreds"); a.b(0x0C, 0xD6, 100); a.jr(0x30, "hundreds")
+        a.b(0xC6, 100, 0x47); a.b(0x79, 0x3C, 0x22); a.b(0x78)  # hundreds digit; a = rest
     a.b(0x0E, 0xFF)
     a.label("tens"); a.b(0x0C, 0xD6, 10); a.jr(0x30, "tens")
     a.b(0xC6, 10 + 1); a.b(0x47); a.b(0x79, 0x3C, 0x22); a.b(0x78, 0x22); a.b(0xC9)
@@ -232,11 +237,64 @@ def build(game):
     return stub, bytes(table), stub_addr
 
 
-LOW_AREA = 0x00FC  # bytes free at $0004-$00FF for the first part of the track table
+LOW_AREA = 0x00FC  # bytes free at $0004-$00FF (the first part of the packed data)
+
+
+def lz_tokens(data):
+    """Greedy LZ77 for unlz: token $01-$7F = that many literal bytes follow; $80+n = copy
+    n+3 bytes from `distance` back in the output (next byte: distance - 1); $00 = end."""
+    out, lit, i = [], bytearray(), 0
+
+    def flush():
+        while lit:
+            n = min(len(lit), 0x7F)
+            out.append(bytes([n]) + lit[:n])
+            del lit[:n]
+    while i < len(data):
+        best_len, best_dist = 0, 0
+        for dist in range(1, min(256, i) + 1):
+            n = 0
+            while i + n < len(data) and n < 0x7F + 3 and data[i - dist + n] == data[i + n]:
+                n += 1
+            if n > best_len:
+                best_len, best_dist = n, dist
+        if best_len >= 3:
+            flush()
+            out.append(bytes([0x80 | (best_len - 3), best_dist - 1]))
+            i += best_len
+        else:
+            lit.append(data[i])
+            i += 1
+    flush()
+    return out
+
+
+def unlz(data):
+    """Python model of the player's unlz, to check the packing."""
+    out, i = bytearray(), 0
+    while data[i]:
+        t = data[i]; i += 1
+        if t < 0x80:
+            out += data[i:i + t]; i += t
+        else:
+            dist = data[i] + 1; i += 1
+            for _ in range((t & 0x7F) + 3):
+                out.append(out[-dist])
+    return bytes(out)
 
 
 def boot(stub, stub_addr, table, font, stack):
-    low, high = table[:LOW_AREA], table[LOW_AREA:]
+    # Pack table + font + loop; the first tokens go in $0004-$00FF, the rest after the code.
+    data = table + font + stub
+    tokens = lz_tokens(data)
+    low = bytearray()
+    while tokens and len(low) + len(tokens[0]) <= LOW_AREA - 1:
+        low += tokens.pop(0)
+    low.append(0)
+    high = b"".join(tokens) + b"\x00"
+    assert unlz(bytes(low[:-1]) + high) == data
+    font_at, stub_at = WRAM7 + len(table), WRAM7 + len(table) + len(font)
+
     a = Asm(0x0200)
     a.b(0xF3); a.ref16(0x31, 0xFFFE)                 # stack in HRAM while WRAM is cleared
     # clear WRAM bank 0, bank 1 and bank 7, then HRAM (inline, once the stack is in WRAM)
@@ -246,41 +304,49 @@ def boot(stub, stub_addr, table, font, stack):
         a.ref16(0x21, 0xD000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
     a.ref16(0x31, stack)
     a.ref16(0x21, 0xFF80); a.b(0x06, 0x7F); a.label("clrh"); a.b(0xAF, 0x22, 0x05); a.jr(0x20, "clrh")
-    # track table to bank 7
-    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
-    a.ref16(0x21, 0x0004); a.ref16(0x11, WRAM7); a.ref16(0x01, len(low)); a.ref16(0xCD, "copy")
-    if high:
-        a.ref16(0x21, "table"); a.ref16(0x01, len(high)); a.ref16(0xCD, "copy")   # de continues
-    a.b(0x3E, 0x01); a.b(0xE0, 0x70)
+    # unpack to bank 7 (still selected): table at $D000, then the font and the loop
+    a.ref16(0x21, 0x0004); a.ref16(0x11, WRAM7); a.ref16(0xCD, "unlz")
+    a.ref16(0x21, "packed"); a.ref16(0xCD, "unlz")   # de continues
     # font: 7 rows of 1bpp -> tiles at $8000 (both bit planes, colour 3), 8th row blank
-    a.ref16(0x21, "font"); a.ref16(0x11, 0x8000); a.b(0x06, len(font) // 7)
+    a.ref16(0x21, font_at); a.ref16(0x11, 0x8000); a.b(0x06, len(font) // 7)
     a.label("glyph"); a.b(0x0E, 7)
     a.label("grow"); a.b(0x2A, 0x12, 0x13, 0x12, 0x13, 0x0D); a.jr(0x20, "grow")
     a.b(0xAF, 0x12, 0x13, 0x12, 0x13, 0x05); a.jr(0x20, "glyph")
+    # the loop to work RAM bank 0
+    a.ref16(0x21, stub_at); a.ref16(0x11, stub_addr); a.ref16(0x01, len(stub))
+    a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy")
+    a.b(0x3E, 0x01); a.b(0xE0, 0x70)
     # background map: spaces
     a.ref16(0x21, 0x9800); a.ref16(0x01, 0x400); a.ref16(0xCD, "fill0")
     # palette 0: white background, black text
     a.b(0x3E, 0x80); a.b(0xE0, 0x68)
     for byte in (0xFF, 0x7F, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00):
         a.b(0x3E, byte); a.b(0xE0, 0x69)
-    # the loop to work RAM, LCD on (BG, tiles at $8000), go
-    a.ref16(0x21, "stub"); a.ref16(0x11, stub_addr); a.ref16(0x01, len(stub)); a.ref16(0xCD, "copy")
+    # LCD on (BG, tiles at $8000), go
     a.b(0x3E, 0x91); a.b(0xE0, 0x40)
     a.ref16(0xC3, stub_addr)
     a.label("fill0"); a.b(0xAF, 0x22, 0x0B, 0x78, 0xB1); a.jr(0x20, "fill0"); a.b(0xC9)
-    a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy"); a.b(0xC9)
-    a.label("font"); a.code += font
-    a.label("stub"); a.code += stub
-    a.label("table"); a.code += high
-    return a.resolve(), low
+    # unlz: unpack hl -> de (format: lz_tokens)
+    a.label("unlz"); a.b(0x2A, 0xB7, 0xC8)                       # ld a,[hl+] ; or a ; ret z
+    a.b(0xCB, 0x7F); a.jr(0x20, "lz_copy")                       # bit 7,a
+    a.b(0x47)
+    a.label("lz_lit"); a.b(0x2A, 0x12, 0x13, 0x05); a.jr(0x20, "lz_lit"); a.jr(0x18, "unlz")
+    a.label("lz_copy"); a.b(0xE6, 0x7F, 0xC6, 0x03, 0x47)         # b = length
+    a.b(0x2A, 0xE5)                                              # a = distance - 1 ; push hl
+    a.b(0x2F, 0x83, 0x6F, 0x7A, 0xCE, 0xFF, 0x67)                # hl = de - distance
+    a.label("lz_rep"); a.b(0x2A, 0x12, 0x13, 0x05); a.jr(0x20, "lz_rep")
+    a.b(0xE1); a.jr(0x18, "unlz")                                # pop hl
+    a.label("packed"); a.code += high
+    return a.resolve(), bytes(low)
 
 
 def generate(game_id):
     game = GAMES[game_id]
     stub, table, stub_addr = build(game)
     font = font_tiles()
+    assert len(table) + len(font) + len(stub) <= 0x1000
     code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10))
-    assert 0x200 + len(code) <= 0x900, f"player is {len(code)} bytes, {0x700} available"
+    assert 0x200 + len(code) <= 0x900, f"{game_id}: player is {len(code)} bytes, {0x700} available"
     rom = bytearray(0x900)
     rom[0:3] = bytes([0xC3, 0x00, 0x02])
     rom[0x200:0x200 + len(code)] = code
