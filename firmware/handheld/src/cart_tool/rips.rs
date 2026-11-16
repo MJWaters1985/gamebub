@@ -141,10 +141,14 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
 
 /// Packages to try for this cartridge, from rips/index.txt ("<name>\t<file>" lines, names as
 /// made by norm()).
-fn candidates(info: &CartInfo) -> Vec<PathBuf> {
+fn candidates(info: &CartInfo) -> Result<Vec<PathBuf>> {
     let dir = crate::util::get_system_file_path("cart-music/rips");
-    let Ok(index) = std::fs::read_to_string(dir.join("index.txt")) else {
-        return vec![];
+    let index = match std::fs::read_to_string(dir.join("index.txt")) {
+        Ok(index) => index,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && dir.parent().is_some_and(|d| d.is_dir()) => {
+            return Ok(vec![]); // no rip packages installed
+        }
+        Err(e) => bail!("Couldn't read the music index on the SD card ({e}). Is the SD card in?"),
     };
     let mut names = vec![];
     if let Some(db) = &info.db {
@@ -162,13 +166,14 @@ fn candidates(info: &CartInfo) -> Vec<PathBuf> {
             }
         }
     }
-    out
+    log::info!("Cartridge Music: looked for {names:?}, {} package(s)", out.len());
+    Ok(out)
 }
 
 /// Find a rip package that matches the cartridge and write its player to
 /// /system/cart-music/rip-player.bin. Ok(None) if there's no package for it.
 pub fn find(link: &mut Link, info: &CartInfo, busy: &dyn Fn(&str)) -> Result<Option<PathBuf>> {
-    let list = candidates(info);
+    let list = candidates(info)?;
     if list.is_empty() {
         return Ok(None);
     }
