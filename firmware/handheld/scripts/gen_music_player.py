@@ -101,13 +101,20 @@ def encode_name(name):
 
 
 WRAM7 = 0xD000
-VAR_TRACK = 0xC7FA   # current track index (0-based)
-VAR_JOY = 0xC7FB     # previous joypad state
-VAR_REDRAW = 0xC7FC  # 1 = draw the track name in the next vertical blank
 
 
 def build(game):
+    """Optional entry fields, for games whose RAM use needs them (e.g. entries made from GBS
+    rips, scripts/gbs2entry.py): `stub` (the loop's address, in $C000-$CFFF), `vars` (3 bytes:
+    track, previous joypad, redraw flag; default stub - 6), `data_bank` (the work RAM bank for
+    the font and track table, default 7), `blobs` ([(address, bytes)] copied to $C000-$CFFF at
+    boot), `timer` ((TMA, TAC) from a GBS header: run `frame` on the hardware timer instead of
+    once a frame; TAC bit 7 selects double-speed mode)."""
     stub_addr = game.get("stub", 0xC800)
+    var = game.get("vars", stub_addr - 6)
+    VAR_TRACK, VAR_JOY, VAR_REDRAW = var, var + 1, var + 2
+    data_bank = game.get("data_bank", 7)
+    timer = game.get("timer")
     tracks = game["tracks"]          # list of (p0, p1, name)
     linear = all(p0 == i + game.get("first", 1) and p1 == 0 for i, (p0, p1, _) in enumerate(tracks))
     count = len(tracks)
@@ -124,7 +131,11 @@ def build(game):
     a = Asm(stub_addr)
     a.b(0x3E, 0x01); a.b(0xE0, 0x50)                 # boot ROM off
     a.b(0x3E, 0x80); a.b(0xE0, 0x26)                 # sound on
+    if timer and timer[1] & 0x80:                    # double speed (KEY1 + stop)
+        a.b(0x3E, 0x30, 0xE0, 0x00, 0x3E, 0x01, 0xE0, 0x4D, 0x10, 0x00)
     a.code += game["init"](stub_addr)                # glue: init
+    if timer:                                        # the hardware timer paces `frame`
+        a.b(0x3E, timer[0], 0xE0, 0x06, 0x3E, (timer[1] & 3) | 4, 0xE0, 0x07)
     a.b(0xAF); a.ref16(0xEA, VAR_TRACK)
     a.ref16(0xCD, "start")
 
@@ -132,11 +143,14 @@ def build(game):
     # find the entry to draw before the vertical blank: walking a long table takes longer than it
     a.ref16(0xFA, VAR_REDRAW); a.b(0xB7); a.ref16(0xC4, "name_ptr")   # call nz,name_ptr -> hl
     a.label("wait_vbl")
+    if timer:
+        a.ref16(0xCD, "tick")
     a.b(0xF0, 0x44); a.b(0xFE, 144); a.jr(0x20, "wait_vbl")
     a.ref16(0xFA, VAR_REDRAW); a.b(0xB7); a.jr(0x28, "no_redraw")
     a.ref16(0xCD, "draw")
     a.label("no_redraw")
-    a.ref16(0xCD, "frame_glue")
+    if not timer:
+        a.ref16(0xCD, "frame_glue")
     # joypad -> b = {start,select,B,A,down,up,left,right}, 1 = pressed
     a.b(0x3E, 0x20); a.b(0xE0, 0x00); a.b(0xF0, 0x00); a.b(0xF0, 0x00)
     a.b(0x2F, 0xE6, 0x0F, 0x47)
@@ -165,8 +179,17 @@ def build(game):
         a.label(skip)
     a.b(0x79, 0xE6, 0x10); a.jr(0x28, "skipA"); a.ref16(0xCD, "start"); a.label("skipA")
     a.label("wait_end")
+    if timer:
+        a.ref16(0xCD, "tick")
     a.b(0xF0, 0x44); a.b(0xFE, 144); a.jr(0x28, "wait_end")
     a.ref16(0xC3, "frame")
+
+    if timer:
+        # tick: run `frame` when the timer has overflowed (IF bit 2; interrupts stay off)
+        a.label("tick")
+        a.b(0xF0, 0x0F, 0xCB, 0x57, 0xC8)            # ldh a,[IF] ; bit 2,a ; ret z
+        a.b(0xE6, 0xFB, 0xE0, 0x0F)                  # and ~4 ; ldh [IF],a
+        a.ref16(0xC3, "frame_glue")
 
     # start: look up the track's parameters (bank 7), then glue start(A=p0, C=p1)
     a.label("start")
@@ -175,7 +198,7 @@ def build(game):
         a.ref16(0xFA, VAR_TRACK); a.b(0xC6, game.get("first", 1)); a.b(0x0E, 0x00)
     else:
         a.ref16(0xCD, "name_ptr")                    # hl = entry (p0, p1, name)
-        a.b(0x3E, 0x07); a.b(0xE0, 0x70)             # bank 7
+        a.b(0x3E, data_bank); a.b(0xE0, 0x70)             # bank 7
         a.b(0x2A, 0x4E, 0x47)                        # ld a,[hl+] (p0) ; ld c,[hl] (p1) ; ld b,a
         a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0x78)  # bank 1 ; ld a,b
     a.code += game["start"](a.pc)
@@ -183,7 +206,7 @@ def build(game):
 
     # name_ptr: hl = pointer to the current track's entry (bank 7 table), walking the entries
     a.label("name_ptr")
-    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
+    a.b(0x3E, data_bank); a.b(0xE0, 0x70)
     a.ref16(0xFA, VAR_TRACK); a.b(0x47)                        # b = track index
     a.ref16(0x21, WRAM7 + 3)
     a.label("walk"); a.b(0x78, 0xB7); a.jr(0x28, "walked")    # b == 0: found
@@ -206,7 +229,7 @@ def build(game):
     a.ref16(0x21, 0x9800 + 8 * 32)                             # clear the name row
     a.b(0x06, 20, 0xAF); a.label("clr_row"); a.b(0x22, 0x05); a.jr(0x20, "clr_row")
     a.b(0xE1)                                                  # pop hl (the entry)
-    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
+    a.b(0x3E, data_bank); a.b(0xE0, 0x70)
     if not linear:
         a.b(0x23, 0x23)                                        # skip p0, p1
     a.b(0x46, 0x23)                                            # ld b,[hl] (length) ; inc hl
@@ -283,9 +306,9 @@ def unlz(data):
     return bytes(out)
 
 
-def boot(stub, stub_addr, table, font, stack):
+def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=()):
     # Pack table + font + loop; the first tokens go in $0004-$00FF, the rest after the code.
-    data = table + font + stub
+    data = table + font + stub + b"".join(b for _, b in blobs)
     tokens = lz_tokens(data)
     low = bytearray()
     while tokens and len(low) + len(tokens[0]) <= LOW_AREA - 1:
@@ -294,17 +317,19 @@ def boot(stub, stub_addr, table, font, stack):
     high = b"".join(tokens) + b"\x00"
     assert unlz(bytes(low[:-1]) + high) == data
     font_at, stub_at = WRAM7 + len(table), WRAM7 + len(table) + len(font)
+    blob_at = stub_at + len(stub)
 
     a = Asm(0x0200)
     a.b(0xF3); a.ref16(0x31, 0xFFFE)                 # stack in HRAM while WRAM is cleared
-    # clear WRAM bank 0, bank 1 and bank 7, then HRAM (inline, once the stack is in WRAM)
+    # clear all of work RAM (banks 0-7), then HRAM (inline, once the stack is in WRAM)
     a.ref16(0x21, 0xC000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
-    for bank in (1, 7):
+    for bank in range(1, 8):
         a.b(0x3E, bank); a.b(0xE0, 0x70)
         a.ref16(0x21, 0xD000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
     a.ref16(0x31, stack)
     a.ref16(0x21, 0xFF80); a.b(0x06, 0x7F); a.label("clrh"); a.b(0xAF, 0x22, 0x05); a.jr(0x20, "clrh")
-    # unpack to bank 7 (still selected): table at $D000, then the font and the loop
+    # unpack to the data bank: table at $D000, then the font, the loop and any blobs
+    a.b(0x3E, data_bank); a.b(0xE0, 0x70)
     a.ref16(0x21, 0x0004); a.ref16(0x11, WRAM7); a.ref16(0xCD, "unlz")
     a.ref16(0x21, "packed"); a.ref16(0xCD, "unlz")   # de continues
     # font: 7 rows of 1bpp -> tiles at $8000 (both bit planes, colour 3), 8th row blank
@@ -314,7 +339,11 @@ def boot(stub, stub_addr, table, font, stack):
     a.b(0xAF, 0x12, 0x13, 0x12, 0x13, 0x05); a.jr(0x20, "glyph")
     # the loop to work RAM bank 0
     a.ref16(0x21, stub_at); a.ref16(0x11, stub_addr); a.ref16(0x01, len(stub))
-    a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy")
+    a.ref16(0xCD, "copy")
+    for addr, blob in blobs:
+        assert 0xC000 <= addr and addr + len(blob) <= 0xD000, "blobs go in work RAM bank 0"
+        a.ref16(0x21, blob_at); a.ref16(0x11, addr); a.ref16(0x01, len(blob)); a.ref16(0xCD, "copy")
+        blob_at += len(blob)
     a.b(0x3E, 0x01); a.b(0xE0, 0x70)
     # background map: spaces
     a.ref16(0x21, 0x9800); a.ref16(0x01, 0x400); a.ref16(0xCD, "fill0")
@@ -326,6 +355,7 @@ def boot(stub, stub_addr, table, font, stack):
     a.b(0x3E, 0x91); a.b(0xE0, 0x40)
     a.ref16(0xC3, stub_addr)
     a.label("fill0"); a.b(0xAF, 0x22, 0x0B, 0x78, 0xB1); a.jr(0x20, "fill0"); a.b(0xC9)
+    a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy"); a.b(0xC9)
     # unlz: unpack hl -> de (format: lz_tokens)
     a.label("unlz"); a.b(0x2A, 0xB7, 0xC8)                       # ld a,[hl+] ; or a ; ret z
     a.b(0xCB, 0x7F); a.jr(0x20, "lz_copy")                       # bit 7,a
@@ -341,11 +371,17 @@ def boot(stub, stub_addr, table, font, stack):
 
 
 def generate(game_id):
-    game = GAMES[game_id]
+    return generate_game(GAMES[game_id], game_id)
+
+
+def generate_game(game, game_id="entry"):
     stub, table, stub_addr = build(game)
+    assert stub_addr + len(stub) <= 0xD000, f"{game_id}: the loop doesn't fit in work RAM bank 0"
     font = font_tiles()
-    assert len(table) + len(font) + len(stub) <= 0x1000
-    code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10))
+    blobs = game.get("blobs", ())
+    assert len(table) + len(font) + len(stub) + sum(len(b) for _, b in blobs) <= 0x1000
+    code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10),
+                     game.get("data_bank", 7), blobs)
     assert 0x200 + len(code) <= 0x900, f"{game_id}: player is {len(code)} bytes, {0x700} available"
     rom = bytearray(0x900)
     rom[0:3] = bytes([0xC3, 0x00, 0x02])
