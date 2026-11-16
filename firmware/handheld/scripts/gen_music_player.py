@@ -129,6 +129,8 @@ def build(game):
     a.ref16(0xCD, "start")
 
     a.label("frame")
+    # find the entry to draw before the vertical blank: walking a long table takes longer than it
+    a.ref16(0xFA, VAR_REDRAW); a.b(0xB7); a.ref16(0xC4, "name_ptr")   # call nz,name_ptr -> hl
     a.label("wait_vbl")
     a.b(0xF0, 0x44); a.b(0xFE, 144); a.jr(0x20, "wait_vbl")
     a.ref16(0xFA, VAR_REDRAW); a.b(0xB7); a.jr(0x28, "no_redraw")
@@ -159,6 +161,7 @@ def build(game):
             a.b(0x3E, count - 1)
         a.label(f"ok{mask}")
         a.ref16(0xEA, VAR_TRACK); a.ref16(0xCD, "start")
+        a.ref16(0xC3, "wait_end")       # one action per frame (start clobbers c, the pressed mask)
         a.label(skip)
     a.b(0x79, 0xE6, 0x10); a.jr(0x28, "skipA"); a.ref16(0xCD, "start"); a.label("skipA")
     a.label("wait_end")
@@ -193,15 +196,15 @@ def build(game):
     a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0xC9)
 
     # draw: "NN/MM" on row 6, name on row 8 (columns 0-19), during vertical blank
-    a.label("draw")
-    a.b(0xAF); a.ref16(0xEA, VAR_REDRAW)
+    a.label("draw")                                            # hl = the entry (from name_ptr)
+    a.b(0xE5); a.b(0xAF); a.ref16(0xEA, VAR_REDRAW)
     a.ref16(0x21, 0x9800 + 6 * 32 + 7)
     a.ref16(0xFA, VAR_TRACK); a.b(0x3C); a.ref16(0xCD, "put2")   # track number (1-based)
     a.b(0x3E, FONT_CHARS.index("/")); a.b(0x22)
     a.b(0x3E, count); a.ref16(0xCD, "put2")
     a.ref16(0x21, 0x9800 + 8 * 32)                             # clear the name row
     a.b(0x06, 20, 0xAF); a.label("clr_row"); a.b(0x22, 0x05); a.jr(0x20, "clr_row")
-    a.ref16(0xCD, "name_ptr")
+    a.b(0xE1)                                                  # pop hl (the entry)
     a.b(0x3E, 0x07); a.b(0xE0, 0x70)
     if not linear:
         a.b(0x23, 0x23)                                        # skip p0, p1
