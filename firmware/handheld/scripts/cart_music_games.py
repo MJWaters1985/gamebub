@@ -238,3 +238,47 @@ GAMES["oracle-of-ages"] = dict(oracle(0x0CB7, ORACLE_AGES),
                                title="ZELDA NAYRUAZ8E", version=0, checksum=0xA132, name="Oracle of Ages")
 GAMES["oracle-of-seasons"] = dict(oracle(0x0C93, ORACLE_SEASONS),
                                   title="ZELDA DIN", version=0, checksum=0xFE8F, name="Oracle of Seasons")
+
+# Pokemon Pinball (USA, Australia) (Rumble Version): pret/pokepinball (the dump matches its
+# build). Like the sound test: SetSongBank ($052C, A = bank) then PlaySong ($0490, E = song);
+# each frame UpdateSFX ($0504), as VBlank does. Songs and banks from SongBanks ($03:$477E).
+POKEMON_PINBALL_TRACKS = [
+    (0x01, 0x0F, "Red Field"), (0x02, 0x0F, "Catch 'Em (Red)"), (0x03, 0x0F, "Hurry Up (Red)"),
+    (0x04, 0x0F, "Pokedex"), (0x05, 0x0F, "Gastly in Graveyard"), (0x06, 0x0F, "Haunter in Graveyard"),
+    (0x07, 0x0F, "Gengar in Graveyard"), (0x01, 0x10, "Blue Field"), (0x02, 0x10, "Catch 'Em (Blue)"),
+    (0x03, 0x10, "Hurry Up (Blue)"), (0x04, 0x10, "High Score"), (0x05, 0x10, "Game Over"),
+    (0x01, 0x11, "Whack the Diglett"), (0x02, 0x11, "Whack the Dugtrio"), (0x03, 0x11, "Seel Stage"),
+    (0x04, 0x11, "Title Screen"), (0x01, 0x12, "Mewtwo Stage"), (0x02, 0x12, "Options"),
+    (0x03, 0x12, "Field Select"), (0x04, 0x12, "Meowth Stage"), (0x01, 0x13, "End Credits"),
+    (0x02, 0x13, "Name Entry"),
+]
+
+GAMES["pokemon-pinball"] = dict(
+    title="POKEPINBALLVPHE", version=0, checksum=0xDA60, name="Pokemon Pinball",
+    init=POKEMON_RB["init"],                                        # NR50, NR51
+    start=lambda pc: bytes([0x5F, 0x16, 0x00, 0x79,                 # ld e,a ; ld d,0 ; ld a,c
+                            0xCD, 0x2C, 0x05, 0xCD, 0x90, 0x04]),   # call SetSongBank ; call PlaySong
+    frame=lambda pc: bytes([0xCD, 0x04, 0x05]),                     # call UpdateSFX
+    tracks=POKEMON_PINBALL_TRACKS,
+)
+
+# Pokemon Trading Card Game (USA, Australia): pret/poketcg (the dump matches its build).
+# SetupSound ($377F), PlaySong ($3785, A = song); the game runs SoundTimerHandler ($3D:$4003)
+# from the timer at ~60.2 Hz (switching banks with BankswitchROM, $07A3); once a frame is
+# within 1%. Songs from src/constants/music_constants.asm.
+POKECARD_NAMES = [
+    "Title Screen", "Duel Theme 1", "Duel Theme 2", "Duel Theme 3", "Pause Menu", "PC Main Menu",
+    "Deck Machine", "Card Pop!", "Overworld", "Pokemon Dome", "Challenge Hall", "Club 1",
+    "Club 2", "Club 3", "Ronald", "Imakuni?", "Hall of Honor", "Credits", "Unused 1",
+    "Unused 2", "Match Start 1", "Match Start 2", "Match Start 3", "Match Victory", "Match Loss",
+    "Match Draw", "Unused 3", "Booster Pack", "Medal", "Unused 4",
+]
+
+GAMES["pokemon-tcg"] = dict(
+    title="POKECARD", version=0, checksum=0x26A6, name="Pokemon Trading Card Game",
+    init=lambda pc: bytes([0xCD, 0x7F, 0x37]),                      # call SetupSound
+    start=lambda pc: bytes([0xCD, 0x85, 0x37]),                     # call PlaySong
+    frame=lambda pc: bytes([0x3E, 0x3D, 0xCD, 0xA3, 0x07,           # ld a,$3D ; call BankswitchROM
+                            0xCD, 0x03, 0x40]),                     # call SoundTimerHandler
+    first=1, tracks=[(i + 1, 0, n) for i, n in enumerate(POKECARD_NAMES)],
+)
