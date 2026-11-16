@@ -351,3 +351,17 @@ GAMES["kirby-dream-land-2"] = dict(
     frame=lambda pc: bytes([0xCD, 0xFD, 0x2B]),                               # call _UpdateAudio
     first=0, tracks=[(i, 0, KDL2_NAMES.get(i, f"Song {i:02d}")) for i in range(0x2F)],
 )
+
+# Tetris DX (World): no disassembly; traced in the user's dump. The sound engine (bank $0C) is
+# reached through home stubs that switch banks: $3F00 init, $3F06 update (the main loop calls it
+# once a frame), $3F12 play music (BC = sound id). Songs are the priority-50 entries of the sound
+# table at $0C:$546D (6 bytes each; the rest are effects). Not yet identified, so numbered.
+TETRIS_DX_SONGS = [0x35] + list(range(0x40, 0x4E)) + [0x50, 0x51, 0x54, 0x55, 0x56, 0x57] + \
+    list(range(0x59, 0x65)) + [0xB9, 0xBA, 0xBB, 0xC5, 0xCB, 0xF8]
+GAMES["tetris-dx"] = dict(
+    title="TETRIS DX", version=0, checksum=0xC800, name="Tetris DX",
+    init=lambda pc: bytes([0xCD, 0x00, 0x3F]),                      # call init
+    start=lambda pc: bytes([0x4F, 0x06, 0x00, 0xCD, 0x12, 0x3F]),   # ld c,a ; ld b,0 ; call play music
+    frame=lambda pc: bytes([0xCD, 0x06, 0x3F]),                     # call update
+    tracks=[(s, 0, f"Song {i + 1:02d}") for i, s in enumerate(TETRIS_DX_SONGS)],
+)
