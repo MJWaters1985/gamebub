@@ -333,3 +333,21 @@ GAMES["kirby-dream-land"] = dict(
     frame=lambda pc: bytes([0x3E, 0x05, 0xEA, 0x00, 0x20, 0xCD, 0x0B, 0x4E]), # bank 5 ; call HandleTimer
     first=0, tracks=[(i, 0, KDL_NAMES.get(i, f"Song {i:02d}")) for i in range(0x13)],
 )
+
+# Kirby's Dream Land 2 (USA, Europe): ElectroDeoxys/kirbydreamland2 (the dump matches its
+# build). InitAudio ($1E:$4232), ForcePlayMusic ($1F:$4237, E = song) and _UpdateAudio ($2BFD,
+# what VBlank runs; it selects bank $1F itself). Banks are selected with UnsafeBankswitch
+# ($05F3), which also records the bank for the engine's farcalls. Songs $00-$2E; the ones the
+# disassembly names are named, the rest numbered.
+KDL2_NAMES = {0x03: "Grass Land", 0x06: "Title Screen", 0x09: "Kine", 0x0A: "Big Forest",
+              0x0B: "Coo", 0x0C: "Ripple Field", 0x11: "Dark Castle", 0x12: "Rainbow Drop",
+              0x14: "Rick", 0x1C: "Level Select", 0x22: "Iceberg", 0x23: "Red Canyon",
+              0x24: "Cloudy Park", 0x2E: "File Select"}
+GAMES["kirby-dream-land-2"] = dict(
+    title="KIRBY2", version=0, checksum=0xDC99, name="Kirby's Dream Land 2",
+    init=lambda pc: bytes([0x3E, 0x1E, 0xCD, 0xF3, 0x05, 0xCD, 0x32, 0x42]),  # bank $1E ; call InitAudio
+    start=lambda pc: bytes([0x5F, 0x3E, 0x1F, 0xCD, 0xF3, 0x05,               # ld e,a ; bank $1F
+                            0xCD, 0x37, 0x42]),                               # call ForcePlayMusic
+    frame=lambda pc: bytes([0xCD, 0xFD, 0x2B]),                               # call _UpdateAudio
+    first=0, tracks=[(i, 0, KDL2_NAMES.get(i, f"Song {i:02d}")) for i in range(0x2F)],
+)
