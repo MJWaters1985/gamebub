@@ -32,6 +32,9 @@ def slug(set_name):
 
 def work(set_name):
     import signal
+    def timeout(*_):
+        raise TimeoutError('tracing took over 300 s')
+    signal.signal(signal.SIGALRM, timeout)   # the default action kills the worker and hangs the pool
     signal.alarm(300)   # a rip whose tracing never ends
     try:
         from package import make
@@ -41,6 +44,8 @@ def work(set_name):
         return set_name, pkg, len(tracks)
     except BaseException as ex:
         return set_name, None, ['error: %r' % ex][:1]
+    finally:
+        signal.alarm(0)
 
 
 if __name__ == '__main__':
@@ -53,7 +58,9 @@ if __name__ == '__main__':
     with multiprocessing.Pool(jobs) as pool:
         for i, (name, pkg, info) in enumerate(pool.imap_unordered(work, sets)):
             if pkg:
-                f = slug(name) + '.cmr'
+                f, k = slug(name) + '.cmr', 2
+                while os.path.exists(os.path.join(out, f)):   # versions with the same name and date
+                    f, k = '%s_%d.cmr' % (slug(name), k), k + 1
                 open(os.path.join(out, f), 'wb').write(pkg)
                 for t in titles(name):
                     index.append('%s\t%s' % (t, f))
