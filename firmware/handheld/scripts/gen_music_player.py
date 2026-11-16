@@ -79,9 +79,10 @@ GLYPHS = {
 FONT_CHARS = "".join(GLYPHS)
 
 
-def font_tiles():
+def font_tiles(chars=FONT_CHARS):
     data = bytearray()
-    for ch, g in GLYPHS.items():
+    for ch in chars:
+        g = GLYPHS[ch]
         g = g.ljust(35, ".")[:35]
         for y in range(7):
             bits = 0
@@ -92,10 +93,17 @@ def font_tiles():
     return bytes(data)  # 7 bytes per glyph
 
 
-def encode_name(name):
+def font_for(names):
+    """The glyphs a game needs: space and digits first (the track number is drawn as glyph
+    1 + digit), then "/" and the characters its track names use, in FONT_CHARS order."""
+    used = {c for n in names for c in n.upper()[:20] if c in GLYPHS}
+    return " 0123456789/" + "".join(c for c in FONT_CHARS if c in used and c not in " 0123456789/")
+
+
+def encode_name(name, chars=FONT_CHARS):
     out = bytearray()
     for ch in name.upper()[:20]:
-        i = FONT_CHARS.find(ch)
+        i = chars.find(ch)
         out.append(i if i >= 0 else 0)
     return bytes([len(out)]) + bytes(out)
 
@@ -116,6 +124,8 @@ def build(game):
     data_bank = game.get("data_bank", 7)
     timer = game.get("timer")
     tracks = game["tracks"]          # list of (p0, p1, name)
+    chars = font_for([n for _, _, n in tracks])
+    game["font_chars"] = chars
     linear = all(p0 == i + game.get("first", 1) and p1 == 0 for i, (p0, p1, _) in enumerate(tracks))
     count = len(tracks)
 
@@ -125,7 +135,7 @@ def build(game):
     for p0, p1, name in tracks:
         if not linear:
             table += bytes([p0, p1])
-        table += encode_name(name)
+        table += encode_name(name, chars)
 
     # --- The loop in work RAM ---
     a = Asm(stub_addr)
@@ -224,7 +234,7 @@ def build(game):
     wide = count > 99                                          # three digits
     a.ref16(0x21, 0x9800 + 6 * 32 + (6 if wide else 7))
     a.ref16(0xFA, VAR_TRACK); a.b(0x3C); a.ref16(0xCD, "put2")   # track number (1-based)
-    a.b(0x3E, FONT_CHARS.index("/")); a.b(0x22)
+    a.b(0x3E, chars.index("/")); a.b(0x22)
     a.b(0x3E, count); a.ref16(0xCD, "put2")
     a.ref16(0x21, 0x9800 + 8 * 32)                             # clear the name row
     a.b(0x06, 20, 0xAF); a.label("clr_row"); a.b(0x22, 0x05); a.jr(0x20, "clr_row")
@@ -306,7 +316,7 @@ def unlz(data):
     return bytes(out)
 
 
-def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=()):
+def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=()):
     # Pack table + font + loop; the first tokens go in $0004-$00FF, the rest after the code.
     data = table + font + stub + b"".join(b for _, b in blobs)
     tokens = lz_tokens(data)
@@ -344,6 +354,9 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=()):
         assert 0xC000 <= addr and addr + len(blob) <= 0xD000, "blobs go in work RAM bank 0"
         a.ref16(0x21, blob_at); a.ref16(0x11, addr); a.ref16(0x01, len(blob)); a.ref16(0xCD, "copy")
         blob_at += len(blob)
+    for i, (addr, blob) in enumerate(raw_blobs):   # stored as is, so they can be patched in the file
+        assert 0xC000 <= addr and addr + len(blob) <= 0xD000, "blobs go in work RAM bank 0"
+        a.ref16(0x21, f"raw{i}"); a.ref16(0x11, addr); a.ref16(0x01, len(blob)); a.ref16(0xCD, "copy")
     a.b(0x3E, 0x01); a.b(0xE0, 0x70)
     # background map: spaces
     a.ref16(0x21, 0x9800); a.ref16(0x01, 0x400); a.ref16(0xCD, "fill0")
@@ -367,6 +380,8 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=()):
     a.label("lz_rep"); a.b(0x2A, 0x12, 0x13, 0x05); a.jr(0x20, "lz_rep")
     a.b(0xE1); a.jr(0x18, "unlz")                                # pop hl
     a.label("packed"); a.code += high
+    for i, (addr, blob) in enumerate(raw_blobs):
+        a.label(f"raw{i}"); a.code += blob
     return a.resolve(), bytes(low)
 
 
@@ -377,11 +392,21 @@ def generate(game_id):
 def generate_game(game, game_id="entry"):
     stub, table, stub_addr = build(game)
     assert stub_addr + len(stub) <= 0xD000, f"{game_id}: the loop doesn't fit in work RAM bank 0"
-    font = font_tiles()
+    font = font_tiles(game["font_chars"])
     blobs = game.get("blobs", ())
     assert len(table) + len(font) + len(stub) + sum(len(b) for _, b in blobs) <= 0x1000
+    raw_blobs = game.get("raw_blobs", ())
     code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10),
-                     game.get("data_bank", 7), blobs)
+                     game.get("data_bank", 7), blobs, raw_blobs)
+    # where each raw blob is in the file (they end the code), for patching the file later
+    end = 0x200 + len(code)
+    for addr, blob in reversed(raw_blobs):
+        end -= len(blob)
+    offs = []
+    for addr, blob in raw_blobs:
+        offs.append(end)
+        end += len(blob)
+    game["raw_file_offsets"] = offs
     assert 0x200 + len(code) <= 0x900, f"{game_id}: player is {len(code)} bytes, {0x700} available"
     rom = bytearray(0x900)
     rom[0:3] = bytes([0xC3, 0x00, 0x02])

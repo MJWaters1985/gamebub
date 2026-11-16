@@ -41,7 +41,11 @@ def lin(bank, addr):
 
 
 class TraceEmu(Emu):
-    def __init__(self, img):
+    """Records what runs and is read, bank switches, and which constants in the ripper's code
+    (`ld r,n` with n from `tainted(L)`) end up written to the bank register ("taint" follows
+    values through registers, memory, the stack and arithmetic)."""
+
+    def __init__(self, img, source=lambda L: False):
         super().__init__(img)
         self.trace_exec = False
         self.fetching = False
@@ -49,6 +53,12 @@ class TraceEmu(Emu):
         self.reads = set()  # lin of data reads from ROM
         self.bankw = {}     # lin of the instruction -> set of values written to $2000-$3FFF
         self.cur = None
+        self.source = source
+        self.rt = {}        # register -> frozenset of source constants
+        self.mt = {}        # memory address -> frozenset
+        self.wt = frozenset()
+        self.bank_sources = set()
+        self.bank_untracked = set()   # bank switches with a value from no known source
 
     def fetch(self):
         self.fetching = True
@@ -62,6 +72,13 @@ class TraceEmu(Emu):
             self.reads.add(lin(self.bank, a))
         return super().rd(a)
 
+    def _addr_taint(self, a):
+        a &= 0xFFFF
+        if a < 0x8000:   # data in the ripper's code is a source; elsewhere ('d', L) marks original data
+            L = lin(self.bank, a)
+            return frozenset({L}) if self.source(L) else frozenset({('d', L)})
+        return self.mt.get(a, frozenset())
+
     def step(self):
         pc = self.pc
         if pc < 0x8000:
@@ -72,12 +89,77 @@ class TraceEmu(Emu):
             self.cur = L
         else:
             self.cur = None
+        # --- taint: work out what this instruction moves, before running it ---
+        R = 'bcdehlma'
+        rt, E = self.rt, frozenset()
+        g = lambda r: rt.get(r, E)
+        op = self.rd(pc)
+        x, y, z = op >> 6, (op >> 3) & 7, op & 7
+        hl = self.hl
+        after = None
+        self.wt = E
+        if x == 1 and op != 0x76:
+            src = self._addr_taint(hl) if z == 6 else g(R[z])
+            if y == 6:
+                self.wt = src
+            else:
+                after = (R[y], src)
+        elif x == 0 and z == 6:                       # ld r,n
+            imm = self._addr_taint(pc + 1)
+            if y == 6:
+                self.wt = imm
+            else:
+                after = (R[y], imm)
+        elif op in (0x02, 0x12, 0x22, 0x32, 0xEA, 0xE0, 0xE2):
+            self.wt = g('a')
+        elif op in (0x0A, 0x1A, 0x2A, 0x3A):
+            a = (self.bc, self.de, hl, hl)[(op >> 4) & 3]
+            after = ('a', self._addr_taint(a))
+        elif op == 0xFA:
+            after = ('a', self._addr_taint(self.rd16(pc + 1)))
+        elif op == 0xF0:
+            after = ('a', self._addr_taint(0xFF00 + self.rd(pc + 1)))
+        elif op == 0xF2:
+            after = ('a', self._addr_taint(0xFF00 + self.c))
+        elif x == 2 or (x == 3 and z == 6):           # ALU: a keeps its sources and the operand's
+            src = self._addr_taint(hl) if (x == 2 and z == 6) else (g(R[z]) if x == 2 else E)
+            if x == 2 and z == 7 and y in (2, 5):     # sub a / xor a: zero
+                after = ('a', E)
+            elif y != 7:
+                after = ('a', g('a') | src)
+        elif x == 3 and z == 5 and y % 2 == 0:        # push
+            p = y >> 1
+            self.wt = g('a') if p == 3 else g('bdh'[p]) | g('cel'[p])
+        elif x == 3 and z == 1 and y % 2 == 0:        # pop
+            p = y >> 1
+            t = self._addr_taint(self.sp) | self._addr_taint(self.sp + 1)
+            after = [('a', t)] if p == 3 else [('bdh'[p], t), ('cel'[p], t)]
+        elif x == 0 and z == 1 and y % 2 == 0:        # ld rr,nn
+            p = y >> 1
+            if p < 3:
+                after = [('bdh'[p], self._addr_taint(pc + 2)), ('cel'[p], self._addr_taint(pc + 1))]
         super().step()
         self.min_sp = min(getattr(self, 'min_sp', 0xFFFF), self.sp)
+        if after:
+            for r, t in (after if isinstance(after, list) else [after]):
+                if t:
+                    rt[r] = t
+                else:
+                    rt.pop(r, None)
 
     def wr(self, a, v):
-        if 0x2000 <= (a & 0xFFFF) < 0x4000 and self.cur is not None:
-            self.bankw.setdefault(self.cur, set()).add(v & 0xFF)
+        a &= 0xFFFF
+        if 0x2000 <= a < 0x4000:
+            if self.cur is not None:
+                self.bankw.setdefault(self.cur, set()).add(v & 0xFF)
+            self.bank_sources |= {(src, self.cur) for src in self.wt}
+            if not self.wt and v & 0xFF:   # bank 0 is the same in both numberings
+                self.bank_untracked.add(self.cur)
+        if a >= 0x8000:
+            if self.wt:
+                self.mt[a] = self.wt
+            else:
+                self.mt.pop(a, None)
         super().wr(a, v)
 
 
@@ -107,11 +189,19 @@ def clean_name(t):
     return re.sub(r'\s+', ' ', t).strip()
 
 
+def stub_region(g):
+    """Where the ripper's code is taken to be without a ROM to compare with."""
+    if g['load'] >= 0x4000:
+        return lambda L: g['load'] <= L < g['load'] + 0x100
+    return lambda L: g['load'] <= L < 0x4000
+
+
 def trace(g, songs, plays):
     img = image(g)
-    agg = dict(ins={}, reads=set(), bankw={}, ram=set(), sram=set(), svbk=set(), play_bank=set())
+    agg = dict(ins={}, reads=set(), bankw={}, ram=set(), sram=set(), svbk=set(), play_bank=set(),
+               bank_sources=set())
     for song in songs:
-        e = TraceEmu(img)
+        e = TraceEmu(img, stub_region(g))
         e.sp = g['sp']
         e.wr(0xFF26, 0x80)
         e.a = song
@@ -132,6 +222,8 @@ def trace(g, songs, plays):
             elif not (sp_lo <= a < g['sp'] + 2):
                 agg['ram'].add((reg, a))
         agg['svbk'] |= e.svbk_writes
+        agg['bank_sources'] |= e.bank_sources
+        agg.setdefault('bank_untracked', set()).update(e.bank_untracked)
     return agg
 
 
@@ -285,7 +377,7 @@ def convert(folder, rom=None, plays=120):
         notes.append('uses cartridge RAM %04X-%04X' % (min(t['sram']), max(t['sram'])))
     timer = (g['tma'], g['tac']) if g['tac'] & 4 else None
     bank1 = bm.get(1, 1) if bm else 1
-    init_glue = [0x3E, 0x77, 0xE0, 0x24, 0x3E, 0xFF, 0xE0, 0x25]          # NR50, NR51
+    init_glue = [0x3E, 0x77, 0xE0, 0x24, 0x3E, 0xF3, 0xE0, 0x25]   # NR50, NR51 as the boot ROM leaves them          # NR50, NR51
     if sram:
         # enable cartridge RAM and clear the part the engine uses (a rip starts with it zeroed;
         # on the cartridge it holds whatever was left there). Nothing outside it is touched.

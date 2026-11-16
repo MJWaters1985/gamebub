@@ -13,6 +13,7 @@ mod cart;
 mod clock;
 mod db;
 mod link;
+mod rips;
 
 /// Requests from the UI.
 #[derive(Debug)]
@@ -108,17 +109,27 @@ fn find_music_player() -> anyhow::Result<std::path::PathBuf> {
         anyhow::bail!("The Cartridge Manager is still running.");
     }
     let mut reader = Link::open().context("Couldn't start the cartridge reader")?;
+    let result = find_with(&mut reader);
+    reader.close();
+    result
+}
+
+fn find_with(reader: &mut Link) -> anyhow::Result<std::path::PathBuf> {
+    use anyhow::Context;
     // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
     let _ = reader.power_cycle();
-    let info = cart::identify(&mut reader);
-    reader.close();
-    let info = info.context("No cartridge could be read")?;
+    let info = cart::identify(reader).context("No cartridge could be read")?;
     if info.mode != link::CartMode::Dmg {
         anyhow::bail!("Cartridge Music plays Game Boy and Game Boy Color cartridges.");
     }
-    crate::bitstream::gameboy::cart_music_player_path(info.header()).with_context(|| {
-        format!("There's no music player for {} on the SD card (/system/cart-music).", info.name())
-    })
+    // A player made for this exact cartridge, else one from a GBS rip that matches it
+    if let Some(path) = crate::bitstream::gameboy::cart_music_player_path(info.header()) {
+        return Ok(path);
+    }
+    if let Some(path) = rips::find(reader, &info, &|label| task(label, None))? {
+        return Ok(path);
+    }
+    anyhow::bail!("There's no music player for {} on the SD card (/system/cart-music).", info.name())
 }
 
 /// Send a request to the Cartridge Manager.

@@ -37,6 +37,9 @@ def reference(g, song, frames, emu=None):
     e = SoundEmu(image(g))
     e.sp = g['sp']
     e.wr(0xFF26, 0x80)
+    e.wr(0xFF24, 0x77)   # as the boot ROM leaves them
+    e.wr(0xFF25, 0xF3)
+    e.log = []
     e.a = song
     e.call(g['init'])
     out = []

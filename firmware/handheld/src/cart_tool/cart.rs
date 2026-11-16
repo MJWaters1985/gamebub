@@ -438,6 +438,13 @@ fn read_rom(
     Ok(())
 }
 
+/// Read `out.len()` bytes at `offset` (0-$3FFF) in ROM bank `bank` of a Game Boy cartridge.
+pub fn read_rom_bank(link: &mut Link, info: &CartInfo, bank: u32, offset: u16, out: &mut [u8]) -> anyhow::Result<()> {
+    let start = select_rom_bank(link, info.mbc, bank)?;
+    link.dmg_read_rom(start + offset, out)?;
+    Ok(())
+}
+
 /// Map a ROM bank, returning the address it can be read from.
 fn select_rom_bank(link: &mut Link, mbc: Mbc, bank: u32) -> anyhow::Result<u16> {
     let start = if bank == 0 { 0 } else { 0x4000 };
