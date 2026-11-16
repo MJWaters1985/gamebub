@@ -3,170 +3,305 @@ Generate a cartridge music player for the Game Boy core, in place of the Game
 Boy Color boot ROM (gameboy.bios-cgb.bin: 2304 bytes, mapped at $0000-$00FF and
 $0200-$08FF until $FF50 is written).
 
-The player drives a game's own sound driver on the physical cartridge: it
-clears RAM, calls the driver's init routine once, then calls its per-frame
-routine on every frame and starts tracks by writing the driver's track-request
-variable. Left/Right choose the previous/next track, A restarts it.
+The player drives a game's own sound driver on the physical cartridge. Each
+game has an entry (scripts/cart_music_games.py) with small pieces of glue code:
+`init` (once), `start` (start a track: A and C hold the track's parameters) and
+`frame` (once per frame), plus its tracks and their names. The player shows the
+track number and name; Left/Right choose the previous/next track, Up/Down jump
+10, A restarts the track.
 
-Because the boot ROM hides cartridge addresses $0200-$08FF, the player copies
-its main loop to work RAM, switches the boot ROM off and runs from there.
+Memory: the boot ROM hides cartridge addresses $0200-$08FF, so the player's
+loop runs from work RAM bank 0 (at the entry's `stub` address, $C800 unless the
+game's driver uses it), with the stack below it. The font and track table go in
+the Color's WRAM bank 7 ($D000), which drivers written for the DMG or for bank 1
+don't touch; the player switches to bank 7 only to read them.
 
-Prototype: The Legend of Zelda: Link's Awakening DX (USA, Europe) (Rev 2),
-whose driver addresses come from the zladx/LADX-Disassembly project and were
-checked against that revision.
-
-Usage: python3 scripts/gen_music_player.py out.bin
+Usage: python3 scripts/gen_music_player.py <game id> out.bin
+       python3 scripts/gen_music_player.py --all <dir>   (every game, named for the SD card)
 """
 
 import sys
 
-# Link's Awakening DX (Rev 2)
-GAME = dict(
-    init_bank=0x1F,       # SoundSystemInit: bank $1F
-    init_addr=0x4000,
-    step_addr=0x089F,     # PlayAudioStep (bank 0; switches banks itself)
-    track_var=0xD368,     # wMusicTrackToPlay
-    frame_counter=0xFF,   # hFrameCounter is $FFE7 (low byte below)
-    frame_counter_lo=0xE7,
-    first_track=0x01,
-    last_track=0x4F,
-    start_track=0x01,     # Title screen
-)
+from cart_music_games import GAMES
+from sm83 import Asm
 
-STUB_RAM = 0xC800         # where the main loop runs (game RAM the driver doesn't use)
-VAR_TRACK = 0xC7F0        # current track
-VAR_JOY = 0xC7F1          # previous joypad state (1 = pressed)
-
-
-class Asm:
-    """A tiny two-pass assembler for the few SM83 instructions the player uses."""
-
-    def __init__(self, origin):
-        self.origin = origin
-        self.code = bytearray()
-        self.labels = {}
-        self.fixups = []  # (offset, label, kind)
-
-    @property
-    def pc(self):
-        return self.origin + len(self.code)
-
-    def label(self, name):
-        self.labels[name] = self.pc
-
-    def b(self, *bs):
-        self.code += bytes(bs)
-
-    def w(self, v):
-        self.code += bytes([v & 0xFF, (v >> 8) & 0xFF])
-
-    def ref16(self, op, target):
-        self.b(op)
-        if isinstance(target, str):
-            self.fixups.append((len(self.code), target, "abs"))
-            self.w(0)
-        else:
-            self.w(target)
-
-    def jr(self, op, target):
-        self.b(op)
-        self.fixups.append((len(self.code), target, "rel"))
-        self.b(0)
-
-    def resolve(self):
-        for off, name, kind in self.fixups:
-            addr = self.labels[name]
-            if kind == "abs":
-                self.code[off:off + 2] = bytes([addr & 0xFF, addr >> 8])
-            else:
-                rel = addr - (self.origin + off + 1)
-                assert -128 <= rel <= 127, f"jr to {name} out of range"
-                self.code[off] = rel & 0xFF
-        return bytes(self.code)
+# 5x7 font, one string per character (7 rows of 5 columns, '#' = pixel).
+GLYPHS = {
+    " ": "...................................",
+    "0": ".###.#...##..###.#.###..##...#.###.",
+    "1": "..#...##....#....#....#....#...###.",
+    "2": ".###.#...#....#..##..#...#....#####",
+    "3": ".###.#...#....#..##.....##...#.###.",
+    "4": "...#...##..#.#.#..#.#####...#....#.",
+    "5": "######....####.....#....##...#.###.",
+    "6": "..##..#...#....####.#...##...#.###.",
+    "7": "#####....#...#...#...#....#....#...",
+    "8": ".###.#...##...#.###.#...##...#.###.",
+    "9": ".###.#...##...#.####....#...#..##..",
+    "A": ".###.#...##...#######...##...##...#",
+    "B": "####.#...##...#####.#...##...#####.",
+    "C": ".###.#...##....#....#....#...#.###.",
+    "D": "####.#...##...##...##...##...#####.",
+    "E": "######....#....####.#....#....#####",
+    "F": "######....#....####.#....#....#....",
+    "G": ".###.#...##....#.####...##...#.###.",
+    "H": "#...##...##...#######...##...##...#",
+    "I": ".###...#....#....#....#....#...###.",
+    "J": "..###...#....#....#....#.#..#..##..",
+    "K": "#...##..#.#.#..##...#.#..#..#.#...#",
+    "L": "#....#....#....#....#....#....#####",
+    "M": "#...###.###.#.##...##...##...##...#",
+    "N": "#...###..##.#.##..###...##...##...#",
+    "O": ".###.#...##...##...##...##...#.###.",
+    "P": "####.#...##...#####.#....#....#....",
+    "Q": ".###.#...##...##...##.#.##..#..##.#",
+    "R": "####.#...##...#####.#.#..#..#.#...#",
+    "S": ".###.#...##.....###.....##...#.###.",
+    "T": "#####..#....#....#....#....#....#..",
+    "U": "#...##...##...##...##...##...#.###.",
+    "V": "#...##...##...##...##...#.#.#...#..",
+    "W": "#...##...##...##.#.##.#.##.#.#.#.#.",
+    "X": "#...##...#.#.#...#...#.#.#...##...#",
+    "Y": "#...##...#.#.#...#....#....#....#..",
+    "Z": "#####....#...#...#...#...#....#####",
+    "-": "...............#####...............",
+    "'": "..#....#....#......................",
+    ".": "..............................##...",
+    ":": ".......##...##........##...##......",
+    "!": "..#....#....#....#....#.........#..",
+    "?": ".###.#...#....#...#....#.........#.",
+    "&": ".##..#..#.#.#...#...#.#.##..#..##.#",
+    "/": "....#...#....#...#...#....#....#....",
+    "(": "...#...#...#....#....#.....#.....#.",
+    ")": ".#.....#.....#....#....#...#...#...",
+    ",": ".........................#...#..#..",
+}
+FONT_CHARS = "".join(GLYPHS)
 
 
-def main_loop(g):
-    """The player loop, run from work RAM after the boot ROM is switched off."""
-    a = Asm(STUB_RAM)
-    a.b(0x3E, 0x01); a.b(0xE0, 0x50)                 # ld a,1 ; ldh [$FF50],a (boot ROM off)
-    a.b(0x3E, 0x80); a.b(0xE0, 0x26)                 # ld a,$80 ; ldh [NR52],a (sound on)
-    a.b(0x3E, g["init_bank"]); a.ref16(0xEA, 0x2100) # ld a,bank ; ld [$2100],a
-    a.ref16(0xCD, g["init_addr"])                    # call SoundSystemInit
-    a.b(0x3E, g["start_track"]); a.ref16(0xEA, VAR_TRACK)
-    a.ref16(0xCD, "play")
+def font_tiles():
+    data = bytearray()
+    for ch, g in GLYPHS.items():
+        g = g.ljust(35, ".")[:35]
+        for y in range(7):
+            bits = 0
+            for x in range(5):
+                if g[y * 5 + x] == "#":
+                    bits |= 0x40 >> x  # one column of left margin
+            data.append(bits)
+    return bytes(data)  # 7 bytes per glyph
+
+
+def encode_name(name):
+    out = bytearray()
+    for ch in name.upper()[:20]:
+        i = FONT_CHARS.find(ch)
+        out.append(i if i >= 0 else 0)
+    return bytes([len(out)]) + bytes(out)
+
+
+WRAM7 = 0xD000
+VAR_TRACK = 0xC7FA   # current track index (0-based)
+VAR_JOY = 0xC7FB     # previous joypad state
+VAR_REDRAW = 0xC7FC  # 1 = draw the track name in the next vertical blank
+
+
+def build(game):
+    stub_addr = game.get("stub", 0xC800)
+    tracks = game["tracks"]          # list of (p0, p1, name)
+    linear = all(p0 == i + game.get("first", 1) and p1 == 0 for i, (p0, p1, _) in enumerate(tracks))
+    count = len(tracks)
+
+    # Bank 7 data: count, flags, then per track [p0 p1 if not linear] and the name (length + glyphs).
+    # Entries follow each other; the player finds the Nth by walking the name lengths.
+    table = bytearray([count, 1 if linear else 0, game.get("first", 1)])
+    for p0, p1, name in tracks:
+        if not linear:
+            table += bytes([p0, p1])
+        table += encode_name(name)
+
+    # --- The loop in work RAM ---
+    a = Asm(stub_addr)
+    a.b(0x3E, 0x01); a.b(0xE0, 0x50)                 # boot ROM off
+    a.b(0x3E, 0x80); a.b(0xE0, 0x26)                 # sound on
+    a.code += game["init"](stub_addr)                # glue: init
+    a.b(0xAF); a.ref16(0xEA, VAR_TRACK)
+    a.ref16(0xCD, "start")
 
     a.label("frame")
-    a.label("wait_vbl")                              # wait for line 144
+    a.label("wait_vbl")
     a.b(0xF0, 0x44); a.b(0xFE, 144); a.jr(0x20, "wait_vbl")
-    a.ref16(0x21, 0xFF00 | g["frame_counter_lo"]); a.b(0x34)   # ld hl,hFrameCounter ; inc [hl]
-    a.ref16(0xCD, g["step_addr"])                    # call PlayAudioStep
-
-    # Joypad: d-pad and buttons, 1 = pressed: b = {start,select,B,A,down,up,left,right}
-    a.b(0x3E, 0x20); a.b(0xE0, 0x00)                 # select d-pad
-    a.b(0xF0, 0x00); a.b(0xF0, 0x00)                 # read (twice, to settle)
-    a.b(0x2F); a.b(0xE6, 0x0F); a.b(0x47)            # cpl ; and $0F ; ld b,a
-    a.b(0x3E, 0x10); a.b(0xE0, 0x00)                 # select buttons
-    a.b(0xF0, 0x00); a.b(0xF0, 0x00)
-    a.b(0x2F); a.b(0xE6, 0x0F)                       # cpl ; and $0F
-    a.b(0xCB, 0x37); a.b(0xB0); a.b(0x47)            # swap a ; or b ; ld b,a
-    a.b(0x3E, 0x30); a.b(0xE0, 0x00)                 # deselect
-    # newly pressed = b & ~previous
-    a.ref16(0xFA, VAR_JOY); a.b(0x2F); a.b(0xA0); a.b(0x4F)   # ld a,[prev] ; cpl ; and b ; ld c,a
-    a.b(0x78); a.ref16(0xEA, VAR_JOY)                # ld a,b ; ld [prev],a
-    # Right: next track
-    a.b(0x79); a.b(0xE6, 0x01); a.jr(0x28, "not_right")
-    a.ref16(0xFA, VAR_TRACK); a.b(0xFE, g["last_track"]); a.jr(0x20, "inc")
-    a.b(0x3E, g["first_track"] - 1)
-    a.label("inc"); a.b(0x3C); a.ref16(0xEA, VAR_TRACK); a.ref16(0xCD, "play")
-    a.label("not_right")
-    # Left: previous track
-    a.b(0x79); a.b(0xE6, 0x02); a.jr(0x28, "not_left")
-    a.ref16(0xFA, VAR_TRACK); a.b(0xFE, g["first_track"]); a.jr(0x20, "dec")
-    a.b(0x3E, g["last_track"] + 1)
-    a.label("dec"); a.b(0x3D); a.ref16(0xEA, VAR_TRACK); a.ref16(0xCD, "play")
-    a.label("not_left")
-    # A: restart the track
-    a.b(0x79); a.b(0xE6, 0x10); a.jr(0x28, "not_a")
-    a.ref16(0xCD, "play")
-    a.label("not_a")
-
-    a.label("wait_end")                              # wait until line 144 is over
+    a.ref16(0xFA, VAR_REDRAW); a.b(0xB7); a.jr(0x28, "no_redraw")
+    a.ref16(0xCD, "draw")
+    a.label("no_redraw")
+    a.ref16(0xCD, "frame_glue")
+    # joypad -> b = {start,select,B,A,down,up,left,right}, 1 = pressed
+    a.b(0x3E, 0x20); a.b(0xE0, 0x00); a.b(0xF0, 0x00); a.b(0xF0, 0x00)
+    a.b(0x2F, 0xE6, 0x0F, 0x47)
+    a.b(0x3E, 0x10); a.b(0xE0, 0x00); a.b(0xF0, 0x00); a.b(0xF0, 0x00)
+    a.b(0x2F, 0xE6, 0x0F, 0xCB, 0x37, 0xB0, 0x47)
+    a.b(0x3E, 0x30); a.b(0xE0, 0x00)
+    a.ref16(0xFA, VAR_JOY); a.b(0x2F, 0xA0, 0x4F); a.b(0x78); a.ref16(0xEA, VAR_JOY)
+    for mask, delta in ((0x01, 1), (0x02, -1), (0x04, -10), (0x08, 10)):  # right, left, up, down
+        skip = f"skip{mask}"
+        a.b(0x79, 0xE6, mask); a.jr(0x28, skip)
+        a.ref16(0xFA, VAR_TRACK); a.b(0xC6, delta & 0xFF)  # add a,delta
+        # wrap into 0..count-1: values >= count (including negatives as 2xx) wrap
+        if delta > 0:
+            a.b(0xFE, count); a.jr(0x38, f"ok{mask}")      # cp count ; jr c
+            a.b(0xD6, count)                               # sub count
+            a.b(0xFE, count); a.jr(0x38, f"ok{mask}")
+            a.b(0xAF)                                      # still too big: 0
+        else:
+            a.b(0xFE, count); a.jr(0x38, f"ok{mask}")
+            a.b(0xC6, count)                               # add count (from negative)
+            a.b(0xFE, count); a.jr(0x38, f"ok{mask}")
+            a.b(0x3E, count - 1)
+        a.label(f"ok{mask}")
+        a.ref16(0xEA, VAR_TRACK); a.ref16(0xCD, "start")
+        a.label(skip)
+    a.b(0x79, 0xE6, 0x10); a.jr(0x28, "skipA"); a.ref16(0xCD, "start"); a.label("skipA")
+    a.label("wait_end")
     a.b(0xF0, 0x44); a.b(0xFE, 144); a.jr(0x28, "wait_end")
     a.ref16(0xC3, "frame")
 
-    a.label("play")                                  # request the current track
-    a.ref16(0xFA, VAR_TRACK); a.ref16(0xEA, g["track_var"]); a.b(0xC9)
-    return a.resolve()
+    # start: look up the track's parameters (bank 7), then glue start(A=p0, C=p1)
+    a.label("start")
+    a.b(0x3E, 0x01); a.ref16(0xEA, VAR_REDRAW)
+    if linear:
+        a.ref16(0xFA, VAR_TRACK); a.b(0xC6, game.get("first", 1)); a.b(0x0E, 0x00)
+    else:
+        a.ref16(0xCD, "name_ptr")                    # hl = entry (p0, p1, name)
+        a.b(0x3E, 0x07); a.b(0xE0, 0x70)             # bank 7
+        a.b(0x2A, 0x4E, 0x47)                        # ld a,[hl+] (p0) ; ld c,[hl] (p1) ; ld b,a
+        a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0x78)  # bank 1 ; ld a,b
+    a.code += game["start"](a.pc)
+    a.b(0xC9)
+
+    # name_ptr: hl = pointer to the current track's entry (bank 7 table), walking the entries
+    a.label("name_ptr")
+    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
+    a.ref16(0xFA, VAR_TRACK); a.b(0x47)                        # b = track index
+    a.ref16(0x21, WRAM7 + 3)
+    a.label("walk"); a.b(0x78, 0xB7); a.jr(0x28, "walked")    # b == 0: found
+    if not linear:
+        a.b(0x23, 0x23)                                        # skip p0, p1
+    a.b(0x7E, 0x3C)                                            # a = length + 1
+    a.b(0x85, 0x6F, 0x30, 0x01, 0x24)                          # hl += a (add a,l ; ld l,a ; jr nc,+1 ; inc h)
+    a.b(0x05); a.jr(0x18, "walk")                              # dec b ; jr walk
+    a.label("walked")
+    a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0xC9)
+
+    # draw: "NN/MM" on row 6, name on row 8 (columns 0-19), during vertical blank
+    a.label("draw")
+    a.b(0xAF); a.ref16(0xEA, VAR_REDRAW)
+    a.ref16(0x21, 0x9800 + 6 * 32 + 7)
+    a.ref16(0xFA, VAR_TRACK); a.b(0x3C); a.ref16(0xCD, "put2")   # track number (1-based)
+    a.b(0x3E, FONT_CHARS.index("/")); a.b(0x22)
+    a.b(0x3E, count); a.ref16(0xCD, "put2")
+    a.ref16(0x21, 0x9800 + 8 * 32)                             # clear the name row
+    a.b(0x06, 20, 0xAF); a.label("clr_row"); a.b(0x22, 0x05); a.jr(0x20, "clr_row")
+    a.ref16(0xCD, "name_ptr")
+    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
+    if not linear:
+        a.b(0x23, 0x23)                                        # skip p0, p1
+    a.b(0x46, 0x23)                                            # ld b,[hl] (length) ; inc hl
+    a.b(0x78); a.b(0xD6, 20); a.b(0x2F, 0x3C)                  # a = 20 - len ...
+    a.b(0xCB, 0x3F)                                            # srl a -> left padding
+    a.b(0x5F, 0x16, 0x00); a.b(0xE5)                           # de = pad ; push hl
+    a.ref16(0x21, 0x9800 + 8 * 32); a.b(0x19); a.b(0x54, 0x5D) # hl = row+pad -> de
+    a.b(0xE1)                                                  # pop hl (name)
+    a.b(0x78, 0xB7); a.jr(0x28, "name_done")
+    a.label("name_cpy"); a.b(0x2A, 0x12, 0x13, 0x05); a.jr(0x20, "name_cpy")
+    a.label("name_done")
+    a.b(0x3E, 0x01); a.b(0xE0, 0x70); a.b(0xC9)
+
+    # put2: write A (0-99) as two digits at [hl+]
+    a.label("put2")
+    a.b(0x0E, 0xFF)
+    a.label("tens"); a.b(0x0C, 0xD6, 10); a.jr(0x30, "tens")
+    a.b(0xC6, 10 + 1); a.b(0x47); a.b(0x79, 0x3C, 0x22); a.b(0x78, 0x22); a.b(0xC9)
+
+    a.label("frame_glue")
+    a.code += game["frame"](a.pc)
+    a.b(0xC9)
+    stub = a.resolve()
+    return stub, bytes(table), stub_addr
 
 
-def boot(stub):
-    """Boot code at $0200: clear RAM, copy the loop to work RAM, start the LCD, jump."""
+LOW_AREA = 0x00FC  # bytes free at $0004-$00FF for the first part of the track table
+
+
+def boot(stub, stub_addr, table, font, stack):
+    low, high = table[:LOW_AREA], table[LOW_AREA:]
     a = Asm(0x0200)
-    a.b(0xF3)                                        # di
-    a.ref16(0x31, 0xDFFF)                            # ld sp,$DFFF
-    a.ref16(0x21, 0xC000); a.ref16(0x01, 0x2000)     # clear $C000-$DFFF
-    a.label("clr"); a.b(0xAF, 0x22, 0x0B, 0x78, 0xB1); a.jr(0x20, "clr")
-    a.ref16(0x21, 0xFF80); a.b(0x06, 0x7F)           # clear HRAM $FF80-$FFFE
-    a.label("clrh"); a.b(0xAF, 0x22, 0x05); a.jr(0x20, "clrh")
-    a.ref16(0x21, "stub"); a.ref16(0x11, STUB_RAM); a.ref16(0x01, len(stub))
-    a.label("cpy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "cpy")
-    a.b(0x3E, 0x80); a.b(0xE0, 0x40)                 # LCD on (for line timing)
-    a.ref16(0xC3, STUB_RAM)
-    a.label("stub")
-    code = a.resolve()
-    return code + stub
+    a.b(0xF3); a.ref16(0x31, 0xFFFE)                 # stack in HRAM while WRAM is cleared
+    # clear WRAM bank 0, bank 1 and bank 7, then HRAM (inline, once the stack is in WRAM)
+    a.ref16(0x21, 0xC000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
+    for bank in (1, 7):
+        a.b(0x3E, bank); a.b(0xE0, 0x70)
+        a.ref16(0x21, 0xD000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
+    a.ref16(0x31, stack)
+    a.ref16(0x21, 0xFF80); a.b(0x06, 0x7F); a.label("clrh"); a.b(0xAF, 0x22, 0x05); a.jr(0x20, "clrh")
+    # track table to bank 7
+    a.b(0x3E, 0x07); a.b(0xE0, 0x70)
+    a.ref16(0x21, 0x0004); a.ref16(0x11, WRAM7); a.ref16(0x01, len(low)); a.ref16(0xCD, "copy")
+    if high:
+        a.ref16(0x21, "table"); a.ref16(0x01, len(high)); a.ref16(0xCD, "copy")   # de continues
+    a.b(0x3E, 0x01); a.b(0xE0, 0x70)
+    # font: 7 rows of 1bpp -> tiles at $8000 (both bit planes, colour 3), 8th row blank
+    a.ref16(0x21, "font"); a.ref16(0x11, 0x8000); a.b(0x06, len(font) // 7)
+    a.label("glyph"); a.b(0x0E, 7)
+    a.label("grow"); a.b(0x2A, 0x12, 0x13, 0x12, 0x13, 0x0D); a.jr(0x20, "grow")
+    a.b(0xAF, 0x12, 0x13, 0x12, 0x13, 0x05); a.jr(0x20, "glyph")
+    # background map: spaces
+    a.ref16(0x21, 0x9800); a.ref16(0x01, 0x400); a.ref16(0xCD, "fill0")
+    # palette 0: white background, black text
+    a.b(0x3E, 0x80); a.b(0xE0, 0x68)
+    for byte in (0xFF, 0x7F, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0x00):
+        a.b(0x3E, byte); a.b(0xE0, 0x69)
+    # the loop to work RAM, LCD on (BG, tiles at $8000), go
+    a.ref16(0x21, "stub"); a.ref16(0x11, stub_addr); a.ref16(0x01, len(stub)); a.ref16(0xCD, "copy")
+    a.b(0x3E, 0x91); a.b(0xE0, 0x40)
+    a.ref16(0xC3, stub_addr)
+    a.label("fill0"); a.b(0xAF, 0x22, 0x0B, 0x78, 0xB1); a.jr(0x20, "fill0"); a.b(0xC9)
+    a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy"); a.b(0xC9)
+    a.label("font"); a.code += font
+    a.label("stub"); a.code += stub
+    a.label("table"); a.code += high
+    return a.resolve(), low
 
 
-def main():
-    stub = main_loop(GAME)
+def generate(game_id):
+    game = GAMES[game_id]
+    stub, table, stub_addr = build(game)
+    font = font_tiles()
+    code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10))
+    assert 0x200 + len(code) <= 0x900, f"player is {len(code)} bytes, {0x700} available"
     rom = bytearray(0x900)
-    rom[0:3] = bytes([0xC3, 0x00, 0x02])             # jp $0200
-    code = boot(stub)
-    assert 0x200 + len(code) <= 0x900
+    rom[0:3] = bytes([0xC3, 0x00, 0x02])
     rom[0x200:0x200 + len(code)] = code
-    open(sys.argv[1], "wb").write(rom)
-    print(f"{sys.argv[1]}: loop {len(stub)} bytes at ${STUB_RAM:04X}, boot code {len(code) - len(stub)} bytes")
+    rom[0x0004:0x0004 + len(low)] = low
+    return bytes(rom), len(code)
+
+
+def file_name(game):
+    """The player's file name, as the firmware looks for it (cart_music_player_path)."""
+    title = "".join(c if c.isalnum() else "_" for c in game["title"]).rstrip("_")
+    return f"{title}-{game['version']}-{game['checksum']:04X}.bin"
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1] == "--all":
+        # Every game's player, for /system/cart-music on the SD card.
+        import os
+        os.makedirs(sys.argv[2], exist_ok=True)
+        for game_id, game in GAMES.items():
+            rom, size = generate(game_id)
+            path = os.path.join(sys.argv[2], file_name(game))
+            open(path, "wb").write(rom)
+            print(f"{path}: {game['name']}, {size} of {0x700} bytes")
+    else:
+        rom, size = generate(sys.argv[1])
+        open(sys.argv[2], "wb").write(rom)
+        print(f"{sys.argv[2]}: {size} of {0x700} bytes")

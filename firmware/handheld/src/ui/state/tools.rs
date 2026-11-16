@@ -38,14 +38,6 @@ impl UiState {
             Device::lock().reboot();
         });
 
-        let root_ = self.root.clone();
-        backend.on_tools_cart_music(move || {
-            crate::bitstream::gameboy::CART_MUSIC_NEXT
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-            root_.unwrap().global::<Backend>().set_game_can_load_rom(false);
-            crate::worker::send(crate::worker::Message::RunCartridge);
-        });
-
         backend.on_tools_start_cart_reader(move || {
             crate::ui::USB_IN_USE.store(true, std::sync::atomic::Ordering::Relaxed);
             usb::configure_usb(usb::UsbMode::ConsoleAndSerial).expect("USB setup failed");

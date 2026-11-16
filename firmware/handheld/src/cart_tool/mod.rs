@@ -44,6 +44,7 @@ enum Action {
     SaveToSd,
     SaveToCart,
     SetClock,
+    PlayMusic,
     ReadAgain,
 }
 
@@ -54,6 +55,7 @@ impl Action {
             Self::SaveToSd => "Save: Cartridge to SD Card",
             Self::SaveToCart => "Save: SD Card to Cartridge",
             Self::SetClock => "Set cartridge clock to now",
+            Self::PlayMusic => "Play music",
             Self::ReadAgain => "Read cartridge again",
         }
     }
@@ -112,12 +114,25 @@ impl Worker {
         while let Ok(request) = rx.recv() {
             match request {
                 Request::Exit => break,
+                Request::Action(i) if matches!(self.actions.get(i), Some(Action::PlayMusic)) => {
+                    // Run the cartridge with its music player in place of the boot ROM.
+                    let player = self.info.as_ref().and_then(|info| {
+                        crate::bitstream::gameboy::cart_music_player_path(info.header())
+                    });
+                    *crate::bitstream::gameboy::CART_MUSIC_PLAYER.lock().unwrap() = player;
+                    if let Some(link) = self.link.take() {
+                        link.close();
+                    }
+                    crate::worker::send(crate::worker::Message::RunCartridge);
+                    return;
+                }
                 Request::Action(i) => match self.actions.get(i).copied() {
                     Some(Action::DumpRom) => self.dump_rom(),
                     Some(Action::SaveToSd) => self.save_to_sd(false),
                     Some(Action::SaveToCart) => self.save_to_cart(false),
                     Some(Action::SetClock) => self.set_clock(),
                     Some(Action::ReadAgain) => self.identify(),
+                    Some(Action::PlayMusic) => {} // handled above
                     None => self.show_menu(),
                 },
                 Request::Confirm => self.confirmed(),
@@ -237,6 +252,11 @@ impl Worker {
         }
         if self.clock.is_some() {
             self.actions.push(Action::SetClock);
+        }
+        if info.mode == link::CartMode::Dmg
+            && crate::bitstream::gameboy::cart_music_player_path(info.header()).is_some()
+        {
+            self.actions.push(Action::PlayMusic);
         }
         self.actions.push(Action::ReadAgain);
         send(Update::Menu {

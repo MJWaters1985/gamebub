@@ -54,16 +54,38 @@ pub enum GameboyError {
     FpgaError(#[from] crate::device::drivers::fpga::Error),
 }
 
-/// Set before running a cartridge to play its music instead of the game (Tools > Cartridge
-/// Music, a prototype): the Game Boy Color boot ROM is replaced with a music player program,
-/// /system/cart-music.bin (made by scripts/gen_music_player.py), which drives the cartridge's
-/// own sound driver.
-pub static CART_MUSIC_NEXT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Set before running a cartridge to play its music instead of the game (Cartridge Manager >
+/// Play music): the Game Boy Color boot ROM is replaced with this music player program, made
+/// for the cartridge by scripts/gen_music_player.py, which drives the cartridge's own sound
+/// driver.
+pub static CART_MUSIC_PLAYER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// The music player's file for a Game Boy cartridge, from its header (from address 0):
+/// /system/cart-music/<title>-<version>-<global checksum>.bin.
+pub fn cart_music_player_path(header: &[u8]) -> Option<PathBuf> {
+    if header.len() < 0x150 {
+        return None;
+    }
+    let title: String = header[0x134..0x144]
+        .iter()
+        .take_while(|&&c| c != 0 && c.is_ascii_graphic() || c == b' ')
+        .map(|&c| if c.is_ascii_alphanumeric() { c as char } else { '_' })
+        .collect();
+    let name = format!(
+        "{}-{}-{:02X}{:02X}.bin",
+        title.trim_end_matches('_'),
+        header[0x14C],
+        header[0x14E],
+        header[0x14F]
+    );
+    let path = crate::util::get_system_file_path(&format!("cart-music/{name}"));
+    path.is_file().then_some(path)
+}
 
 /// Driver for Gameboy FPGA module
 pub struct Gameboy {
-    /// Playing the cartridge's music (see CART_MUSIC_NEXT)
-    cart_music: bool,
+    /// Music player to run instead of the boot ROM (see CART_MUSIC_PLAYER)
+    cart_music: Option<PathBuf>,
     /// Rom header, if this is an emulated cartridge
     rom_header: Option<rom::RomHeader>,
     /// Size of the ROM
@@ -78,7 +100,7 @@ pub struct Gameboy {
 impl Gameboy {
     pub fn new() -> Self {
         Gameboy {
-            cart_music: CART_MUSIC_NEXT.swap(false, std::sync::atomic::Ordering::Relaxed),
+            cart_music: CART_MUSIC_PLAYER.lock().unwrap().take(),
             rom_header: None,
             rom_file_size: 0,
             ram_path: None,
@@ -248,7 +270,7 @@ impl CoreHandler for Gameboy {
 
     fn get_file_path_override(&mut self, id: u16) -> Option<PathBuf> {
         match id {
-            FILE_BIOS_CGB if self.cart_music => Some(crate::util::get_system_file_path("cart-music.bin")),
+            FILE_BIOS_CGB if self.cart_music.is_some() => self.cart_music.clone(),
             FILE_BIOS_CGB => Some(crate::util::get_system_file_path("gameboy.bios-cgb.bin")),
             FILE_BIOS_DMG => Some(crate::util::get_system_file_path("gameboy.bios-dmg.bin")),
             _ => None,

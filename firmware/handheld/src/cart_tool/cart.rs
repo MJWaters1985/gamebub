@@ -151,6 +151,13 @@ pub struct CartInfo {
 }
 
 impl CartInfo {
+    /// The first $180 bytes of the cartridge (header included)
+    pub fn header(&self) -> &[u8] {
+        &self.header
+    }
+}
+
+impl CartInfo {
     /// Name used for files: the database name, or the header title.
     pub fn name(&self) -> String {
         let name = match &self.db {
