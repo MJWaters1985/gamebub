@@ -193,10 +193,19 @@ int main(int argc, char** argv) {
     simulator.reset();
 
     if (headless) {
+        // With --save-audio, also write the audio (16-bit stereo PCM) to that file.
+        std::ofstream audio_file;
+        if (!audio_save_path.empty()) {
+            audio_file.open(audio_save_path, std::ios::binary);
+        }
         for (long frame = 0; frame < max_frames; frame++) {
             simulator.set_joypad_state(scripted_joypad_state(input_script, frame));
             simulator.simulate_frame();
-            simulator.getAudioSampleBuffer().clear();
+            auto& samples = simulator.getAudioSampleBuffer();
+            if (audio_file) {
+                audio_file.write(reinterpret_cast<const char*>(samples.data()), samples.size() * sizeof(int16_t));
+            }
+            samples.clear();
         }
         if (!screenshot_path.empty()) {
             write_ppm(screenshot_path, simulator.getFramebuffer().renderBuffer(),

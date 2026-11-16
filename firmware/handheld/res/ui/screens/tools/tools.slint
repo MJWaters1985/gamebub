@@ -11,7 +11,8 @@ export component ToolsScreen inherits ScreenBase {
         "Mount SD Card over USB",
         "Set Up SD Card",
         "FlashGBX Cartridge Backup / Restore",
-        "Debug battery info"
+        "Debug battery info",
+        "Cartridge Music (prototype)"
     ];
     private property <int> selected-tool: -1;
 
@@ -43,7 +44,11 @@ export component ToolsScreen inherits ScreenBase {
                 wrap: true;
                 on-item-selected(i) => {
                     debug("on-item-selected ", i);
-                    root.selected-tool = i;
+                    if i == 6 {
+                        Backend.tools-cart-music();
+                    } else {
+                        root.selected-tool = i;
+                    }
                 }
             }
 
