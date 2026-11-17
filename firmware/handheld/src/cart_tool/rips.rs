@@ -29,10 +29,11 @@ struct Package {
     /// Bytes in the checked ranges that may be bank numbers the ripper renumbered, sorted:
     /// (rip bank, offset, the rip's value). See `crc`.
     marks: Vec<(u8, u16, u8)>,
-    /// Calls the ripper redirected to its copy of a bank 0 routine: (rip bank, offset of the
-    /// address in the instruction, length, CRC32 of the ripper's copy). The cartridge's routine at
-    /// the address it has there (through up to three jp) must have that CRC.
-    redirects: Vec<(u8, u16, u16, u32)>,
+    /// Calls the ripper may have redirected to its copy of a bank 0 routine: (rip bank, offset of
+    /// the address in the instruction, the rip's address, length, CRC32 of the ripper's copy).
+    /// Unless the cartridge has the same address there, its routine at that address (through up
+    /// to three jp) must have that CRC.
+    redirects: Vec<(u8, u16, u16, u16, u32)>,
     player: Vec<u8>,
 }
 
@@ -89,8 +90,8 @@ fn parse(data: &[u8]) -> Result<Package> {
     if version >= 4 {
         let n = u16_(take(2)?) as usize;
         for _ in 0..n {
-            let c = take(9)?;
-            redirects.push((c[0], u16_(&c[1..]), u16_(&c[3..]), u32::from_le_bytes([c[5], c[6], c[7], c[8]])));
+            let c = take(11)?;
+            redirects.push((c[0], u16_(&c[1..]), u16_(&c[3..]), u16_(&c[5..]), u32::from_le_bytes([c[7], c[8], c[9], c[10]])));
         }
     }
     let _flags = take(1)?[0];
@@ -199,14 +200,14 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
             return Ok(Err("the cartridge's code differs from the rip's".into()));
         }
     }
-    for &(rip_bank, off, len, want) in &pkg.redirects {
+    for &(rip_bank, off, rip_addr, len, want) in &pkg.redirects {
         let bank = if rip_bank == 0 { 0 } else { table.get(rip_bank as usize).copied().unwrap_or(rip_bank) };
         let mut a = [0u8; 2];
         cart::read_rom_bank(link, info, bank as u32, off, &mut a)?;
         let mut x = u16::from_le_bytes(a);
-        let mut ok = false;
+        let mut ok = x == rip_addr;   // not redirected: the cartridge's own routine is there
         for hop in 0..4 {
-            if x as u32 + len as u32 > 0x4000 {
+            if ok || x as u32 + len as u32 > 0x4000 {
                 break;
             }
             if crc(link, info, pkg, (0xFF, 0), x, len, &mut vec![])? == want {

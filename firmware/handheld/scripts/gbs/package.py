@@ -21,8 +21,9 @@ Package (.cmr), little endian:
      cartridge's must be the ROM bank of that rip bank,
   u16 count + calls the ripper redirected to its copy of a bank 0 routine (the address in an
      instruction of the engine's own code points into the moved code): u8 rip bank, u16 offset
-     of the address, u16 length, u32 CRC32 of the ripper's copy; the cartridge's routine at the
-     address it has there (through up to three jp) must have that CRC,
+     of the address, u16 the rip's address, u16 length, u32 CRC32 of the ripper's copy. Unless the
+     cartridge has the same address there, its routine at that address (through up to three jp)
+     must have that CRC,
   u8 flags (1: uses cartridge RAM), 2304-byte player file.
 
 package.py <rip folder> <out.cmr>      make one package
@@ -363,7 +364,7 @@ def make(folder, plays=30, small=False, _t=None):
         pkg += struct.pack('<BHB', b, o, v)
     pkg += struct.pack('<H', len(redirects))
     for L, tl, n in redirects:
-        pkg += struct.pack('<BHHI', L // 0x4000, L % 0x4000, n, zlib.crc32(img[tl:tl + n]))
+        pkg += struct.pack('<BHHHI', L // 0x4000, L % 0x4000, tl, n, zlib.crc32(img[tl:tl + n]))
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
     return bytes(pkg), g, tracks, [], entry
@@ -413,7 +414,7 @@ def parse(pkg):
     n, = struct.unpack_from('<H', pkg, p); p += 2
     redirects = []
     for _ in range(n):
-        redirects.append(struct.unpack_from('<BHHI', pkg, p)); p += 9
+        redirects.append(struct.unpack_from('<BHHHI', pkg, p)); p += 11
     flags = pkg[p]; p += 1
     return dict(redirects=redirects, marks=marks, bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
                 player=bytes(pkg[p:p + 0x900]))
@@ -454,9 +455,11 @@ def match(pkg, rom, mbc1=False):
     for rb, o, ln, crc in P['checks']:
         if rb == 0 and crc_of(0, 0, o, ln, renumbered) != crc:
             return None, 'bank 0 code differs'
-    for rb, o, n, crc in P['redirects']:
+    for rb, o, tl, n, crc in P['redirects']:
         cb = table[rb] if rb else 0
         x = rom[cb * 0x4000 + o] | rom[cb * 0x4000 + o + 1] << 8
+        if x == tl:
+            continue   # not redirected: the cartridge's own routine is there
         for _ in range(3):   # through a jump table
             if x + 3 <= 0x4000 and rom[x] == 0xC3 and zlib.crc32(rom[x:x + n]) != crc:
                 x = rom[x + 1] | rom[x + 2] << 8
