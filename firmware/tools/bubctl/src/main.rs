@@ -9,12 +9,14 @@
 //!                                       home select start l r
 //!   bubctl screenshot <out.png>         the menus (not the game's picture)
 //!   bubctl log <seconds> [--until TEXT] the USB serial log (read only)
-//!   bubctl install <file.uf2>           copy the firmware to the GAME BUB drive (enter update
-//!                                       mode with the buttons first), wait until it's running
+//!   bubctl install <file.uf2>           install firmware: copied to the GAME BUB drive if
+//!                                       update mode is on, else flashed over USB through the
+//!                                       update firmware's protocol (restarting into it if the
+//!                                       running firmware says that's safe), then verified
 //!
-//! Not offered: restarting into update mode over USB (reboot request value 2). That starts the
-//! update firmware without the GAME BUB drive, and with the vibration motor and audio amplifier
-//! pins left floating (the motor runs and the amplifier hisses).
+//! Restarting into update mode over USB needs firmware that latches the FPGA power, DAC reset
+//! and cartridge power pins off first (info flag bit 0): without that the update firmware
+//! leaves them floating, and the vibration motor runs and the amplifier whines.
 //!
 //! The gamepad uses the quiet slot (no "Gamepad connected" notification).
 
@@ -22,6 +24,8 @@ use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
 use nusb::transfer::{Control, ControlType, Recipient};
+
+mod dfu;
 
 const PRODUCT: &str = "Game Bub Handheld";
 const GET_INFO: u8 = 0;
@@ -76,16 +80,27 @@ impl Bub {
             .map_err(|e| format!("USB request {request} failed: {e}"))
     }
 
-    fn info(&self) -> Result<(u32, String, String)> {
+    /// Flags (bit 0: restarting into update mode over USB is safe), serial, version, commit.
+    fn info_flags(&self) -> Result<(u32, u32, String, String)> {
         let mut b = [0u8; 24];
         let n = self.input(GET_INFO, 0, &mut b)?;
         if n < 24 {
             return Err("Short info reply".into());
         }
+        let flags = u32::from_le_bytes(b[0..4].try_into().unwrap());
+        let (serial, version, commit) = Self::parse_info(&b);
+        Ok((flags, serial, version, commit))
+    }
+
+    fn info(&self) -> Result<(u32, String, String)> {
+        self.info_flags().map(|(_, s, v, c)| (s, v, c))
+    }
+
+    fn parse_info(b: &[u8; 24]) -> (u32, String, String) {
         let serial = u32::from_le_bytes(b[4..8].try_into().unwrap());
         let version = format!("{}.{}.{}", b[15], b[14], b[13]);
         let commit: String = b[16..24].iter().map(|x| format!("{x:02x}")).collect();
-        Ok((serial, version, commit))
+        (serial, version, commit)
     }
 }
 
@@ -297,24 +312,57 @@ fn wait_for(what: &str, secs: u64, mut f: impl FnMut() -> bool) -> Result<()> {
 
 fn install(uf2: &str) -> Result<()> {
     let path = std::path::Path::new(uf2);
-    if !path.is_file() {
-        return Err(format!("{uf2} not found"));
-    }
-    if !std::path::Path::new(UPDATE_VOLUME).is_dir() {
-        return Err("No GAME BUB drive: put the Game Bub in update mode with its buttons first".into());
-    }
-    let dest = std::path::Path::new(UPDATE_VOLUME).join(path.file_name().unwrap());
-    println!("Copying {} ...", path.display());
-    // The drive goes away as soon as the copy completes, so errors closing it are expected.
-    let status = std::process::Command::new("cp").arg("-X").arg(path).arg(&dest).status();
-    if !matches!(status, Ok(s) if s.success()) && std::path::Path::new(UPDATE_VOLUME).is_dir() {
-        return Err("Copying the firmware failed".into());
+    let file = std::fs::read(path).map_err(|e| format!("{uf2}: {e}"))?;
+    let expected_commit;
+    if std::path::Path::new(UPDATE_VOLUME).is_dir() {
+        // Update mode entered with the buttons: copy to the drive.
+        expected_commit = None;
+        let dest = std::path::Path::new(UPDATE_VOLUME).join(path.file_name().unwrap());
+        println!("Copying {} ...", path.display());
+        // The drive goes away as soon as the copy completes, so errors closing it are expected.
+        let status = std::process::Command::new("cp").arg("-X").arg(path).arg(&dest).status();
+        if !matches!(status, Ok(s) if s.success()) && std::path::Path::new(UPDATE_VOLUME).is_dir() {
+            return Err("Copying the firmware failed".into());
+        }
+    } else {
+        let mut d = match dfu::Dfu::find()? {
+            Some(d) => d,
+            None => {
+                let bub = Bub::open()?;
+                let (flags, ..) = bub.info_flags()?;
+                if flags & 1 == 0 {
+                    return Err("The running firmware can't restart into update mode safely over USB \
+                                (the vibration motor and amplifier would be left on): enter update \
+                                mode with the buttons"
+                        .into());
+                }
+                bub.out(REBOOT, 2, &[])?;
+                println!("Restarting into update mode...");
+                let mut found = None;
+                wait_for("the update firmware", 30, || {
+                    found = dfu::Dfu::find().ok().flatten();
+                    found.is_some()
+                })?;
+                found.unwrap()
+            }
+        };
+        let (runs, commit) = dfu::read_uf2(&file, d.hardware()?)?;
+        expected_commit = commit;
+        let size: usize = runs.iter().map(|r| r.1.len()).sum();
+        println!("Flashing {} ({} KB) ...", path.display(), size / 1024);
+        d.flash(&runs)?;
+        d.reboot()?;
     }
     println!("Installing...");
     wait_for("the Game Bub to restart", 120, || Bub::find().ok().flatten().is_some())?;
     std::thread::sleep(Duration::from_secs(2));
     let (_, version, commit) = Bub::open()?.info()?;
     println!("Running {version} ({})", &commit[..7]);
+    if let Some(want) = expected_commit {
+        if !want.starts_with(&commit[..7]) {
+            return Err(format!("Expected commit {}, the Game Bub runs {}", &want[..7.min(want.len())], &commit[..7]));
+        }
+    }
     Ok(())
 }
 
@@ -331,8 +379,23 @@ fn run(args: &[String]) -> Result<()> {
         Some("screenshot") => screenshot(args.get(1).ok_or("screenshot needs an output file")?),
         Some("log") => log(&args[1..]),
         Some("install") => install(args.get(1).ok_or("install needs a .uf2 file")?),
+        Some("uf2-info") => {
+            let f = args.get(1).ok_or("uf2-info needs a .uf2 file")?;
+            let data = std::fs::read(f).map_err(|e| format!("{f}: {e}"))?;
+            // Hardware 1.4.1.0 unless given (product.major.minor.variant)
+            let hw = args.get(2).map_or(Ok(0x0104_0100), |v| {
+                let p: Vec<u32> = v.split('.').filter_map(|x| x.parse().ok()).collect();
+                if p.len() == 4 { Ok(p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]) } else { Err("hardware as 1.4.1.0".to_string()) }
+            })?;
+            let (runs, commit) = dfu::read_uf2(&data, hw)?;
+            for (start, bytes) in &runs {
+                println!("{start:#010x} .. {:#010x}  {} KB", start + bytes.len() as u32, bytes.len() / 1024);
+            }
+            println!("commit {}", commit.unwrap_or_else(|| "?".into()));
+            Ok(())
+        }
         _ => Err("Usage: bubctl info | reboot | press <buttons>... [--hold MS] [--gap MS] | \
-                  screenshot <out.png> | log <seconds> [--until TEXT] | install <file.uf2>"
+                  screenshot <out.png> | log <seconds> [--until TEXT] | install <file.uf2> | uf2-info <file.uf2> [hw]"
             .into()),
     }
 }

@@ -7,3 +7,4 @@ description = "Control a Game Bub over USB from a computer: info, restart, butto
 [dependencies]
 nusb = "0.1"
 png = "0.17"
+futures-lite = "2"

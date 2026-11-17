@@ -40,7 +40,9 @@ const QUIET_SLOT: u32 = 0xB0B;
 pub fn handle_control_in<'a>(request: &Request, buf: &'a mut [u8]) -> Result<&'a [u8], ()> {
     match request.request {
         REQUEST_GET_INFO => {
-            buf[0..4].copy_from_slice(&0u32.to_le_bytes());
+            // Flags: bit 0, restarting into update mode over USB is safe (Device::reboot_dfu
+            // latches the FPGA power, DAC reset and cartridge power pins off).
+            buf[0..4].copy_from_slice(&1u32.to_le_bytes());
             buf[4..8].copy_from_slice(&hwinfo::get_serial_number().0.to_le_bytes());
             buf[8..12].copy_from_slice(&hwinfo::get_hardware_version().as_u32().to_le_bytes());
             buf[12] = crate::fwinfo::FIRMWARE_VERSION.pre;

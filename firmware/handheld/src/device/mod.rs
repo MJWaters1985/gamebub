@@ -42,6 +42,9 @@ pub struct Device<'a> {
     /// FPGA power in, active-high.
     fpga_power: PinDriver<'a, AnyOutputPin, Output>,
 
+    /// FPGA power, DAC reset and cartridge power pins (-1: none), latched by reboot_dfu.
+    latched_pins: [i32; 3],
+
     /// The I2C bus.
     #[allow(unused)]
     i2c: &'a Mutex<I2cDriver<'a>>,
@@ -267,6 +270,17 @@ impl Device<'_> {
                 let pin_cart_switch = Some(peripherals.pins.gpio14.downgrade_input());
                 let pin_cart_power = Some(peripherals.pins.gpio15.downgrade_output());
             }
+        }
+
+        // Pins reboot_dfu latches in their off state (FPGA power, DAC reset, cartridge power):
+        // release them, or they can't be driven.
+        let latched_pins = [
+            gpio::Pin::pin(&pin_fpga_power),
+            gpio::Pin::pin(&pin_dac_reset),
+            pin_cart_power.as_ref().map_or(-1, gpio::Pin::pin),
+        ];
+        for pin in latched_pins.into_iter().filter(|&p| p >= 0) {
+            unsafe { esp_idf_svc::sys::gpio_hold_dis(pin) };
         }
 
         // Status LED: active high
@@ -583,6 +597,7 @@ impl Device<'_> {
             pin_vbus_pgood,
             pin_cart_power,
             pin_cart_switch,
+            latched_pins,
             rtc,
             imu,
             sdcard,
@@ -671,7 +686,16 @@ impl Device<'_> {
         const DFU_HINT: u32 = 0x1B01;
         log::info!("Preparing for DFU");
         unsafe { esp_idf_svc::sys::esp_reset_reason_set_hint(DFU_HINT) };
-        self.reboot()
+        log::info!("Rebooting");
+        self.prepare_for_power_off();
+        // The update firmware doesn't set these pins up: left floating, the FPGA powers up
+        // unconfigured (its pull-ups run the vibration motor) and the DAC's amplifier whines.
+        // Latch them off through the restart (released in Device::init).
+        self.set_cart_power(false);
+        for pin in self.latched_pins.into_iter().filter(|&p| p >= 0) {
+            unsafe { esp_idf_svc::sys::gpio_hold_en(pin) };
+        }
+        esp_idf_svc::hal::reset::restart();
     }
 
     /// Prepare for power-off or reset, by powering down peripherals and saving state.
