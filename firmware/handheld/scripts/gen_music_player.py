@@ -338,6 +338,8 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=(
         a.ref16(0x21, 0xD000); a.ref16(0x01, 0x1000); a.ref16(0xCD, "fill0")
     a.ref16(0x31, stack)
     a.ref16(0x21, 0xFF80); a.b(0x06, 0x7F); a.label("clrh"); a.b(0xAF, 0x22, 0x05); a.jr(0x20, "clrh")
+    # no interrupts, even if a driver runs ei: IE and IF clear (a = 0 after the loop)
+    a.b(0xE0, 0xFF, 0xE0, 0x0F)
     # unpack to the data bank: table at $D000, then the font, the loop and any blobs
     a.b(0x3E, data_bank); a.b(0xE0, 0x70)
     a.ref16(0x21, 0x0004); a.ref16(0x11, WRAM7); a.ref16(0xCD, "unlz")
