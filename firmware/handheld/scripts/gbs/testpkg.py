@@ -2,7 +2,7 @@
 the rip (sound register writes, frame by frame)."""
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from package import make, match, parse
+from package import make, match, parse, entry_for
 from gbsdiff import find_rom, S
 from verify import verify
 
@@ -25,10 +25,7 @@ for n in sorted(os.listdir(X)):
     if not player:
         print('%-34s no match: %s (%d B)' % (n[:34], why, len(pkg))); continue
     P = parse(pkg)
-    raw_at = P['table_at'] - (entry['raw_len'] - P['tsize'])
-    addr = entry['raw_blobs'][0][0]
-    e2 = dict(entry, blobs=[(addr, player[raw_at:raw_at + entry['raw_len']])])
-    e2.pop('raw_blobs')
+    e2 = entry_for(entry, player, P)
     k = len(tracks)
     songs = sorted({tracks[i][0] for i in (0, k // 2, k - 1)})
     res = verify(g, e2, rom, songs, frames=60)

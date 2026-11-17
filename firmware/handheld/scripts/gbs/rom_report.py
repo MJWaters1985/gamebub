@@ -28,7 +28,7 @@ def work(args):
     signal.signal(signal.SIGALRM, timeout)
     signal.alarm(600)
     try:
-        from package import match, make, parse
+        from package import match, make, parse, entry_for
         from verify import verify
         rom = open(path, 'rb').read()
         mbc1 = rom[0x147] in (1, 2, 3)
@@ -47,9 +47,7 @@ def work(args):
                 return path, 'matches', f
             pkg2, g, tracks, problems, entry = make(os.path.join(X, name))
             P = parse(pkg)
-            raw_at = P['table_at'] - (entry['raw_len'] - P['tsize'])
-            addr = entry['raw_blobs'][0][0]
-            e2 = dict(entry, blobs=[(addr, player[raw_at:raw_at + entry['raw_len']])])
+            e2 = entry_for(entry, player, P)
             songs = [i for i, _, _ in entry['tracks']]
             pick = sorted({songs[0], songs[len(songs) // 2], songs[-1]})
             res = verify(g, e2, rom, pick, 90)

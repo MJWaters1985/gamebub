@@ -210,8 +210,13 @@ def make(folder, plays=30, small=False, _t=None):
         frame=lambda pc, b=bytes(frame_glue): b, first=0,
         tracks=[(i, 0, clean_name(n)) for i, n in tracks],
         stub=stub_addr, stack=stack, vars=stub_addr - 6, data_bank=data_bank or 7,
-        raw_blobs=[(where, raw)],
+        # the moved code is packed; only the bank table stays as it is, for the device to fill in,
+        # and the player translates the bank-number constants through it at boot
+        blobs=[(where, bytes(blob) + xl)],
+        raw_blobs=[(table_addr, table)],
     )
+    if imm_raw:
+        entry['xlat'] = (table_addr, [where + o for o in imm_raw])
     if g['tac'] & 4:
         entry['timer'] = (g['tma'], g['tac'])
     if problems:
@@ -227,9 +232,10 @@ def make(folder, plays=30, small=False, _t=None):
         except AssertionError as ex:
             err = str(ex).split(': ')[-1]
     else:
+        if not small and g['load'] < 0x4000 - 0x100:
+            return make(folder, plays, True, t)
         return None, g, tracks, [err], None
-    raw_at = entry['raw_file_offsets'][0]
-    table_at = raw_at + len(blob) + 24
+    table_at = entry['raw_file_offsets'][0]
 
     # checks: everything run or read outside the moved code, in runs
     def runs(addrs):
@@ -270,7 +276,7 @@ def make(folder, plays=30, small=False, _t=None):
 
     pkg = bytearray(b'CMR2')
     pkg += struct.pack('<HB', table_at, maxbank + 1)
-    pkg += struct.pack('<B', len(imm_raw)) + b''.join(struct.pack('<H', raw_at + o) for o in imm_raw)
+    pkg += struct.pack('<B', 0)   # constants: translated by the player itself
     pkg += struct.pack('<B', len(probes))
     for b, (off, data) in sorted(probes.items()):
         pkg += struct.pack('<BHB', b, off, len(data)) + data
@@ -283,8 +289,24 @@ def make(folder, plays=30, small=False, _t=None):
         pkg += struct.pack('<BHB', L // 0x4000, L % 0x4000, img[L])
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
-    entry['raw_len'] = len(raw)
     return bytes(pkg), g, tracks, [], entry
+
+
+def entry_for(entry, player, P):
+    """The entry as the matched player runs it (for checking it in the emulator): the bank table
+    from the player file, the constants translated through it."""
+    table_addr = entry['raw_blobs'][0][0]
+    table = player[P['table_at']:P['table_at'] + P['tsize']]
+    blobs = []
+    for addr, b in entry['blobs']:
+        b = bytearray(b)
+        for a in entry.get('xlat', (0, []))[1]:
+            if addr <= a < addr + len(b) and b[a - addr] < len(table):
+                b[a - addr] = table[b[a - addr]]
+        blobs.append((addr, bytes(b)))
+    e2 = dict(entry, blobs=blobs + [(table_addr, bytes(table))])
+    e2.pop('raw_blobs')
+    return e2
 
 
 def parse(pkg):

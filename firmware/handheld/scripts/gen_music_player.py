@@ -316,7 +316,7 @@ def unlz(data):
     return bytes(out)
 
 
-def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=()):
+def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=(), xlat=None):
     # Pack table + font + loop; the first tokens go in $0004-$00FF, the rest after the code.
     data = table + font + stub + b"".join(b for _, b in blobs)
     tokens = lz_tokens(data)
@@ -357,6 +357,15 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=(
     for i, (addr, blob) in enumerate(raw_blobs):   # stored as is, so they can be patched in the file
         assert 0xC000 <= addr and addr + len(blob) <= 0xD000, "blobs go in work RAM bank 0"
         a.ref16(0x21, f"raw{i}"); a.ref16(0x11, addr); a.ref16(0x01, len(blob)); a.ref16(0xCD, "copy")
+    if xlat:
+        # bank numbers in the blobs: each byte at these addresses becomes table[byte]
+        xl_table, xl_addrs = xlat
+        a.ref16(0x21, "xl_list"); a.b(0x06, len(xl_addrs))
+        a.label("xl_next")
+        a.b(0x2A, 0x5F, 0x2A, 0x57, 0xE5)                       # de = [hl+] ; push hl
+        a.b(0x1A); a.ref16(0x21, xl_table)                      # a = [de] ; hl = table
+        a.b(0x85, 0x6F); a.jr(0x30, "xl_nc"); a.b(0x24)         # hl += a
+        a.label("xl_nc"); a.b(0x7E, 0x12, 0xE1, 0x05); a.jr(0x20, "xl_next")   # [de] = [hl] ; pop hl
     a.b(0x3E, 0x01); a.b(0xE0, 0x70)
     # background map: spaces
     a.ref16(0x21, 0x9800); a.ref16(0x01, 0x400); a.ref16(0xCD, "fill0")
@@ -387,6 +396,10 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=(
     a.b(0x2F, 0x83, 0x6F, 0x7A, 0xCE, 0xFF, 0x67)                # hl = de - distance
     a.label("lz_rep"); a.b(0x2A, 0x12, 0x13, 0x05); a.jr(0x20, "lz_rep")
     a.b(0xE1); a.jr(0x18, "unlz")                                # pop hl
+    if xlat:
+        a.label("xl_list")
+        for addr in xlat[1]:
+            a.code += bytes([addr & 0xFF, addr >> 8])
     a.label("packed"); a.code += high
     for i, (addr, blob) in enumerate(raw_blobs):
         a.label(f"raw{i}"); a.code += blob
@@ -402,10 +415,11 @@ def generate_game(game, game_id="entry"):
     assert stub_addr + len(stub) <= 0xD000, f"{game_id}: the loop doesn't fit in work RAM bank 0"
     font = font_tiles(game["font_chars"])
     blobs = game.get("blobs", ())
-    assert len(table) + len(font) + len(stub) + sum(len(b) for _, b in blobs) <= 0x1000
+    assert len(table) + len(font) + len(stub) + sum(len(b) for _, b in blobs) <= 0x1000, \
+        f"{game_id}: player data is {len(table) + len(font) + len(stub) + sum(len(b) for _, b in blobs)} bytes, 4096 available"
     raw_blobs = game.get("raw_blobs", ())
     code, low = boot(stub, stub_addr, table, font, game.get("stack", stub_addr - 0x10),
-                     game.get("data_bank", 7), blobs, raw_blobs)
+                     game.get("data_bank", 7), blobs, raw_blobs, game.get("xlat"))
     # where each raw blob is in the file (they end the code), for patching the file later
     end = 0x200 + len(code)
     for addr, blob in reversed(raw_blobs):
