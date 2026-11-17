@@ -23,8 +23,8 @@ struct Package {
     probes: Vec<(u8, u16, Vec<u8>)>,
     /// (rip bank, offset, length, CRC32)
     checks: Vec<(u8, u16, u16, u32)>,
-    /// Bank numbers in the engine's data: (rip bank, offset, the rip's value). The ripper
-    /// renumbered them; on the cartridge each must be the ROM bank that rip bank was found in.
+    /// Bank numbers in the engine's data: (rip bank, offset, the rip's value). On the cartridge
+    /// each is the same, or (renumbered by the ripper) the ROM bank that rip bank was found in.
     bank_bytes: Vec<(u8, u16, u8)>,
     player: Vec<u8>,
 }
@@ -151,7 +151,8 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
         let bank = if rip_bank == 0 { 0 } else { table.get(rip_bank as usize).copied().unwrap_or(rip_bank) };
         let mut b = [0u8];
         cart::read_rom_bank(link, info, bank as u32, off, &mut b)?;
-        if table.get(value as usize) != Some(&b[0]) {
+        // left alone by the ripper, or renumbered to the rip bank
+        if b[0] != value && table.get(value as usize) != Some(&b[0]) {
             return Ok(Err("the bank numbers in its sound engine's data don't match".into()));
         }
     }

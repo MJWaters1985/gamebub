@@ -14,7 +14,7 @@ Package (.cmr), little endian:
   u8 count + probes: u8 rip bank, u16 offset in the bank, u8 length, bytes,
   u16 count + checks: u8 rip bank (0 = bank 0), u16 offset in the bank, u16 length, u32 CRC32,
   u16 count + bank numbers in the engine's data: u8 rip bank, u16 offset, u8 the rip's value
-     (the ripper renumbers them; on the cartridge it must be the ROM bank that rip bank is in),
+     (on the cartridge: the same, or renumbered by the ripper to the ROM bank that rip bank is in),
   u8 flags (1: uses cartridge RAM), 2304-byte player file.
 
 package.py <rip folder> <out.cmr>      make one package
@@ -329,7 +329,8 @@ def match(pkg, rom, mbc1=False):
             return None, 'bank 0 code differs'
     for rb, o, v in P['bank_bytes']:
         cb = table[rb] if rb else 0
-        if v >= len(table) or rom[cb * 0x4000 + o] != table[v]:
+        c = rom[cb * 0x4000 + o]
+        if c != v and (v >= len(table) or c != table[v]):
             return None, 'bank numbers in the engine data differ'
     player = bytearray(P['player'])
     for i, v in enumerate(table):
