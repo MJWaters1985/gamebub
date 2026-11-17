@@ -177,12 +177,12 @@ def run_rom_open_system(d, index, name):
 
 
 def exit_core(d):
-    """In a core: Home, then Exit Core (third item). The menu ignores presses for a moment
-    after it opens (finding: see docs), so wait, and try again if the core is still running."""
+    """In a core: Home, then Exit Core, the last item (the menu has Load ROM too for games
+    started from Run ROM, and doesn't wrap: three Downs reach the end either way)."""
     for attempt in range(3):
         mark = d.log.mark()
-        d.press('home', gap=1500)
-        d.press('down', 'down', 'a', gap=400)
+        d.press('home', gap=1000)
+        d.press('down', 'down', 'down', 'a', gap=300)
         if d.log.wait(r'Screen enter: MainMenu', mark, 8):
             if attempt:
                 d.retries.append('in-game menu: Exit Core needed %d tries' % (attempt + 1))

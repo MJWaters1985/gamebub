@@ -52,6 +52,22 @@ impl System {
         Path::new(DIR_ROMS).join(self.folder)
     }
 
+    /// How many ROMs `games` would list, without building the list (no names, paths or sort:
+    /// counting every system must fit in whatever memory is free).
+    pub fn count(&self) -> usize {
+        std::fs::read_dir(self.rom_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| {
+                let file_name = entry.file_name();
+                let file_name = file_name.to_string_lossy();
+                !file_name.starts_with("._") && has_extension(&file_name, self.extensions)
+            })
+            .take(MAX_GAMES)
+            .count()
+    }
+
     /// ROMs in this system's folder, sorted by name.
     pub fn games(&self) -> Vec<Game> {
         let mut games: Vec<Game> = std::fs::read_dir(self.rom_dir())

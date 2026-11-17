@@ -90,15 +90,19 @@ impl UiState {
     fn library_open(&mut self) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
+        // Coming back from a game list: release it and its box art before counting.
         backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
+        backend.set_library_games(ModelRc::default());
+        self.library.games = vec![];
+        self.library.strip_pool.clear();
         // Systems in alphabetical order (after Favorites).
         let mut systems: Vec<(System, usize)> = library::SYSTEMS
             .iter()
             .filter(|s| s.rom_dir().is_dir())
             .map(|s| {
                 crate::crash_handler::note(&format_args!("Run ROM: counting {}", s.folder));
-                (*s, s.games().len())
+                (*s, s.count())
             })
             .collect();
         systems.sort_by(|a, b| crate::core::browse::natural_cmp(a.0.folder, b.0.folder));

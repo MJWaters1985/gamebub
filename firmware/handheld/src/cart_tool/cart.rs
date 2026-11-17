@@ -303,12 +303,20 @@ pub fn identify(link: &mut Link) -> anyhow::Result<CartInfo> {
     }
 }
 
+/// An empty slot reads as all ones (pulled up) or all zeros.
+fn looks_empty(header: &[u8]) -> bool {
+    header.iter().all(|&b| b == 0xFF) || header.iter().all(|&b| b == 0)
+}
+
 fn identify_dmg(header: Vec<u8>, db: Option<GameEntry>) -> anyhow::Result<CartInfo> {
     let checksum = header[0x134..=0x14C]
         .iter()
         .fold(0u8, |x, &b| x.wrapping_sub(b).wrapping_sub(1));
     if header[0x104..0x134] != DMG_LOGO || checksum != header[0x14D] {
-        bail!("Couldn't read the cartridge header.\nClean the cartridge contacts and try again.");
+        if looks_empty(&header[0x100..0x150]) {
+            bail!("There's no cartridge in the slot.\nInsert a cartridge.");
+        }
+        bail!("Couldn't read the cartridge header.\nIf a cartridge is inserted, clean its contacts and try again.");
     }
     let cgb = header[0x143] & 0x80 != 0;
     // Titles are 11-16 characters; CGB games use the end for a manufacturer code / flag.
@@ -352,7 +360,10 @@ fn identify_agb(link: &mut Link, header: Vec<u8>, db: Option<GameEntry>) -> anyh
         .fold(0u8, |x, &b| x.wrapping_sub(b))
         .wrapping_sub(0x19);
     if checksum != header[0xBD] || header[0xB2] != 0x96 {
-        bail!("Couldn't read the cartridge header.\nClean the cartridge contacts and try again.");
+        if looks_empty(&header[0xA0..0xC0]) {
+            bail!("There's no cartridge in the slot.\nInsert a cartridge.");
+        }
+        bail!("Couldn't read the cartridge header.\nIf a cartridge is inserted, clean its contacts and try again.");
     }
     let title = header_title(&header[0xA0..0xAC]);
     let (rom_size, save, save_guessed) = match &db {

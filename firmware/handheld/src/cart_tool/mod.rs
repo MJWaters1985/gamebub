@@ -156,10 +156,9 @@ fn find_music_player() -> anyhow::Result<Player> {
 }
 
 fn find_with(reader: &mut Link) -> anyhow::Result<Player> {
-    use anyhow::Context;
     // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
     let _ = reader.power_cycle();
-    let info = cart::identify(reader).context("No cartridge could be read")?;
+    let info = cart::identify(reader)?;
     if info.mode != link::CartMode::Dmg {
         anyhow::bail!("Cartridge Music plays Game Boy and Game Boy Color cartridges.");
     }

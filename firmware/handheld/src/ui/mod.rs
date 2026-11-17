@@ -112,11 +112,19 @@ pub enum Message {
     Task(crate::wifi_setup::TaskUpdate),
 }
 
+/// Messages sent before the UI thread started, delivered when it starts.
+static EARLY: std::sync::Mutex<Vec<Message>> = std::sync::Mutex::new(Vec::new());
+
 /// Send a message to the UI thread.
 pub fn send(message: Message) {
+    let mut early = EARLY.lock().unwrap();
     match SENDER.get() {
-        Some(sender) => sender.send(message).unwrap(),
-        None => log::error!("Dropping UI message"),
+        Some(sender) => {
+            drop(early);
+            sender.send(message).unwrap()
+        }
+        None if early.len() < 32 => early.push(message),
+        None => log::warn!("Dropping UI message (the UI hasn't started)"),
     }
 }
 
@@ -226,7 +234,14 @@ impl UI {
         });
 
         let (sender, receiver) = mpsc::channel::<Message>();
-        SENDER.set(sender).expect("UI already initialized");
+        {
+            // Holding EARLY: a send now waits, then goes straight to the channel.
+            let mut early = EARLY.lock().unwrap();
+            for message in early.drain(..) {
+                let _ = sender.send(message);
+            }
+            SENDER.set(sender).expect("UI already initialized");
+        }
 
         let framebuffer = vec![Argb1555::from_rgb(0, 0, 0); DISPLAY_WIDTH];
         let lcd_line_buffer = vec![0u8; DISPLAY_WIDTH * 3 * 2];

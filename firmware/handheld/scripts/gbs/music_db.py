@@ -115,12 +115,18 @@ def rip_sets():
 
 BY_TITLE = None
 
+# Games with no rip of their own whose music is the same as another version's rip.
+ALIASES = {
+    'pokemon silver': 'pokemon gold',
+}
+
 
 def work(path):
     name = os.path.splitext(os.path.basename(path))[0]
     rom = open(path, 'rb').read()
     best = None
-    for n in dict.fromkeys(BY_TITLE.get(norm(name), [])):
+    title = norm(name)
+    for n in dict.fromkeys(BY_TITLE.get(title, []) or BY_TITLE.get(ALIASES.get(title, ''), [])):
         gd = os.path.join(X, n)
         gp = [f for f in os.listdir(gd) if f.lower().endswith('.gbs')]
         if not gp:
