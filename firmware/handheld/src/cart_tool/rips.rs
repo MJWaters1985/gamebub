@@ -141,8 +141,14 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
 
 /// Packages to try for this cartridge, from rips/index.txt ("<name>\t<file>" lines, names as
 /// made by norm()).
+/// Rip packages and their index. Not get_system_file_path, which only looks on the SD card for
+/// files that already exist and otherwise gives the (read-only) built-in /system.
+const RIPS_DIR: &str = "/sdcard/system/cart-music/rips";
+/// The player made from the package that matched, for the Game Boy core to load.
+const RIP_PLAYER: &str = "/sdcard/system/cart-music/rip-player.bin";
+
 fn candidates(info: &CartInfo) -> Result<Vec<PathBuf>> {
-    let dir = crate::util::get_system_file_path("cart-music/rips");
+    let dir = std::path::Path::new(RIPS_DIR);
     let index = match std::fs::read_to_string(dir.join("index.txt")) {
         Ok(index) => index,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && dir.parent().is_some_and(|d| d.is_dir()) => {
@@ -184,7 +190,7 @@ pub fn find(link: &mut Link, info: &CartInfo, busy: &dyn Fn(&str)) -> Result<Opt
         let pkg = parse(&data).with_context(|| format!("{}", path.display()))?;
         match try_package(link, info, &pkg)? {
             Ok(player) => {
-                let out = crate::util::get_system_file_path("cart-music/rip-player.bin");
+                let out = PathBuf::from(RIP_PLAYER);
                 std::fs::write(&out, &player).context("Couldn't write the music player")?;
                 log::info!("Cartridge Music: {} matches", path.display());
                 return Ok(Some(out));
