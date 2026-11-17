@@ -81,10 +81,16 @@ pub fn norm(name: &str) -> String {
 }
 
 fn crc(link: &mut Link, info: &CartInfo, bank: u32, offset: u16, len: u16) -> Result<u32> {
-    let mut buf = vec![0u8; len as usize];
-    cart::read_rom_bank(link, info, bank, offset, &mut buf)?;
+    // In pieces: a check can cover a whole 16 KB bank, and memory is short.
+    let mut buf = [0u8; 512];
     let mut c = Crc32::new();
-    c.update(&buf);
+    let mut done = 0u16;
+    while done < len {
+        let n = (len - done).min(buf.len() as u16);
+        cart::read_rom_bank(link, info, bank, offset + done, &mut buf[..n as usize])?;
+        c.update(&buf[..n as usize]);
+        done += n;
+    }
     Ok(c.finish())
 }
 
@@ -149,7 +155,8 @@ const RIP_PLAYER: &str = "/sdcard/system/cart-music/rip-player.bin";
 
 fn candidates(info: &CartInfo) -> Result<Vec<PathBuf>> {
     let dir = std::path::Path::new(RIPS_DIR);
-    let index = match std::fs::read_to_string(dir.join("index.txt")) {
+    // Read a line at a time: the index is too big to load in one piece.
+    let index = match std::fs::File::open(dir.join("index.txt")) {
         Ok(index) => index,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && dir.parent().is_some_and(|d| d.is_dir()) => {
             return Ok(vec![]); // no rip packages installed
@@ -161,15 +168,23 @@ fn candidates(info: &CartInfo) -> Result<Vec<PathBuf>> {
         names.push(norm(&db.name));
     }
     names.push(norm(&info.header_title));
-    let mut out: Vec<PathBuf> = vec![];
-    for name in names.iter().filter(|n| !n.is_empty()) {
-        for line in index.lines() {
-            if let Some((n, file)) = line.split_once('\t') {
-                let p = dir.join(file);
-                if n == name && !out.contains(&p) {
-                    out.push(p);
+    // Matches for each name, so the database name's packages are tried first.
+    let mut found: Vec<Vec<PathBuf>> = vec![vec![]; names.len()];
+    let reader = std::io::BufReader::with_capacity(1024, index);
+    for line in std::io::BufRead::lines(reader) {
+        let line = line.context("Couldn't read the music index on the SD card")?;
+        if let Some((n, file)) = line.split_once('\t') {
+            for (name, list) in names.iter().zip(found.iter_mut()) {
+                if !name.is_empty() && n == name {
+                    list.push(dir.join(file));
                 }
             }
+        }
+    }
+    let mut out: Vec<PathBuf> = vec![];
+    for p in found.into_iter().flatten() {
+        if !out.contains(&p) {
+            out.push(p);
         }
     }
     log::info!("Cartridge Music: looked for {names:?}, {} package(s)", out.len());
