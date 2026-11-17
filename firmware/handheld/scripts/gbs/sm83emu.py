@@ -35,15 +35,16 @@ class Emu:
         self.io_writes = {}
         self.rst_base = 0        # GBS rips: rst n calls load + n
         self.rst_used = set()    # rst vectors called (n)
+        self.pad = 0xFF          # past the end of the image (GBS rips drop trailing zeros: 0)
 
     # --- memory ---
     def rd(self, a):
         a &= 0xFFFF
         if a < 0x4000:
-            return self.rom[a] if a < len(self.rom) else 0xFF
+            return self.rom[a] if a < len(self.rom) else self.pad
         if a < 0x8000:
             i = self.bank * 0x4000 + a - 0x4000
-            return self.rom[i] if i < len(self.rom) else 0xFF
+            return self.rom[i] if i < len(self.rom) else self.pad
         if a < 0xA000:
             return self.vram[a - 0x8000]
         if a < 0xC000:

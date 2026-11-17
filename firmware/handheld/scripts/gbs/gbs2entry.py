@@ -203,6 +203,7 @@ def trace(g, songs, plays):
     for song in songs:
         e = TraceEmu(img, stub_region(g))
         e.rst_base = g['load']
+        e.pad = 0
         e.sp = g['sp']
         e.wr(0xFF26, 0x80)
         e.a = song

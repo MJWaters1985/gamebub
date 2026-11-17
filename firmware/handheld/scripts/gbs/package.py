@@ -48,6 +48,14 @@ def make(folder, plays=30):
     elif any(0x4000 <= x < 0x4100 for x in (g['init'], g['play'])):
         # the ripper's code runs on past the end of bank 0 (init or play at the start of bank 1)
         ripper |= {L for L in touched if 0x4000 <= L < 0x4100}
+    # data read from the moved code's area that runs on past it (a table or compressed data the
+    # ripper's code points at) moves with it, or the moved pointer would run off the end
+    for L in sorted(ripper):
+        n = L + 1
+        while n in t['reads'] and n not in ripper and n - L < 0x800:
+            ripper.add(n)
+            n += 1
+
     def whole_instructions():
         for L, (b, bank) in t['ins'].items():
             if any(x in ripper for x in range(L, L + len(b))):
@@ -227,7 +235,8 @@ def make(folder, plays=30):
             else:
                 out.append([L, L + 1])
         return out
-    in_rip = {L for L in touched if L >= g['load']}   # below the load address the rip has nothing
+    # below the load address and past the end of the rip, the rip has nothing to compare
+    in_rip = {L for L in touched if g['load'] <= L < len(img)}
     bank_bytes = sorted(L for L in must_check - ripper - vec if L >= g['load'])
     code_runs = runs((code_bytes & in_rip) - ripper - vec - set(bank_bytes))
     data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper - vec - set(bank_bytes))
