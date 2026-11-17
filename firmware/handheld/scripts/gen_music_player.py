@@ -366,7 +366,13 @@ def boot(stub, stub_addr, table, font, stack, data_bank=7, blobs=(), raw_blobs=(
         a.b(0x3E, byte); a.b(0xE0, 0x69)
     # LCD on (BG, tiles at $8000), go
     a.b(0x3E, 0x91); a.b(0xE0, 0x40)
-    a.ref16(0xC3, stub_addr)
+    # unmap the player so the cartridge's own $0000-$08FF shows (the rst handlers and any low
+    # routines its sound driver uses). Everything from here on runs from RAM; the write itself
+    # can't be in the player, so it's done from high RAM: ldh [$FF50],a ; jp stub
+    a.ref16(0x21, 0xFF80)
+    for byte in (0xE0, 0x50, 0xC3, stub_addr & 0xFF, stub_addr >> 8):
+        a.b(0x36, byte, 0x23)                        # ld [hl],n ; inc hl
+    a.b(0x3E, 0x01); a.ref16(0xC3, 0xFF80)
     a.label("fill0"); a.b(0xAF, 0x22, 0x0B, 0x78, 0xB1); a.jr(0x20, "fill0"); a.b(0xC9)
     a.label("copy"); a.b(0x2A, 0x12, 0x13, 0x0B, 0x78, 0xB1); a.jr(0x20, "copy"); a.b(0xC9)
     # unlz: unpack hl -> de (format: lz_tokens)

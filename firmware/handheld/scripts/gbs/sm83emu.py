@@ -33,6 +33,8 @@ class Emu:
         self.trace_exec = True
         self.mbc_write = mbc_write
         self.io_writes = {}
+        self.rst_base = 0        # GBS rips: rst n calls load + n
+        self.rst_used = set()    # rst vectors called (n)
 
     # --- memory ---
     def rd(self, a):
@@ -301,7 +303,8 @@ class Emu:
             return
         if z == 6:
             self.alu(y, self.fetch()); return
-        self.push(self.pc); self.pc = y * 8
+        self.rst_used.add(y * 8)
+        self.push(self.pc); self.pc = self.rst_base + y * 8
 
     def cb(self):
         op = self.fetch()

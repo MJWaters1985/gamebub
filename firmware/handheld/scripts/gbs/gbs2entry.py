@@ -202,6 +202,7 @@ def trace(g, songs, plays):
                bank_sources=set())
     for song in songs:
         e = TraceEmu(img, stub_region(g))
+        e.rst_base = g['load']
         e.sp = g['sp']
         e.wr(0xFF26, 0x80)
         e.a = song
@@ -223,6 +224,7 @@ def trace(g, songs, plays):
                 agg['ram'].add((reg, a))
         agg['svbk'] |= e.svbk_writes
         agg['bank_sources'] |= e.bank_sources
+        agg.setdefault('rst', set()).update(e.rst_used)
         agg.setdefault('bank_untracked', set()).update(e.bank_untracked)
     return agg
 

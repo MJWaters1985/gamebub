@@ -43,6 +43,9 @@ def make(folder, plays=30):
     ripper = {L for L in touched if g['load'] <= L < 0x4000}
     if g['load'] >= 0x4000:
         ripper |= {L for L in touched if g['load'] <= L < g['load'] + 0x100}
+    elif any(0x4000 <= x < 0x4100 for x in (g['init'], g['play'])):
+        # the ripper's code runs on past the end of bank 0 (init or play at the start of bank 1)
+        ripper |= {L for L in touched if 0x4000 <= L < 0x4100}
     def whole_instructions():
         for L, (b, bank) in t['ins'].items():
             if any(x in ripper for x in range(L, L + len(b))):
@@ -62,6 +65,22 @@ def make(folder, plays=30):
         whole_instructions()
         if not grew:
             break
+
+    # GBS rips have their rst handlers at load + n; on the cartridge they are at $00n0. They stay
+    # there (checked against the cartridge's bank 0) rather than being moved.
+    vec = set()
+    todo = [g['load'] + n for n in t.get('rst', ())]
+    while todo:   # the handlers: what runs on from each vector used, within the vector area
+        L = todo.pop()
+        if L in vec or L not in t['ins'] or not g['load'] <= L < g['load'] + 0x40:
+            continue
+        b = t['ins'][L][0]
+        vec.update(range(L, L + len(b)))
+        if b[0] not in NO_FALLTHROUGH:
+            todo.append(L + len(b))
+        if b[0] in JR:
+            todo.append(L + 2 + (b[1] - 256 if b[1] > 127 else b[1]))
+    ripper -= vec
 
     clusters = []
     for L in sorted(ripper):
@@ -207,9 +226,11 @@ def make(folder, plays=30):
                 out.append([L, L + 1])
         return out
     in_rip = {L for L in touched if L >= g['load']}   # below the load address the rip has nothing
-    code_runs = runs((code_bytes & in_rip) - ripper)
-    data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper)
-    checks, budget = [], DATA_CHECK_CAP
+    code_runs = runs((code_bytes & in_rip) - ripper - vec)
+    data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper - vec)
+    checks, budget = [], DATA_CHECK_CAP   # (rip address range, where it is on the cartridge)
+    for lo, hi in runs(vec):
+        checks.append((lo, hi, lo - g['load']))
     for lo, hi in code_runs:
         checks.append((lo, hi))
     covered = {L for lo, hi in code_runs for L in range(lo, hi)}
@@ -240,8 +261,9 @@ def make(folder, plays=30):
     for b, (off, data) in sorted(probes.items()):
         pkg += struct.pack('<BHB', b, off, len(data)) + data
     pkg += struct.pack('<H', len(checks))
-    for lo, hi in checks:
-        pkg += struct.pack('<BHHI', lo // 0x4000, lo % 0x4000, hi - lo, zlib.crc32(img[lo:hi]))
+    for lo, hi, *at in checks:
+        at = at[0] if at else lo
+        pkg += struct.pack('<BHHI', at // 0x4000, at % 0x4000, hi - lo, zlib.crc32(img[lo:hi]))
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
     entry['raw_len'] = len(raw)

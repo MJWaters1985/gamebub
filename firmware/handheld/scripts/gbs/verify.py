@@ -35,6 +35,7 @@ class SoundEmu(Emu):
 
 def reference(g, song, frames, emu=None):
     e = SoundEmu(image(g))
+    e.rst_base = g['load']
     e.sp = g['sp']
     e.wr(0xFF26, 0x80)
     e.wr(0xFF24, 0x77)   # as the boot ROM leaves them
