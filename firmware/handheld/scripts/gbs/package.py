@@ -30,19 +30,22 @@ import gen_music_player as gm
 DATA_CHECK_CAP = 0x2000   # bytes of music data checked (code is always checked in full)
 
 
-def make(folder, plays=30):
+def make(folder, plays=30, small=False, _t=None):
+    """small: move only the first $100 bytes from the load address (where rippers put their
+    init and play code) and check the rest of bank 0 against the cartridge, for rips whose bank 0
+    from the load address doesn't fit in work RAM."""
     gp = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith('.gbs')]
     g = load_gbs(gp[0])
     img = image(g)
     tracks = read_m3u(folder, g['songs'])
-    t = trace(g, [i for i, _ in tracks], plays)
+    t = _t or trace(g, [i for i, _ in tracks], plays)
     problems = []
 
     code_bytes = set()
     for L, (b, bank) in t['ins'].items():
         code_bytes |= set(range(L, L + len(b)))
     touched = code_bytes | t['reads']
-    ripper = {L for L in touched if g['load'] <= L < 0x4000}
+    ripper = {L for L in touched if g['load'] <= L < (min(0x4000, g['load'] + 0x100) if small else 0x4000)}
     if g['load'] >= 0x4000:
         ripper |= {L for L in touched if g['load'] <= L < g['load'] + 0x100}
     elif any(0x4000 <= x < 0x4100 for x in (g['init'], g['play'])):
@@ -149,6 +152,8 @@ def make(folder, plays=30):
     need = len(blob) + 24 + maxbank + 1 + 0x56 + LOOP
     where = free_window(ram_used, need)
     if where is None:
+        if not small and g['load'] < 0x4000 - 0x100:
+            return make(folder, plays, True, t)
         return None, g, tracks, ['no free work RAM window of %d bytes' % need], None
 
     def reloc(L):
@@ -256,8 +261,9 @@ def make(folder, plays=30):
         cand = [r for r in code_runs if r[0] // 0x4000 == b] or [r for r in data_runs if r[0] // 0x4000 == b]
         lo, hi = max(cand, key=lambda r: r[1] - r[0])
         probes[b] = (lo % 0x4000, bytes(img[lo:min(hi, lo + 24)]))
+    read_banks = {L // 0x4000 for L in in_rip if L >= 0x4000}   # selected but never read: no matter
     for b in range(1, maxbank + 1):
-        if b not in probes and b in used_banks:
+        if b not in probes and b in used_banks and b in read_banks:
             problems.append('rip bank %d is used but has nothing to find it by' % b)
     if problems:
         return None, g, tracks, problems, None
