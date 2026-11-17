@@ -29,6 +29,10 @@ struct Package {
     /// Bytes in the checked ranges that may be bank numbers the ripper renumbered, sorted:
     /// (rip bank, offset, the rip's value). See `crc`.
     marks: Vec<(u8, u16, u8)>,
+    /// Calls the ripper redirected to its copy of a bank 0 routine: (rip bank, offset of the
+    /// address in the instruction, length, CRC32 of the ripper's copy). The cartridge's routine at
+    /// the address it has there (through up to three jp) must have that CRC.
+    redirects: Vec<(u8, u16, u16, u32)>,
     player: Vec<u8>,
 }
 
@@ -43,6 +47,7 @@ fn parse(data: &[u8]) -> Result<Package> {
         b"CMR1" => 1,
         b"CMR2" => 2,
         b"CMR3" => 3,
+        b"CMR4" => 4,
         _ => bail!("not a cartridge music package"),
     };
     let u16_ = |b: &[u8]| u16::from_le_bytes([b[0], b[1]]);
@@ -80,12 +85,20 @@ fn parse(data: &[u8]) -> Result<Package> {
         }
         marks.sort_unstable();
     }
+    let mut redirects = vec![];
+    if version >= 4 {
+        let n = u16_(take(2)?) as usize;
+        for _ in 0..n {
+            let c = take(9)?;
+            redirects.push((c[0], u16_(&c[1..]), u16_(&c[3..]), u32::from_le_bytes([c[5], c[6], c[7], c[8]])));
+        }
+    }
     let _flags = take(1)?[0];
     let player = take(PLAYER_SIZE)?.to_vec();
     if table_at + table_size > PLAYER_SIZE || constants.iter().any(|&o: &usize| o >= PLAYER_SIZE) {
         bail!("package offsets out of range");
     }
-    Ok(Package { table_at, table_size, constants, probes, checks, bank_bytes, marks, player })
+    Ok(Package { table_at, table_size, constants, probes, checks, bank_bytes, marks, redirects, player })
 }
 
 /// Lower case, without bracketed parts, "The", a possessive "s", "version" and punctuation, the
@@ -184,6 +197,32 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
     for &(_, o, len, want) in pkg.checks.iter().filter(|c| c.0 == 0) {
         if crc(link, info, pkg, (0, 0), o, len, &mut renumbered)? != want {
             return Ok(Err("the cartridge's code differs from the rip's".into()));
+        }
+    }
+    for &(rip_bank, off, len, want) in &pkg.redirects {
+        let bank = if rip_bank == 0 { 0 } else { table.get(rip_bank as usize).copied().unwrap_or(rip_bank) };
+        let mut a = [0u8; 2];
+        cart::read_rom_bank(link, info, bank as u32, off, &mut a)?;
+        let mut x = u16::from_le_bytes(a);
+        let mut ok = false;
+        for hop in 0..4 {
+            if x as u32 + len as u32 > 0x4000 {
+                break;
+            }
+            if crc(link, info, pkg, (0xFF, 0), x, len, &mut vec![])? == want {
+                ok = true;
+                break;
+            }
+            // through a jump table: jp nn
+            let mut j = [0u8; 3];
+            cart::read_rom_bank(link, info, 0, x, &mut j)?;
+            if hop == 3 || j[0] != 0xC3 {
+                break;
+            }
+            x = u16::from_le_bytes([j[1], j[2]]);
+        }
+        if !ok {
+            return Ok(Err("a routine its sound engine calls differs".into()));
         }
     }
     // possible bank numbers that differ must be the ROM bank of the rip bank they name

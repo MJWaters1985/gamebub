@@ -8,7 +8,7 @@ banks, check the code, fill in the rip-bank -> ROM-bank table and refuse a cartr
 doesn't match (another revision or region, or a rip with other patches).
 
 Package (.cmr), little endian:
-  "CMR3", u16 file offset of the bank table, u8 table size,
+  "CMR4", u16 file offset of the bank table, u8 table size,
   u8 count + u16 file offsets of constants holding rip bank numbers (ld a,N before a call into
      the engine) to translate through the table,
   u8 count + probes: u8 rip bank, u16 offset in the bank, u8 length, bytes,
@@ -19,6 +19,10 @@ Package (.cmr), little endian:
      value is a rip bank): u8 rip bank, u16 offset, u8 the rip's value. Where the cartridge has
      another value there, the CRC is taken with the rip's, and once the table is filled in the
      cartridge's must be the ROM bank of that rip bank,
+  u16 count + calls the ripper redirected to its copy of a bank 0 routine (the address in an
+     instruction of the engine's own code points into the moved code): u8 rip bank, u16 offset
+     of the address, u16 length, u32 CRC32 of the ripper's copy; the cartridge's routine at the
+     address it has there (through up to three jp) must have that CRC,
   u8 flags (1: uses cartridge RAM), 2304-byte player file.
 
 package.py <rip folder> <out.cmr>      make one package
@@ -271,8 +275,29 @@ def make(folder, plays=30, small=False, _t=None):
         return out
     # below the load address and past the end of the rip, the rip has nothing to compare
     in_rip = {L for L in touched if g['load'] <= L < len(img)}
+    # the engine's own code calling (or pointing at) the ripper's copy of a routine
+    redirects, redirect_bytes = [], set()
+    for L, (ins, bank) in sorted(t['ins'].items()):
+        if cluster_of(L) is not None or ins[0] not in ABS16 or L < g['load']:
+            continue
+        nn = ins[1] | ins[2] << 8
+        tl = lin(bank, nn) if nn < 0x8000 else None
+        if tl is None or cluster_of(tl) is None or tl >= 0x4000:
+            continue
+        n, x = 0, tl
+        while x in t['ins'] and n < 64:   # the routine up to its first ret or jump
+            b = t['ins'][x][0]
+            if b[0] in ABS16 and (b[1] | b[2] << 8) < 0x4000 and cluster_of(b[1] | b[2] << 8) is not None:
+                break   # ... or a call to another of the ripper's copies (which the cart has elsewhere)
+            n += len(b)
+            x += len(b)
+            if b[0] in NO_FALLTHROUGH:
+                break
+        if n:
+            redirects.append((L + 1, tl, n))
+            redirect_bytes |= {L + 1, L + 2}
     bank_bytes = sorted(L for L in must_check - ripper - vec if L >= g['load'])
-    code_runs = runs((code_bytes & in_rip) - ripper - vec - set(bank_bytes))
+    code_runs = runs((code_bytes & in_rip) - ripper - vec - set(bank_bytes) - redirect_bytes)
     data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper - vec - set(bank_bytes))
     checks, budget = [], DATA_CHECK_CAP   # (rip address range, where it is on the cartridge)
     for lo, hi in runs(vec):
@@ -299,7 +324,10 @@ def make(folder, plays=30, small=False, _t=None):
     for b in sorted({lo // 0x4000 for lo, hi in code_runs + data_runs if lo >= 0x4000}):
         runs_b = [r for r in code_runs if r[0] // 0x4000 == b] + [r for r in data_runs if r[0] // 0x4000 == b]
         at, n = max((window(lo, hi) for lo, hi in runs_b), key=lambda w: w[1])
-        if n >= 6:
+        if n < 8:   # nothing clean enough: the longest run as it is
+            at, hi = max(runs_b, key=lambda r: r[1] - r[0])
+            n = min(hi, len(img), at + 24) - at
+        if n >= 4:
             probes[b] = (at % 0x4000, bytes(img[at:at + n]))
     read_banks = {L // 0x4000 for L in in_rip if L >= 0x4000}   # selected but never read: no matter
     for b in range(1, maxbank + 1):
@@ -317,7 +345,7 @@ def make(folder, plays=30, small=False, _t=None):
                 marks.append(((at + i) // 0x4000, (at + i) % 0x4000, img[lo + i]))
     marks = sorted(set(marks))[:MARKS_CAP]
 
-    pkg = bytearray(b'CMR3')
+    pkg = bytearray(b'CMR4')
     pkg += struct.pack('<HB', table_at, maxbank + 1)
     pkg += struct.pack('<B', 0)   # constants: translated by the player itself
     pkg += struct.pack('<B', len(probes))
@@ -333,6 +361,9 @@ def make(folder, plays=30, small=False, _t=None):
     pkg += struct.pack('<H', len(marks))
     for b, o, v in marks:
         pkg += struct.pack('<BHB', b, o, v)
+    pkg += struct.pack('<H', len(redirects))
+    for L, tl, n in redirects:
+        pkg += struct.pack('<BHHI', L // 0x4000, L % 0x4000, n, zlib.crc32(img[tl:tl + n]))
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
     return bytes(pkg), g, tracks, [], entry
@@ -356,7 +387,7 @@ def entry_for(entry, player, P):
 
 
 def parse(pkg):
-    assert pkg[:4] == b'CMR3'
+    assert pkg[:4] == b'CMR4'
     p = 4
     table_at, tsize = struct.unpack_from('<HB', pkg, p); p += 3
     n = pkg[p]; p += 1
@@ -379,8 +410,12 @@ def parse(pkg):
     for _ in range(n):
         b, o, v = struct.unpack_from('<BHB', pkg, p); p += 4
         marks[(b, o)] = v
+    n, = struct.unpack_from('<H', pkg, p); p += 2
+    redirects = []
+    for _ in range(n):
+        redirects.append(struct.unpack_from('<BHHI', pkg, p)); p += 9
     flags = pkg[p]; p += 1
-    return dict(marks=marks, bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
+    return dict(redirects=redirects, marks=marks, bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
                 player=bytes(pkg[p:p + 0x900]))
 
 
@@ -419,6 +454,14 @@ def match(pkg, rom, mbc1=False):
     for rb, o, ln, crc in P['checks']:
         if rb == 0 and crc_of(0, 0, o, ln, renumbered) != crc:
             return None, 'bank 0 code differs'
+    for rb, o, n, crc in P['redirects']:
+        cb = table[rb] if rb else 0
+        x = rom[cb * 0x4000 + o] | rom[cb * 0x4000 + o + 1] << 8
+        for _ in range(3):   # through a jump table
+            if x + 3 <= 0x4000 and rom[x] == 0xC3 and zlib.crc32(rom[x:x + n]) != crc:
+                x = rom[x + 1] | rom[x + 2] << 8
+        if x + n > 0x4000 or zlib.crc32(rom[x:x + n]) != crc:
+            return None, 'a routine the rip calls differs'
     for c, v in renumbered:
         if v >= len(table) or c != table[v]:
             return None, 'bank numbers differ'
