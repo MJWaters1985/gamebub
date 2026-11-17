@@ -1,5 +1,5 @@
 pub mod buttons;
-mod screenshot;
+pub mod screenshot;
 mod slint;
 mod state;
 
@@ -88,8 +88,8 @@ pub enum Message {
     DockBegin { serial: String, firmware: String },
     /// Dock ended
     DockEnd,
-    /// Take a UI screenshot
-    Screenshot,
+    /// Take a UI screenshot (true: for USB, to screenshot::USB_PATH)
+    Screenshot(bool),
     /// Open core file selection screen
     CoreFileSelectBegin { label: String },
     /// Update core file selection list
@@ -386,10 +386,13 @@ impl UI {
             Message::DockEnd => {
                 self.root.global::<slint::Backend>().set_docked(false);
             }
-            Message::Screenshot => {
-                match screenshot::save_ui_screenshot(&self.window, &mut self.framebuffer) {
+            Message::Screenshot(usb) => {
+                match screenshot::save_ui_screenshot(&self.window, &mut self.framebuffer, usb) {
                     Ok(f) => log::info!("Saved UI screenshot to {f}"),
                     Err(e) => log::error!("Screenshot error: {e}"),
+                }
+                if usb {
+                    screenshot::USB_PENDING.store(false, std::sync::atomic::Ordering::Release);
                 }
             }
             Message::CoreFileSelectBegin { label } => {

@@ -30,16 +30,24 @@ impl<'a> LineBufferProvider for &mut ScreenshotLineBuffer<'a> {
     }
 }
 
+/// Where screenshots asked for over USB go (overwritten each time; read back with the USB
+/// control request, see control::REQUEST_SCREENSHOT_READ).
+pub const USB_PATH: &str = "/sdcard/system/usb-screenshot.tga";
+
+/// Set while a USB screenshot is being taken.
+pub static USB_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Render a screenshot of the UI and save it to a TGA file on the SD card.
 pub fn save_ui_screenshot(
     window: &MinimalSoftwareWindow,
     buffer: &mut [Argb1555],
+    usb: bool,
 ) -> std::io::Result<String> {
     let timestamp = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let filename = format!("/sdcard/screenshot-{}.tga", timestamp);
+    let filename = if usb { USB_PATH.to_string() } else { format!("/sdcard/screenshot-{}.tga", timestamp) };
     let file = File::create(&filename)?;
     let mut writer = BufWriter::new(file);
 

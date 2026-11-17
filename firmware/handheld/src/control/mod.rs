@@ -28,6 +28,13 @@ const REQUEST_GAMEPAD_DISCONNECT: u8 = 5;
 const REQUEST_GAMEPAD_DATA: u8 = 6;
 
 const REQUEST_LCD_DEBUG: u8 = 8;
+/// Read the last USB screenshot (REQUEST_SCREENSHOT with value 1): value = 512-byte piece.
+/// Stalls while the screenshot is being taken or when there's none.
+const REQUEST_SCREENSHOT_READ: u8 = 9;
+
+/// Gamepad slot of the host control tool (firmware/tools/bubctl): connects without a
+/// notification.
+const QUIET_SLOT: u32 = 0xB0B;
 
 /// Handle a control request where data is sent to the host (IN).
 pub fn handle_control_in<'a>(request: &Request, buf: &'a mut [u8]) -> Result<&'a [u8], ()> {
@@ -43,6 +50,24 @@ pub fn handle_control_in<'a>(request: &Request, buf: &'a mut [u8]) -> Result<&'a
             buf[16..24].copy_from_slice(&crate::fwinfo::GIT_COMMIT_BYTES[0..8]);
             Ok(&buf[0..24])
         }
+        REQUEST_SCREENSHOT_READ => {
+            use std::io::{Read, Seek, SeekFrom};
+            if crate::ui::screenshot::USB_PENDING.load(std::sync::atomic::Ordering::Acquire) {
+                return Err(());
+            }
+            let n = (request.length as usize).min(buf.len());
+            let mut file = std::fs::File::open(crate::ui::screenshot::USB_PATH).map_err(|_| ())?;
+            file.seek(SeekFrom::Start(request.value as u64 * 512)).map_err(|_| ())?;
+            let mut got = 0;
+            while got < n {
+                match file.read(&mut buf[got..n]) {
+                    Ok(0) => break,
+                    Ok(k) => got += k,
+                    Err(_) => return Err(()),
+                }
+            }
+            Ok(&buf[0..got])
+        }
         _ => Err(()),
     }
 }
@@ -53,7 +78,11 @@ pub fn handle_control_out(request: &Request, buf: &[u8]) -> Result<(), ()> {
         REQUEST_REBOOT => Ok(()),
         REQUEST_ENABLE_DEBUG => Ok(()),
         REQUEST_SCREENSHOT => {
-            ui::send(ui::Message::Screenshot);
+            let usb = request.value == 1;
+            if usb {
+                crate::ui::screenshot::USB_PENDING.store(true, std::sync::atomic::Ordering::Release);
+            }
+            ui::send(ui::Message::Screenshot(usb));
             Ok(())
         }
         REQUEST_LCD_DEBUG => {
@@ -104,9 +133,11 @@ pub fn handle_control_out(request: &Request, buf: &[u8]) -> Result<(), ()> {
                 .unwrap_or_default()
                 .trim_end_matches('\0');
             ui::send(ui::Message::GamepadConnected(GamepadId(slot)));
-            ui::send(ui::Message::Notification(ui::Notification::new_short(
-                "Gamepad connected".to_string(),
-            )));
+            if slot != QUIET_SLOT {
+                ui::send(ui::Message::Notification(ui::Notification::new_short(
+                    "Gamepad connected".to_string(),
+                )));
+            }
             log::info!("Gamepad model='{model}' id={device_id:?}");
             Ok(())
         }
@@ -117,9 +148,11 @@ pub fn handle_control_out(request: &Request, buf: &[u8]) -> Result<(), ()> {
             }
             let slot = u32::from_le_bytes(buf[0..4].try_into().unwrap());
             ui::send(ui::Message::GamepadDisconnected(GamepadId(slot)));
-            ui::send(ui::Message::Notification(ui::Notification::new_short(
-                "Gamepad disconnected".to_string(),
-            )));
+            if slot != QUIET_SLOT {
+                ui::send(ui::Message::Notification(ui::Notification::new_short(
+                    "Gamepad disconnected".to_string(),
+                )));
+            }
             Ok(())
         }
         REQUEST_GAMEPAD_DATA => {

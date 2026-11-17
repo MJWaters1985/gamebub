@@ -1,0 +1,9 @@
+[package]
+name = "bubctl"
+version = "0.1.0"
+edition = "2021"
+description = "Control a Game Bub over USB from a computer: info, restart, buttons, screenshots, log, firmware install"
+
+[dependencies]
+nusb = "0.1"
+png = "0.17"
