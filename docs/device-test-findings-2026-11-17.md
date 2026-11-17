@@ -1,5 +1,10 @@
 # Device test findings, 17 November 2026
 
+**Status (end of day):** findings 1, 2, 4 and 5 fixed (`4f6e8282`); finding 3 was the test's
+mistake, not the firmware's; the reruns found finding 6 (fixed, `4f7109ff`, `58f5a803`) and
+finding 7 (open). Last full run on `4f7109f` + `58f5a80`: every test passes
+(`test-runs/20261117-172914`, `20261117-174653`).
+
 Found by the automated on-device suite (`firmware/tools/bubctl/devtest.py`) on a rev 4 Game Bub
 (hardware 1.4.1.0) running firmware `b5453bb` (branch `cart-music`), with the SD card's
 library: 5 favorites, Game Boy 24, Game Boy Advance 41, Game Boy Color 17, Game Gear 28,
@@ -23,7 +28,7 @@ and screenshots. `test-runs/` is ignored by git.
 
 ## Findings
 
-### 1. Run ROM crashes going back from a game list to the system list (high)
+### 1. Run ROM crashes going back from a game list to the system list (high) — fixed
 
 **Seen:** Run ROM → open a system (box art shows) → B. The firmware runs out of memory and
 restarts: free heap falls to about 20 KB while it recounts the systems, and counting Genesis
@@ -44,7 +49,10 @@ its length.
   entries (no names, no paths, no sort).
 - Add a test step that goes back from the biggest list (the suite's `leak_run_rom` covers it).
 
-### 2. Built-in music data misses the Game Bub's own ROMs when they differ from the Pocket's (medium)
+**Fixed (`4f6e8282`):** both of the above. Ten rounds of `leak_run_rom` now keep about 103 KB
+free on the home screen, with no crash.
+
+### 2. Built-in music data misses the Game Bub's own ROMs when they differ from the Pocket's (medium) — fixed
 
 **Seen:** Donkey Kong (Game Boy) on the Game Bub's SD card shows no Music hint, though the
 built-in data has Donkey Kong (Japan, USA) (SGB Enhanced) from the Pocket card. The Game Bub's
@@ -59,7 +67,12 @@ later.
 - Optionally, when a header doesn't match, try the entries for the same title (No-Intro name):
   the rebuild's CRC check already refuses a version it can't rebuild exactly.
 
-### 3. The in-game menu ignores the d-pad the first time it's opened after a game starts (medium)
+**Fixed (`4f6e8282`, data rebuilt):** the data is now built from the Pocket card, `cart-dumps/` and
+the Game Bub card's own 41 Game Boy / Color ROMs: 217 games, and all 41 Game Bub ROMs have
+music (Donkey Kong included). Pokemon Silver has no rip of its own; `music_db.py` now has
+aliases, and Silver rebuilds the Gold rip exactly (125 bytes of data).
+
+### 3. The in-game menu ignores the d-pad the first time it's opened after a game starts — not a bug
 
 **Seen:** after launching a game from Run ROM and playing for 6 seconds, Home → Down → Down → A
 selected **Return** instead of **Exit Core** every time (8 of 8 cores); the second time the menu
@@ -74,23 +87,60 @@ loop ignores input while animations run unless polled").
 and check `Screen enter`; focus the list as the menu becomes visible, and poll input during the
 animation.
 
-### 4. With no cartridge inserted, the message says to clean the contacts (low)
+**Resolved:** the test's mistake. A game started from Run ROM has a fourth item, **Load ROM**
+(Return, Load ROM, Reset, Exit Core); music has three. Down, Down, A chose Reset. The test now
+presses Down three times (the menu doesn't wrap, so that's Exit Core either way), and every core
+exits on the first try.
+
+### 4. With no cartridge inserted, the message says to clean the contacts (low) — fixed
 
 **Seen:** Cartridge Manager and Cartridge Music with an empty slot: "Couldn't read the cartridge
 header. Clean the cartridge contacts and try again." (`identify_dmg` in
 `src/cart_tool/cart.rs`). The firmware can't tell an empty slot from a dirty cartridge (the logo
 check fails either way), but the advice only fits the second.
 
+**Fixed (`4f6e8282`):** a header that reads as all `0xFF` or all `0x00` (an empty slot) says
+"There's no cartridge in the slot. Insert a cartridge."; otherwise "Couldn't read the cartridge
+header. If a cartridge is inserted, clean its contacts and try again." (Game Boy and Advance).
+
 **Fix:** "No cartridge found. Insert a cartridge, or clean its contacts if one is inserted." (and
 if a read of all `0xFF`/`0x00` is typical of an empty slot, say "Insert a cartridge" for that).
 
-### 5. "Dropping UI message" logged as an error at every boot (low)
+### 5. "Dropping UI message" logged as an error at every boot (low) — fixed
 
 **Seen:** `E (443) handheld::ui: Dropping UI message`, once per boot, before the UI thread is
 up (`ui::send` with no sender yet, `src/ui/mod.rs`). Something is sent too early and lost.
 
 **Fix:** log which message (e.g. `{message:?}` or its variant) to find the sender; queue it or
 send it after the UI starts. Then it can stop being an error-level line that tests must ignore.
+
+**Fixed (`4f6e8282`):** messages sent before the UI thread starts are queued (up to 32) and
+delivered when it starts; the line no longer appears.
+
+### 6. A screenshot of a game list with box art crashed the Game Bub (high) — fixed
+
+**Seen (rerun on `4f6e828`):** right after a game list loaded its box art, a USB screenshot
+(`bubctl screenshot`) ran out of memory inside the renderer's full redraw (Slint
+`SceneTexture` vector growing: `memory allocation of 7168 bytes failed`; 19 KB free, largest
+block 3.8 KB). The screenshot held an 8 KB write buffer and an open file during the redraw.
+
+**Fixed (`4f7109ff`, `58f5a803`):** lines are written from the stack (no heap buffer), and a
+screenshot is refused, with a warning and the stale file removed, when the largest free block is
+under 24 KB; `bubctl screenshot` asks again up to four times.
+
+### 7. Memory is very tight while a game list with box art is showing (medium) — open
+
+**Seen:** with box art on screen, the largest free block stays between 7 and 22 KB (free memory
+about 55 KB), so 28 of 35 screenshot attempts were refused in `run_rom_lists`. Normal drawing
+copes, but anything that allocates a few KB at that moment (a full redraw, a notification, a
+Wi-Fi event) can run out, as finding 6 did. This is the Run ROM memory pressure noted before
+(box art strip pool, game list model, renderer scene).
+
+**Fix (to do):** measure what the list view holds (box art strips about 45 KB, the list model,
+`library.games`); keep box art in fewer, smaller strips or load it into one pre-allocated buffer
+at boot; and keep a reserve (e.g. 32 KB contiguous) that box art loading won't take
+(`THUMBNAIL_HEADROOM` is 24 KB of total free, not contiguous). Then `run_rom_lists` should get
+every screenshot.
 
 ## Test suite limits
 
