@@ -179,20 +179,26 @@ fn press(args: &[String]) -> Result<()> {
 
 fn screenshot(out: &str) -> Result<()> {
     let bub = Bub::open()?;
-    bub.out(SCREENSHOT, 1, &[])?;
-    let start = Instant::now();
     let mut data = Vec::new();
     let mut buf = [0u8; 512];
-    // The first piece is refused until the screenshot is saved.
-    loop {
-        match bub.input(SCREENSHOT_READ, 0, &mut buf) {
-            Ok(n) => {
-                data.extend_from_slice(&buf[..n]);
-                break;
-            }
-            Err(e) if start.elapsed() > Duration::from_secs(10) => return Err(format!("No screenshot: {e}")),
-            Err(_) => std::thread::sleep(Duration::from_millis(100)),
+    // The first piece is refused until the screenshot is saved, and for good when the Game Bub
+    // refused to take it (short of memory, e.g. with box art showing): ask again a few times.
+    'attempts: for attempt in 0..4 {
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(1000));
         }
+        bub.out(SCREENSHOT, 1, &[])?;
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(3) {
+            if let Ok(n) = bub.input(SCREENSHOT_READ, 0, &mut buf) {
+                data.extend_from_slice(&buf[..n]);
+                break 'attempts;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    if data.is_empty() {
+        return Err("No screenshot (the Game Bub refused it, probably short of memory)".into());
     }
     if data.len() < 18 {
         return Err("Screenshot too short".into());

@@ -405,7 +405,12 @@ impl UI {
                 match screenshot::save_ui_screenshot(&self.window, &mut self.framebuffer, usb) {
                     Ok(f) => log::info!("Saved UI screenshot to {f}"),
                     Err(e) => {
-                        log::error!("Screenshot error: {e}");
+                        // Refused for lack of memory is expected (box art on screen): a warning.
+                        if e.kind() == std::io::ErrorKind::Other {
+                            log::warn!("Screenshot refused: {e}");
+                        } else {
+                            log::error!("Screenshot error: {e}");
+                        }
                         if usb {
                             // Don't let the reader get the previous screenshot.
                             let _ = std::fs::remove_file(screenshot::USB_PATH);
