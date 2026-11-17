@@ -280,7 +280,9 @@ impl UI {
             // Render UI if needed.
             self.window.draw_if_needed(|renderer| {
                 let frame = FRAMES_DRAWN.fetch_add(1, Ordering::Relaxed);
-                crate::crash_handler::note(&format_args!("frame {frame} start"));
+                if cfg!(diagnostics) {
+                    crate::crash_handler::note(&format_args!("frame {frame} start"));
+                }
                 let mut device = Device::lock();
 
                 let render_start = Instant::now();

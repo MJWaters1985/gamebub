@@ -88,12 +88,17 @@ unsafe extern "C" fn alloc_failed(size: usize, caps: u32, _function: *const core
     );
 }
 
-/// Test builds: note an event and the heap's state in the crash report.
+/// Note an event and the heap's state: in the log (USB serial) always, and in test builds also
+/// in the crash report.
 pub fn note(event: &dyn Display) {
+    use esp_idf_svc::sys::*;
+    let (free, largest) = unsafe {
+        (heap_caps_get_free_size(MALLOC_CAP_8BIT), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT))
+    };
+    log::info!("{event}: heap free {free}, largest {largest}");
     if !cfg!(diagnostics) {
         return;
     }
-    use esp_idf_svc::sys::*;
     let report = unsafe { REPORT.assume_init_mut() };
     let slot = &mut report.events[report.next_event % EVENTS];
     slot.clear();
@@ -102,8 +107,8 @@ pub fn note(event: &dyn Display) {
             slot,
             "{:7.1}s {event}: free {}, largest {}",
             esp_timer_get_time() as f64 / 1e6,
-            heap_caps_get_free_size(MALLOC_CAP_8BIT),
-            heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+            free,
+            largest,
         )
     };
     report.next_event = (report.next_event + 1) % EVENTS;

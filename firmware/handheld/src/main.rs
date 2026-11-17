@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
         log::warn!("Failed to mount SD card");
     }
     device.set_brightness(kvs::keys::BRIGHTNESS.get().unwrap());
+    crate::crash_handler::note(&"device ready");
     timezone::apply();
 
     // Setup workers.

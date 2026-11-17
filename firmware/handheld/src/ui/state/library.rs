@@ -96,7 +96,10 @@ impl UiState {
         let mut systems: Vec<(System, usize)> = library::SYSTEMS
             .iter()
             .filter(|s| s.rom_dir().is_dir())
-            .map(|s| (*s, s.games().len()))
+            .map(|s| {
+                crate::crash_handler::note(&format_args!("Run ROM: counting {}", s.folder));
+                (*s, s.games().len())
+            })
             .collect();
         systems.sort_by(|a, b| crate::core::browse::natural_cmp(a.0.folder, b.0.folder));
         let favorites = library::favorites().len();
