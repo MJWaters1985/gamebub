@@ -8,13 +8,17 @@ banks, check the code, fill in the rip-bank -> ROM-bank table and refuse a cartr
 doesn't match (another revision or region, or a rip with other patches).
 
 Package (.cmr), little endian:
-  "CMR2", u16 file offset of the bank table, u8 table size,
+  "CMR3", u16 file offset of the bank table, u8 table size,
   u8 count + u16 file offsets of constants holding rip bank numbers (ld a,N before a call into
      the engine) to translate through the table,
   u8 count + probes: u8 rip bank, u16 offset in the bank, u8 length, bytes,
   u16 count + checks: u8 rip bank (0 = bank 0), u16 offset in the bank, u16 length, u32 CRC32,
   u16 count + bank numbers in the engine's data: u8 rip bank, u16 offset, u8 the rip's value
      (on the cartridge: the same, or renumbered by the ripper to the ROM bank that rip bank is in),
+  u16 count + bytes in the checked ranges that may be bank numbers the ripper renumbered (their
+     value is a rip bank): u8 rip bank, u16 offset, u8 the rip's value. Where the cartridge has
+     another value there, the CRC is taken with the rip's, and once the table is filled in the
+     cartridge's must be the ROM bank of that rip bank,
   u8 flags (1: uses cartridge RAM), 2304-byte player file.
 
 package.py <rip folder> <out.cmr>      make one package
@@ -28,6 +32,7 @@ from gbsdiff import load_gbs, image
 import gen_music_player as gm
 
 DATA_CHECK_CAP = 0x2000   # bytes of music data checked (code is always checked in full)
+MARKS_CAP = 2000          # possible bank numbers listed (device memory)
 
 
 def make(folder, plays=30, small=False, _t=None):
@@ -48,8 +53,9 @@ def make(folder, plays=30, small=False, _t=None):
     ripper = {L for L in touched if g['load'] <= L < (min(0x4000, g['load'] + 0x100) if small else 0x4000)}
     if g['load'] >= 0x4000:
         ripper |= {L for L in touched if g['load'] <= L < g['load'] + 0x100}
-    elif any(0x4000 <= x < 0x4100 for x in (g['init'], g['play'])):
-        # the ripper's code runs on past the end of bank 0 (init or play at the start of bank 1)
+    elif 0x4000 <= g['init'] < 0x4100:
+        # the ripper's code runs on past the end of bank 0 (its init at the start of bank 1; play
+        # there alone can be the engine's own entry point)
         ripper |= {L for L in touched if 0x4000 <= L < 0x4100}
     # data read from the moved code's area that runs on past it (a table or compressed data the
     # ripper's code points at) moves with it, or the moved pointer would run off the end
@@ -150,7 +156,21 @@ def make(folder, plays=30, small=False, _t=None):
         problems.append('no free WRAM bank for the track table')
     LOOP = 0x260
     need = len(blob) + 24 + maxbank + 1 + 0x56 + LOOP
-    where = free_window(ram_used, need)
+    # jp hl into the moved code with h from an `ld h,n` there (an address built from a high byte
+    # and a table of low bytes): the code moves by whole pages and those bytes are patched
+    hi_fix, align = set(), None
+    for L, tgt, hs in t.get('jphl', ()):
+        if L is None or tgt is None or cluster_of(L) is None or cluster_of(tgt) is None:
+            continue
+        for src in hs:
+            if isinstance(src, int) and cluster_of(src) is not None and img[src - 1] == 0x26:
+                i = cluster_of(tgt)
+                a = (clusters[i][0] - cl_off[i]) % 256
+                if align is not None and a != align:
+                    problems.append('jp hl into moved code needs two alignments')
+                align = a
+                hi_fix.add((src, tgt))
+    where = free_window(ram_used, need, align=align)
     if where is None:
         if not small and g['load'] < 0x4000 - 0x100:
             return make(folder, plays, True, t)
@@ -179,6 +199,9 @@ def make(folder, plays=30, small=False, _t=None):
             d = ins[1] - 256 if ins[1] > 127 else ins[1]
             if cluster_of(L + 2 + d) != i:
                 problems.append('jr out of moved code at %X' % L)
+    for src, tgt in hi_fix:
+        o = reloc(src) - where
+        blob[o] = (img[src] + ((reloc(tgt) - tgt) >> 8)) & 0xFF
     xl = bytes([0xE5, 0xF5, 0x21, table_addr & 0xFF, table_addr >> 8,
                 0x85, 0x6F, 0x30, 0x01, 0x24, 0x7E, 0xEA, 0x00, 0x20, 0xF1, 0xE1, 0xC9]).ljust(24, b'\0')
     table = bytes(range(maxbank + 1))   # filled in on the device
@@ -263,10 +286,21 @@ def make(folder, plays=30, small=False, _t=None):
         checks.append((lo, hi))
         budget -= hi - lo
     probes = {}
+    def window(lo, hi):
+        # the longest stretch (up to 24 bytes) with no byte that could be a renumbered bank number
+        best, start = (0, lo), lo
+        for x in range(lo, min(hi, len(img)) + 1):
+            if x == min(hi, len(img)) or 1 <= img[x] <= maxbank:
+                if x - start > best[0]:
+                    best = (x - start, start)
+                start = x + 1
+        n, at = best
+        return at, min(n, 24)
     for b in sorted({lo // 0x4000 for lo, hi in code_runs + data_runs if lo >= 0x4000}):
-        cand = [r for r in code_runs if r[0] // 0x4000 == b] or [r for r in data_runs if r[0] // 0x4000 == b]
-        lo, hi = max(cand, key=lambda r: r[1] - r[0])
-        probes[b] = (lo % 0x4000, bytes(img[lo:min(hi, lo + 24)]))
+        runs_b = [r for r in code_runs if r[0] // 0x4000 == b] + [r for r in data_runs if r[0] // 0x4000 == b]
+        at, n = max((window(lo, hi) for lo, hi in runs_b), key=lambda w: w[1])
+        if n >= 6:
+            probes[b] = (at % 0x4000, bytes(img[at:at + n]))
     read_banks = {L // 0x4000 for L in in_rip if L >= 0x4000}   # selected but never read: no matter
     for b in range(1, maxbank + 1):
         if b not in probes and b in used_banks and b in read_banks:
@@ -274,7 +308,16 @@ def make(folder, plays=30, small=False, _t=None):
     if problems:
         return None, g, tracks, problems, None
 
-    pkg = bytearray(b'CMR2')
+    # bytes that may be renumbered bank numbers (not exercised by the trace): see the format
+    marks = []
+    for lo, hi, *at in checks:
+        at = at[0] if at else lo
+        for i in range(hi - lo):
+            if 1 <= img[lo + i] <= maxbank:
+                marks.append(((at + i) // 0x4000, (at + i) % 0x4000, img[lo + i]))
+    marks = sorted(set(marks))[:MARKS_CAP]
+
+    pkg = bytearray(b'CMR3')
     pkg += struct.pack('<HB', table_at, maxbank + 1)
     pkg += struct.pack('<B', 0)   # constants: translated by the player itself
     pkg += struct.pack('<B', len(probes))
@@ -287,6 +330,9 @@ def make(folder, plays=30, small=False, _t=None):
     pkg += struct.pack('<H', len(bank_bytes))
     for L in bank_bytes:
         pkg += struct.pack('<BHB', L // 0x4000, L % 0x4000, img[L])
+    pkg += struct.pack('<H', len(marks))
+    for b, o, v in marks:
+        pkg += struct.pack('<BHB', b, o, v)
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
     return bytes(pkg), g, tracks, [], entry
@@ -310,7 +356,7 @@ def entry_for(entry, player, P):
 
 
 def parse(pkg):
-    assert pkg[:4] == b'CMR2'
+    assert pkg[:4] == b'CMR3'
     p = 4
     table_at, tsize = struct.unpack_from('<HB', pkg, p); p += 3
     n = pkg[p]; p += 1
@@ -328,8 +374,13 @@ def parse(pkg):
     bank_bytes = []
     for _ in range(n):
         bank_bytes.append(struct.unpack_from('<BHB', pkg, p)); p += 4
+    n, = struct.unpack_from('<H', pkg, p); p += 2
+    marks = {}
+    for _ in range(n):
+        b, o, v = struct.unpack_from('<BHB', pkg, p); p += 4
+        marks[(b, o)] = v
     flags = pkg[p]; p += 1
-    return dict(bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
+    return dict(marks=marks, bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
                 player=bytes(pkg[p:p + 0x900]))
 
 
@@ -339,13 +390,26 @@ def match(pkg, rom, mbc1=False):
     P = parse(pkg)
     nbanks = max(2, len(rom) // 0x4000)
     table = list(range(P['tsize']))
+    marks = P['marks']
+    renumbered = []   # (cartridge byte, rip value) where a possible bank number differs
+
+    def crc_of(rb, cb, o, ln, out):
+        data = bytearray(rom[cb * 0x4000 + o:cb * 0x4000 + o + ln])
+        for i in range(len(data)):
+            v = marks.get((rb, o + i))
+            if v is not None and data[i] != v:
+                out.append((data[i], v))
+                data[i] = v
+        return zlib.crc32(data)
+
     for b, off, data in P['probes']:
         found = [cb for cb in range(1, nbanks) if rom[cb * 0x4000 + off:cb * 0x4000 + off + len(data)] == data]
         ok = None
         for cb in found:
-            if all(zlib.crc32(rom[cb * 0x4000 + o:cb * 0x4000 + o + ln]) == crc
-                   for rb, o, ln, crc in P['checks'] if rb == b):
+            got = []
+            if all(crc_of(b, cb, o, ln, got) == crc for rb, o, ln, crc in P['checks'] if rb == b):
                 ok = cb
+                renumbered += got
                 break
         if ok is None:
             return None, 'rip bank %d not found on the cartridge' % b
@@ -353,8 +417,11 @@ def match(pkg, rom, mbc1=False):
             return None, 'needs MBC1 bank %d' % ok
         table[b] = ok
     for rb, o, ln, crc in P['checks']:
-        if rb == 0 and zlib.crc32(rom[o:o + ln]) != crc:
+        if rb == 0 and crc_of(0, 0, o, ln, renumbered) != crc:
             return None, 'bank 0 code differs'
+    for c, v in renumbered:
+        if v >= len(table) or c != table[v]:
+            return None, 'bank numbers differ'
     for rb, o, v in P['bank_bytes']:
         cb = table[rb] if rb else 0
         c = rom[cb * 0x4000 + o]

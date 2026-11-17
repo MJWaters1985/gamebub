@@ -26,6 +26,9 @@ struct Package {
     /// Bank numbers in the engine's data: (rip bank, offset, the rip's value). On the cartridge
     /// each is the same, or (renumbered by the ripper) the ROM bank that rip bank was found in.
     bank_bytes: Vec<(u8, u16, u8)>,
+    /// Bytes in the checked ranges that may be bank numbers the ripper renumbered, sorted:
+    /// (rip bank, offset, the rip's value). See `crc`.
+    marks: Vec<(u8, u16, u8)>,
     player: Vec<u8>,
 }
 
@@ -39,6 +42,7 @@ fn parse(data: &[u8]) -> Result<Package> {
     let version = match take(4)? {
         b"CMR1" => 1,
         b"CMR2" => 2,
+        b"CMR3" => 3,
         _ => bail!("not a cartridge music package"),
     };
     let u16_ = |b: &[u8]| u16::from_le_bytes([b[0], b[1]]);
@@ -67,12 +71,21 @@ fn parse(data: &[u8]) -> Result<Package> {
             bank_bytes.push((c[0], u16_(&c[1..]), c[3]));
         }
     }
+    let mut marks = vec![];
+    if version >= 3 {
+        let n = u16_(take(2)?) as usize;
+        for _ in 0..n {
+            let c = take(4)?;
+            marks.push((c[0], u16_(&c[1..]), c[3]));
+        }
+        marks.sort_unstable();
+    }
     let _flags = take(1)?[0];
     let player = take(PLAYER_SIZE)?.to_vec();
     if table_at + table_size > PLAYER_SIZE || constants.iter().any(|&o: &usize| o >= PLAYER_SIZE) {
         bail!("package offsets out of range");
     }
-    Ok(Package { table_at, table_size, constants, probes, checks, bank_bytes, player })
+    Ok(Package { table_at, table_size, constants, probes, checks, bank_bytes, marks, player })
 }
 
 /// Lower case, without bracketed parts, "The", a possessive "s", "version" and punctuation, the
@@ -93,14 +106,38 @@ pub fn norm(name: &str) -> String {
     s.split_whitespace().filter(|w| !DROP.contains(w)).collect::<Vec<_>>().join(" ")
 }
 
-fn crc(link: &mut Link, info: &CartInfo, bank: u32, offset: u16, len: u16) -> Result<u32> {
+/// CRC of a range of the cartridge (ROM `bank`) that rip bank `rip_bank` should have. Where a
+/// marked byte (a possible renumbered bank number) differs from the rip's, the rip's value is
+/// used and (cartridge value, rip value) noted in `renumbered`, to check against the table.
+fn crc(
+    link: &mut Link,
+    info: &CartInfo,
+    pkg: &Package,
+    (rip_bank, bank): (u8, u32),
+    offset: u16,
+    len: u16,
+    renumbered: &mut Vec<(u8, u8)>,
+) -> Result<u32> {
     // In pieces: a check can cover a whole 16 KB bank, and memory is short.
     let mut buf = [0u8; 512];
     let mut c = Crc32::new();
     let mut done = 0u16;
+    let mut mark = pkg.marks.partition_point(|m| (m.0, m.1) < (rip_bank, offset));
     while done < len {
         let n = (len - done).min(buf.len() as u16);
-        cart::read_rom_bank(link, info, bank, offset + done, &mut buf[..n as usize])?;
+        let at = offset + done;
+        cart::read_rom_bank(link, info, bank, at, &mut buf[..n as usize])?;
+        while let Some(&(b, o, v)) = pkg.marks.get(mark) {
+            if b != rip_bank || o >= at + n {
+                break;
+            }
+            let i = (o - at) as usize;
+            if buf[i] != v {
+                renumbered.push((buf[i], v));
+                buf[i] = v;
+            }
+            mark += 1;
+        }
         c.update(&buf[..n as usize]);
         done += n;
     }
@@ -111,6 +148,7 @@ fn crc(link: &mut Link, info: &CartInfo, bank: u32, offset: u16, len: u16) -> Re
 fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::result::Result<Vec<u8>, String>> {
     let banks = (info.rom_size / 0x4000).max(2);
     let mut table: Vec<u8> = (0..pkg.table_size as u32).map(|b| b as u8).collect();
+    let mut renumbered = vec![];
     for (rip_bank, off, probe) in &pkg.probes {
         let mut found = None;
         let mut buf = vec![0u8; probe.len()];
@@ -120,15 +158,16 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
                 continue;
             }
             let mut all = true;
-            for &(b, o, len, want) in pkg.checks.iter().filter(|c| c.0 == *rip_bank) {
-                let _ = b;
-                if crc(link, info, bank, o, len)? != want {
+            let mut got = vec![];
+            for &(_, o, len, want) in pkg.checks.iter().filter(|c| c.0 == *rip_bank) {
+                if crc(link, info, pkg, (*rip_bank, bank), o, len, &mut got)? != want {
                     all = false;
                     break;
                 }
             }
             if all {
                 found = Some(bank);
+                renumbered.extend(got);
                 break;
             }
         }
@@ -143,9 +182,13 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
         }
     }
     for &(_, o, len, want) in pkg.checks.iter().filter(|c| c.0 == 0) {
-        if crc(link, info, 0, o, len)? != want {
+        if crc(link, info, pkg, (0, 0), o, len, &mut renumbered)? != want {
             return Ok(Err("the cartridge's code differs from the rip's".into()));
         }
+    }
+    // possible bank numbers that differ must be the ROM bank of the rip bank they name
+    if renumbered.iter().any(|&(cart, rip)| table.get(rip as usize) != Some(&cart)) {
+        return Ok(Err("the bank numbers in its sound engine don't match".into()));
     }
     for &(rip_bank, off, value) in &pkg.bank_bytes {
         let bank = if rip_bank == 0 { 0 } else { table.get(rip_bank as usize).copied().unwrap_or(rip_bank) };

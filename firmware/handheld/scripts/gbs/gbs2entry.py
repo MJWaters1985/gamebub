@@ -59,6 +59,7 @@ class TraceEmu(Emu):
         self.wt = frozenset()
         self.bank_sources = set()
         self.bank_untracked = set()   # bank switches with a value from no known source
+        self.jphl = set()   # jp hl: (lin of the jp, lin of the target, sources of h)
 
     def fetch(self):
         self.fetching = True
@@ -96,6 +97,8 @@ class TraceEmu(Emu):
         op = self.rd(pc)
         x, y, z = op >> 6, (op >> 3) & 7, op & 7
         hl = self.hl
+        if op == 0xE9:
+            self.jphl.add((self.cur, lin(self.bank, hl) if hl < 0x8000 else None, g('h')))
         after = None
         self.wt = E
         if x == 1 and op != 0x76:
@@ -226,18 +229,23 @@ def trace(g, songs, plays):
         agg['svbk'] |= e.svbk_writes
         agg['bank_sources'] |= e.bank_sources
         agg.setdefault('rst', set()).update(e.rst_used)
+        agg.setdefault('jphl', set()).update(e.jphl)
         agg.setdefault('bank_untracked', set()).update(e.bank_untracked)
     return agg
 
 
-def free_window(used, size, lo=0xC000, hi=0xD000):
+def free_window(used, size, lo=0xC000, hi=0xD000, align=None):
+    """align: the address's low byte must be this."""
     addr = lo
-    while addr + size <= hi:
+    while True:
+        if align is not None:
+            addr += (align - addr) % 256
+        if addr + size > hi:
+            return None
         clash = [u for u in range(addr - 16, addr + size + 16) if u in used]
         if not clash:
             return addr
         addr = max(clash) + 17
-    return None
 
 
 def convert(folder, rom=None, plays=120):
