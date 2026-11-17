@@ -8,11 +8,13 @@ banks, check the code, fill in the rip-bank -> ROM-bank table and refuse a cartr
 doesn't match (another revision or region, or a rip with other patches).
 
 Package (.cmr), little endian:
-  "CMR1", u16 file offset of the bank table, u8 table size,
+  "CMR2", u16 file offset of the bank table, u8 table size,
   u8 count + u16 file offsets of constants holding rip bank numbers (ld a,N before a call into
      the engine) to translate through the table,
   u8 count + probes: u8 rip bank, u16 offset in the bank, u8 length, bytes,
   u16 count + checks: u8 rip bank (0 = bank 0), u16 offset in the bank, u16 length, u32 CRC32,
+  u16 count + bank numbers in the engine's data: u8 rip bank, u16 offset, u8 the rip's value
+     (the ripper renumbers them; on the cartridge it must be the ROM bank that rip bank is in),
   u8 flags (1: uses cartridge RAM), 2304-byte player file.
 
 package.py <rip folder> <out.cmr>      make one package
@@ -226,17 +228,14 @@ def make(folder, plays=30):
                 out.append([L, L + 1])
         return out
     in_rip = {L for L in touched if L >= g['load']}   # below the load address the rip has nothing
-    code_runs = runs((code_bytes & in_rip) - ripper - vec)
-    data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper - vec)
+    bank_bytes = sorted(L for L in must_check - ripper - vec if L >= g['load'])
+    code_runs = runs((code_bytes & in_rip) - ripper - vec - set(bank_bytes))
+    data_runs = runs((t['reads'] & in_rip) - code_bytes - ripper - vec - set(bank_bytes))
     checks, budget = [], DATA_CHECK_CAP   # (rip address range, where it is on the cartridge)
     for lo, hi in runs(vec):
         checks.append((lo, hi, lo - g['load']))
     for lo, hi in code_runs:
         checks.append((lo, hi))
-    covered = {L for lo, hi in code_runs for L in range(lo, hi)}
-    for L in sorted(must_check - covered - ripper):
-        if L >= g['load']:
-            checks.append((L, L + 1))
     for lo, hi in sorted(data_runs, key=lambda r: r[0]):
         if budget <= 0:
             break
@@ -254,7 +253,7 @@ def make(folder, plays=30):
     if problems:
         return None, g, tracks, problems, None
 
-    pkg = bytearray(b'CMR1')
+    pkg = bytearray(b'CMR2')
     pkg += struct.pack('<HB', table_at, maxbank + 1)
     pkg += struct.pack('<B', len(imm_raw)) + b''.join(struct.pack('<H', raw_at + o) for o in imm_raw)
     pkg += struct.pack('<B', len(probes))
@@ -264,6 +263,9 @@ def make(folder, plays=30):
     for lo, hi, *at in checks:
         at = at[0] if at else lo
         pkg += struct.pack('<BHHI', at // 0x4000, at % 0x4000, hi - lo, zlib.crc32(img[lo:hi]))
+    pkg += struct.pack('<H', len(bank_bytes))
+    for L in bank_bytes:
+        pkg += struct.pack('<BHB', L // 0x4000, L % 0x4000, img[L])
     pkg += struct.pack('<B', 1 if sram else 0)
     pkg += player
     entry['raw_len'] = len(raw)
@@ -271,7 +273,7 @@ def make(folder, plays=30):
 
 
 def parse(pkg):
-    assert pkg[:4] == b'CMR1'
+    assert pkg[:4] == b'CMR2'
     p = 4
     table_at, tsize = struct.unpack_from('<HB', pkg, p); p += 3
     n = pkg[p]; p += 1
@@ -285,8 +287,12 @@ def parse(pkg):
     checks = []
     for _ in range(n):
         checks.append(struct.unpack_from('<BHHI', pkg, p)); p += 9
+    n, = struct.unpack_from('<H', pkg, p); p += 2
+    bank_bytes = []
+    for _ in range(n):
+        bank_bytes.append(struct.unpack_from('<BHB', pkg, p)); p += 4
     flags = pkg[p]; p += 1
-    return dict(table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
+    return dict(bank_bytes=bank_bytes, table_at=table_at, tsize=tsize, imms=imms, probes=probes, checks=checks, flags=flags,
                 player=bytes(pkg[p:p + 0x900]))
 
 
@@ -312,6 +318,10 @@ def match(pkg, rom, mbc1=False):
     for rb, o, ln, crc in P['checks']:
         if rb == 0 and zlib.crc32(rom[o:o + ln]) != crc:
             return None, 'bank 0 code differs'
+    for rb, o, v in P['bank_bytes']:
+        cb = table[rb] if rb else 0
+        if v >= len(table) or rom[cb * 0x4000 + o] != table[v]:
+            return None, 'bank numbers in the engine data differ'
     player = bytearray(P['player'])
     for i, v in enumerate(table):
         player[P['table_at'] + i] = v

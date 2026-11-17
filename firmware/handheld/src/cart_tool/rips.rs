@@ -23,6 +23,9 @@ struct Package {
     probes: Vec<(u8, u16, Vec<u8>)>,
     /// (rip bank, offset, length, CRC32)
     checks: Vec<(u8, u16, u16, u32)>,
+    /// Bank numbers in the engine's data: (rip bank, offset, the rip's value). The ripper
+    /// renumbered them; on the cartridge each must be the ROM bank that rip bank was found in.
+    bank_bytes: Vec<(u8, u16, u8)>,
     player: Vec<u8>,
 }
 
@@ -33,9 +36,11 @@ fn parse(data: &[u8]) -> Result<Package> {
         p += n;
         Ok(s)
     };
-    if take(4)? != b"CMR1" {
-        bail!("not a cartridge music package");
-    }
+    let version = match take(4)? {
+        b"CMR1" => 1,
+        b"CMR2" => 2,
+        _ => bail!("not a cartridge music package"),
+    };
     let u16_ = |b: &[u8]| u16::from_le_bytes([b[0], b[1]]);
     let h = take(3)?;
     let (table_at, table_size) = (u16_(h) as usize, h[2] as usize);
@@ -54,12 +59,20 @@ fn parse(data: &[u8]) -> Result<Package> {
         let c = take(9)?;
         checks.push((c[0], u16_(&c[1..]), u16_(&c[3..]), u32::from_le_bytes([c[5], c[6], c[7], c[8]])));
     }
+    let mut bank_bytes = vec![];
+    if version >= 2 {
+        let n = u16_(take(2)?) as usize;
+        for _ in 0..n {
+            let c = take(4)?;
+            bank_bytes.push((c[0], u16_(&c[1..]), c[3]));
+        }
+    }
     let _flags = take(1)?[0];
     let player = take(PLAYER_SIZE)?.to_vec();
     if table_at + table_size > PLAYER_SIZE || constants.iter().any(|&o: &usize| o >= PLAYER_SIZE) {
         bail!("package offsets out of range");
     }
-    Ok(Package { table_at, table_size, constants, probes, checks, player })
+    Ok(Package { table_at, table_size, constants, probes, checks, bank_bytes, player })
 }
 
 /// Lower case, without bracketed parts, "The", a possessive "s", "version" and punctuation, the
@@ -132,6 +145,14 @@ fn try_package(link: &mut Link, info: &CartInfo, pkg: &Package) -> Result<std::r
     for &(_, o, len, want) in pkg.checks.iter().filter(|c| c.0 == 0) {
         if crc(link, info, 0, o, len)? != want {
             return Ok(Err("the cartridge's code differs from the rip's".into()));
+        }
+    }
+    for &(rip_bank, off, value) in &pkg.bank_bytes {
+        let bank = if rip_bank == 0 { 0 } else { table.get(rip_bank as usize).copied().unwrap_or(rip_bank) };
+        let mut b = [0u8];
+        cart::read_rom_bank(link, info, bank as u32, off, &mut b)?;
+        if table.get(value as usize) != Some(&b[0]) {
+            return Ok(Err("the bank numbers in its sound engine's data don't match".into()));
         }
     }
     let mut player = pkg.player.clone();
