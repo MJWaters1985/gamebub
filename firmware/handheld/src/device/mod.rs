@@ -42,8 +42,9 @@ pub struct Device<'a> {
     /// FPGA power in, active-high.
     fpga_power: PinDriver<'a, AnyOutputPin, Output>,
 
-    /// FPGA power, DAC reset and cartridge power pins (-1: none), latched by reboot_dfu.
-    latched_pins: [i32; 3],
+    /// FPGA power, DAC reset, cartridge power, LCD backlight and LCD reset pins (-1: none),
+    /// latched by reboot_dfu.
+    latched_pins: [i32; 5],
 
     /// The I2C bus.
     #[allow(unused)]
@@ -272,12 +273,15 @@ impl Device<'_> {
             }
         }
 
-        // Pins reboot_dfu latches in their off state (FPGA power, DAC reset, cartridge power):
+        // Pins reboot_dfu latches in their off state (FPGA power, DAC reset, cartridge power,
+        // LCD backlight and reset):
         // release them, or they can't be driven.
         let latched_pins = [
             gpio::Pin::pin(&pin_fpga_power),
             gpio::Pin::pin(&pin_dac_reset),
             pin_cart_power.as_ref().map_or(-1, gpio::Pin::pin),
+            gpio::Pin::pin(&pin_lcd_backlight),
+            gpio::Pin::pin(&pin_lcd_reset),
         ];
         for pin in latched_pins.into_iter().filter(|&p| p >= 0) {
             unsafe { esp_idf_svc::sys::gpio_hold_dis(pin) };
@@ -692,6 +696,16 @@ impl Device<'_> {
         // unconfigured (its pull-ups run the vibration motor) and the DAC's amplifier whines.
         // Latch them off through the restart (released in Device::init).
         self.set_cart_power(false);
+        // The backlight (a PWM output) and the LCD reset: plain outputs, low (backlight off,
+        // panel held in reset).
+        unsafe {
+            use esp_idf_svc::sys::*;
+            for pin in [self.latched_pins[3], self.latched_pins[4]] {
+                gpio_reset_pin(pin);
+                gpio_set_direction(pin, gpio_mode_t_GPIO_MODE_OUTPUT);
+                gpio_set_level(pin, 0);
+            }
+        }
         for pin in self.latched_pins.into_iter().filter(|&p| p >= 0) {
             unsafe { esp_idf_svc::sys::gpio_hold_en(pin) };
         }
