@@ -404,7 +404,13 @@ impl UI {
             Message::Screenshot(usb) => {
                 match screenshot::save_ui_screenshot(&self.window, &mut self.framebuffer, usb) {
                     Ok(f) => log::info!("Saved UI screenshot to {f}"),
-                    Err(e) => log::error!("Screenshot error: {e}"),
+                    Err(e) => {
+                        log::error!("Screenshot error: {e}");
+                        if usb {
+                            // Don't let the reader get the previous screenshot.
+                            let _ = std::fs::remove_file(screenshot::USB_PATH);
+                        }
+                    }
                 }
                 if usb {
                     screenshot::USB_PENDING.store(false, std::sync::atomic::Ordering::Release);

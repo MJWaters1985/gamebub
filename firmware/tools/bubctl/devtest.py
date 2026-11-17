@@ -23,7 +23,7 @@ PROBLEM = re.compile(r'panicked|Out of memory|Guru Meditation|abort\(\)|assert|^
 # Known noise, reported once as a low-priority finding but not failing tests.
 KNOWN = [re.compile(r'handheld::ui: Dropping UI message')]
 # Expected when no cartridge is inserted (the tools test notes it instead).
-NO_CART = re.compile(r'No cartridge could be read')
+NO_CART = re.compile(r"No cartridge could be read|There's no cartridge in the slot")
 HEAP = re.compile(r'(.*): heap free (\d+), largest (\d+)')
 
 

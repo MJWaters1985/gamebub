@@ -1,8 +1,4 @@
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    time::SystemTime,
-};
+use std::{fs::File, io::Write, time::SystemTime};
 
 use slint::platform::software_renderer::{LineBufferProvider, RepaintBufferType};
 
@@ -10,7 +6,8 @@ use crate::ui::slint::{Argb1555, MinimalSoftwareWindow};
 
 struct ScreenshotLineBuffer<'a> {
     buffer: &'a mut [Argb1555],
-    writer: &'a mut BufWriter<File>,
+    writer: &'a mut File,
+    error: Option<std::io::Error>,
 }
 
 impl<'a> LineBufferProvider for &mut ScreenshotLineBuffer<'a> {
@@ -24,8 +21,16 @@ impl<'a> LineBufferProvider for &mut ScreenshotLineBuffer<'a> {
     ) {
         let buffer = &mut self.buffer[range];
         render_fn(buffer);
-        for x in buffer {
-            let _ = self.writer.write_all(&x.as_u16().to_le_bytes());
+        // One write per line from the stack: no write buffer on the heap, which is short while
+        // the full redraw runs (box art on screen left too little for an 8 KB buffer).
+        let mut bytes = [0u8; 2 * 512];
+        for chunk in buffer.chunks(512) {
+            for (i, x) in chunk.iter().enumerate() {
+                bytes[i * 2..i * 2 + 2].copy_from_slice(&x.as_u16().to_le_bytes());
+            }
+            if let Err(e) = self.writer.write_all(&bytes[..chunk.len() * 2]) {
+                self.error.get_or_insert(e);
+            }
         }
     }
 }
@@ -48,8 +53,14 @@ pub fn save_ui_screenshot(
         .unwrap()
         .as_secs();
     let filename = if usb { USB_PATH.to_string() } else { format!("/sdcard/screenshot-{}.tga", timestamp) };
-    let file = File::create(&filename)?;
-    let mut writer = BufWriter::new(file);
+    // A full redraw needs room for the renderer's scene; refuse rather than run out of memory.
+    let largest = unsafe {
+        esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT)
+    };
+    if largest < 24 * 1024 {
+        return Err(std::io::Error::other(format!("not enough memory ({largest} bytes free in one block)")));
+    }
+    let mut writer = File::create(&filename)?;
 
     // Write TGA header
     let mut header = [0u8; 18];
@@ -69,8 +80,12 @@ pub fn save_ui_screenshot(
         let mut line_buffer = ScreenshotLineBuffer {
             buffer,
             writer: &mut writer,
+            error: None,
         };
         renderer.render_by_line(&mut line_buffer);
+        if let Some(e) = line_buffer.error {
+            log::error!("Screenshot write error: {e}");
+        }
     });
 
     writer.flush()?;
