@@ -3,6 +3,17 @@
 Turns GBS music rips into cartridge music players (`../gen_music_player.py`) that drive the
 sound engine on the cartridge itself.
 
+## Built-in music data (preferred)
+
+- `music_db.py <out.db>`: for each ROM in `CART_MUSIC_ROMS` with a rip, the steps that rebuild
+  the rip from the ROM (copies from the ROM, plus the few bytes the ripper changed). Write it to
+  `../../res/cart-music.db` (ignored by git: it holds bytes from the rips); the firmware build
+  embeds it. A newer table can also go on the SD card as `/system/cart-music/db.bin`.
+- `gbs2rom.py`: the music boot ROM (`../../res/cart-music-boot.bin`) and test images. The device
+  (`src/cart_tool/music.rs`) rebuilds the rip from the cartridge or a ROM file, writes it as a
+  ROM image with this boot ROM and runs it in the Game Boy core (MBC3, timer-driven player in
+  video RAM; Left/Right change the song, A restarts it). Tools > Cartridge Music, or Y in Run ROM.
+
 ## Packages for the device (no ROM needed)
 
 - `package.py`: traces a rip in an SM83 emulator (`sm83emu.py`, `gbs2entry.py`), moves the

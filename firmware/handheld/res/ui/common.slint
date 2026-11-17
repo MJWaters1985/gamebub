@@ -164,6 +164,9 @@ export global Backend {
     callback library-clear-boxart();
     // Add the game to the favorites, or remove it
     callback library-toggle-favorite(int);
+    // The focused game has built-in cartridge music data (cart_tool::music)
+    in property <bool> library-has-music;
+    callback library-play-music(int);
 
     // Wi-Fi screen. View: 0 menu, 1 busy, 2 networks, 3 password, 4 result
     in-out property <int> wifi-view: 0;

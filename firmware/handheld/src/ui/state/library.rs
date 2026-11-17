@@ -61,6 +61,8 @@ impl UiState {
 
         let state_ = state.clone();
         backend.on_library_toggle_favorite(move |i| state_.borrow_mut().library_toggle_favorite(i as usize));
+        let state_ = state.clone();
+        backend.on_library_play_music(move |i| state_.borrow_mut().library_play_music(i as usize));
     }
 
     /// Release the box art. Its memory is only freed after the next redraw, so the next image
@@ -132,6 +134,7 @@ impl UiState {
         let name = system.map_or(FAVORITES, |s| s.folder);
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
+        backend.set_library_has_music(false);
         // Each system's box art buffers are sized for it.
         backend.set_library_boxart(ModelRc::default());
         backend.set_library_has_boxart(false);
@@ -161,6 +164,14 @@ impl UiState {
     fn library_focus_game(&mut self, index: usize) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
+        backend.set_library_has_music(self.library.games.get(index).is_some_and(|g| {
+            g.system.core_id == "Game-Bub.GB" && {
+                let mut header = [0u8; 0x150];
+                std::fs::File::open(&g.path)
+                    .and_then(|mut f| std::io::Read::read_exact(&mut f, &mut header))
+                    .is_ok_and(|_| crate::cart_tool::music::has_music(&header))
+            }
+        }));
         // The box art buffers are shared with the image on screen, which is only released when a
         // redraw visits the box art (redraws of just the scrolling name don't); refilling them
         // before that would copy them, using twice the memory. So once the highlight has stopped,
@@ -239,6 +250,17 @@ impl UiState {
             core_id: system.core_id.to_string(),
             path: game.path.clone(),
         });
+    }
+
+    /// Play the game's music (built-in cartridge music data) instead of the game.
+    fn library_play_music(&mut self, index: usize) {
+        let Some(game) = self.library.games.get(index).cloned() else {
+            return;
+        };
+        self.library_close();
+        let root = self.root.unwrap();
+        root.global::<Backend>().set_game_can_load_rom(false);
+        crate::cart_tool::play_rom_music(game.path.clone());
     }
 
     /// Add the game to its core's favorites, or remove it.

@@ -83,6 +83,9 @@ export component LibraryScreen inherits ScreenBase {
                 } else if event.text == "Select" && !event.repeat {
                     Backend.library-toggle-favorite(games.focus-item);
                     accept
+                } else if event.text == "y" && !event.repeat && Backend.library-has-music {
+                    Backend.library-play-music(games.focus-item);
+                    accept
                 } else {
                     reject
                 }
@@ -197,6 +200,11 @@ export component LibraryScreen inherits ScreenBase {
                     ControlHint {
                         label: "Favorite";
                         button: "select";
+                    }
+
+                    if Backend.library-has-music: ControlHint {
+                        label: "Music";
+                        button: "y";
                     }
 
                     ControlHint {

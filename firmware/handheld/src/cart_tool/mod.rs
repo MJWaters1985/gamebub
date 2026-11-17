@@ -13,6 +13,7 @@ mod cart;
 mod clock;
 mod db;
 mod link;
+pub mod music;
 mod rips;
 
 /// Requests from the UI.
@@ -76,23 +77,63 @@ pub fn start() {
     });
 }
 
-/// Tools > Cartridge Music: read the inserted Game Boy cartridge's header, then run the
-/// cartridge with its music player (/system/cart-music, see
-/// bitstream::gameboy::cart_music_player_path) in place of the boot ROM. Progress and problems
-/// go to the Tools task view.
+/// What Tools > Cartridge Music found for the inserted cartridge.
+enum Player {
+    /// A player for the cartridge itself, run in place of the boot ROM.
+    Cartridge(std::path::PathBuf),
+    /// The game's music rebuilt from its ROM (music.rs).
+    Image(music::Music),
+}
+
+/// Tools > Cartridge Music: read the inserted Game Boy cartridge's header, then play its music:
+/// with a player made for the cartridge (/system/cart-music, see
+/// bitstream::gameboy::cart_music_player_path), else from the built-in music data (the rip
+/// rebuilt from the cartridge's ROM, music.rs), else with a player from a GBS rip package
+/// (rips.rs). Progress and problems go to the Tools task view.
 pub fn play_music() {
     task("Reading cartridge...", None);
     crate::jobs::run(|| match find_music_player() {
-        Ok(player) => {
+        Ok(Player::Cartridge(player)) => {
             *crate::bitstream::gameboy::CART_MUSIC_PLAYER.lock().unwrap() = Some(player);
             task("", Some((true, "Playing the cartridge's music.".into())));
             crate::worker::send(crate::worker::Message::RunCartridge);
+        }
+        Ok(Player::Image(music)) => {
+            task("", Some((true, "Playing the cartridge's music.\nLeft/Right: song, A: restart.".into())));
+            music::run(music);
         }
         Err(e) => {
             log::error!("Cartridge Music: {e:#}");
             task("", Some((false, format!("{e:#}"))));
         }
     });
+}
+
+/// Play the music of a ROM file (Run ROM), from the built-in music data.
+pub fn play_rom_music(path: std::path::PathBuf) {
+    task("Rebuilding the music...", None);
+    crate::jobs::run(move || {
+        let progress = |p: f32| progress_task("Rebuilding the music...", p);
+        match music::for_rom_file(&path, &progress) {
+            Ok(Some(m)) => {
+                task("", Some((true, "Playing the game's music.\nLeft/Right: song, A: restart.".into())));
+                music::run(m);
+            }
+            Ok(None) => task("", Some((false, "There's no music data for this game.".into()))),
+            Err(e) => {
+                log::error!("ROM music: {e:#}");
+                task("", Some((false, format!("{e:#}"))));
+            }
+        }
+    });
+}
+
+fn progress_task(label: &str, progress: f32) {
+    ui::send(ui::Message::Task(crate::wifi_setup::TaskUpdate {
+        label: label.to_string(),
+        progress,
+        result: None,
+    }));
 }
 
 fn task(label: &str, result: Option<(bool, String)>) {
@@ -103,7 +144,7 @@ fn task(label: &str, result: Option<(bool, String)>) {
     }));
 }
 
-fn find_music_player() -> anyhow::Result<std::path::PathBuf> {
+fn find_music_player() -> anyhow::Result<Player> {
     use anyhow::Context;
     if SENDER.lock().unwrap().is_some() {
         anyhow::bail!("The Cartridge Manager is still running.");
@@ -114,7 +155,7 @@ fn find_music_player() -> anyhow::Result<std::path::PathBuf> {
     result
 }
 
-fn find_with(reader: &mut Link) -> anyhow::Result<std::path::PathBuf> {
+fn find_with(reader: &mut Link) -> anyhow::Result<Player> {
     use anyhow::Context;
     // Power cycle so the cartridge starts from a clean state (e.g. after a swap).
     let _ = reader.power_cycle();
@@ -122,14 +163,19 @@ fn find_with(reader: &mut Link) -> anyhow::Result<std::path::PathBuf> {
     if info.mode != link::CartMode::Dmg {
         anyhow::bail!("Cartridge Music plays Game Boy and Game Boy Color cartridges.");
     }
-    // A player made for this exact cartridge, else one from a GBS rip that matches it
+    // A player made for this exact cartridge, else the built-in music data, else a player
+    // from a GBS rip package that matches it
     if let Some(path) = crate::bitstream::gameboy::cart_music_player_path(info.header()) {
-        return Ok(path);
+        return Ok(Player::Cartridge(path));
+    }
+    let progress = |p: f32| progress_task("Reading the music from the cartridge...", p);
+    if let Some(m) = music::for_cartridge(reader, &info, &progress)? {
+        return Ok(Player::Image(m));
     }
     if let Some(path) = rips::find(reader, &info, &|label| task(label, None))? {
-        return Ok(path);
+        return Ok(Player::Cartridge(path));
     }
-    anyhow::bail!("There's no music player for {} on the SD card (/system/cart-music).", info.name())
+    anyhow::bail!("There's no music for {} (built in or on the SD card).", info.name())
 }
 
 /// Send a request to the Cartridge Manager.

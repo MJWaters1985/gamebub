@@ -51,5 +51,14 @@ fn main() {
         println!("cargo:rustc-cfg=diagnostics");
     }
 
+    // Cartridge music data (scripts/gbs/music_db.py), embedded when it's there: it holds bytes
+    // from GBS rips, so it isn't in git. Without it the firmware has an empty table.
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("cart-music.db");
+    println!("cargo:rerun-if-changed=res/cart-music.db");
+    match std::fs::read("res/cart-music.db") {
+        Ok(data) => std::fs::write(&out, data).unwrap(),
+        Err(_) => std::fs::write(&out, b"").unwrap(),
+    }
+
     println!("cargo:rustc-link-arg=-Wl,--wrap=esp_panic_handler");
 }

@@ -60,6 +60,10 @@ pub enum GameboyError {
 /// driver.
 pub static CART_MUSIC_PLAYER: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
+/// With CART_MUSIC_PLAYER, for a music image with no header (cart_tool::music): cartridge type,
+/// ROM size and RAM size codes to use instead of the header's.
+pub static CART_MUSIC_MAPPER: std::sync::Mutex<Option<[u8; 3]>> = std::sync::Mutex::new(None);
+
 /// The music player's file for a Game Boy cartridge, from its header (from address 0):
 /// /system/cart-music/<title>-<version>-<global checksum>.bin.
 pub fn cart_music_player_path(header: &[u8]) -> Option<PathBuf> {
@@ -86,6 +90,8 @@ pub fn cart_music_player_path(header: &[u8]) -> Option<PathBuf> {
 pub struct Gameboy {
     /// Music player to run instead of the boot ROM (see CART_MUSIC_PLAYER)
     cart_music: Option<PathBuf>,
+    /// Header codes for a music image (see CART_MUSIC_MAPPER)
+    cart_music_mapper: Option<[u8; 3]>,
     /// Rom header, if this is an emulated cartridge
     rom_header: Option<rom::RomHeader>,
     /// Size of the ROM
@@ -101,6 +107,7 @@ impl Gameboy {
     pub fn new() -> Self {
         Gameboy {
             cart_music: CART_MUSIC_PLAYER.lock().unwrap().take(),
+            cart_music_mapper: CART_MUSIC_MAPPER.lock().unwrap().take(),
             rom_header: None,
             rom_file_size: 0,
             ram_path: None,
@@ -282,6 +289,9 @@ impl CoreHandler for Gameboy {
             self.rom_file_size = file.metadata().map_err(|_| "I/O")?.len() as u32;
             let mut rom_header = [0u8; 0x150];
             file.read(&mut rom_header).map_err(|_| "I/O")?;
+            if let Some(codes) = self.cart_music_mapper {
+                rom_header[0x147..0x14A].copy_from_slice(&codes);
+            }
             let rom_header = rom::RomHeader::parse(rom_header).map_err(|e| e.to_string())?;
             file.seek(std::io::SeekFrom::Start(0)).map_err(|_| "I/O")?;
             self.rom_header = Some(rom_header);
