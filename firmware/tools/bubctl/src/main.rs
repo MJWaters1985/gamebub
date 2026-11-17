@@ -2,15 +2,19 @@
 //! vendor control interface (handheld/src/control/mod.rs) and its USB serial log.
 //!
 //!   bubctl info                         serial number, firmware version and commit
-//!   bubctl reboot [--update]            restart (into update mode with --update)
+//!   bubctl reboot                       restart
 //!   bubctl press <buttons>... [--hold MS] [--gap MS]
 //!                                       press buttons in turn; combine with +, e.g. home a+b;
 //!                                       wait:MS pauses. Buttons: a b x y up down left right
 //!                                       home select start l r
 //!   bubctl screenshot <out.png>         the menus (not the game's picture)
 //!   bubctl log <seconds> [--until TEXT] the USB serial log (read only)
-//!   bubctl install <file.uf2>           restart into update mode, copy the firmware, wait
-//!                                       until it's running again
+//!   bubctl install <file.uf2>           copy the firmware to the GAME BUB drive (enter update
+//!                                       mode with the buttons first), wait until it's running
+//!
+//! Not offered: restarting into update mode over USB (reboot request value 2). That starts the
+//! update firmware without the GAME BUB drive, and with the vibration motor and audio amplifier
+//! pins left floating (the motor runs and the amplifier hisses).
 //!
 //! The gamepad uses the quiet slot (no "Gamepad connected" notification).
 
@@ -297,11 +301,7 @@ fn install(uf2: &str) -> Result<()> {
         return Err(format!("{uf2} not found"));
     }
     if !std::path::Path::new(UPDATE_VOLUME).is_dir() {
-        let bub = Bub::open()?;
-        bub.out(REBOOT, 2, &[])?;
-        println!("Restarting into update mode...");
-        wait_for("the GAME BUB drive", 60, || std::path::Path::new(UPDATE_VOLUME).is_dir())?;
-        std::thread::sleep(Duration::from_secs(1));
+        return Err("No GAME BUB drive: put the Game Bub in update mode with its buttons first".into());
     }
     let dest = std::path::Path::new(UPDATE_VOLUME).join(path.file_name().unwrap());
     println!("Copying {} ...", path.display());
@@ -326,12 +326,12 @@ fn run(args: &[String]) -> Result<()> {
             println!("serial {serial:08X}, firmware {version}, commit {}", &commit[..7]);
             Ok(())
         }
-        Some("reboot") => Bub::open()?.out(REBOOT, if args.iter().any(|a| a == "--update") { 2 } else { 1 }, &[]),
+        Some("reboot") => Bub::open()?.out(REBOOT, 1, &[]),
         Some("press") => press(&args[1..]),
         Some("screenshot") => screenshot(args.get(1).ok_or("screenshot needs an output file")?),
         Some("log") => log(&args[1..]),
         Some("install") => install(args.get(1).ok_or("install needs a .uf2 file")?),
-        _ => Err("Usage: bubctl info | reboot [--update] | press <buttons>... [--hold MS] [--gap MS] | \
+        _ => Err("Usage: bubctl info | reboot | press <buttons>... [--hold MS] [--gap MS] | \
                   screenshot <out.png> | log <seconds> [--until TEXT] | install <file.uf2>"
             .into()),
     }
