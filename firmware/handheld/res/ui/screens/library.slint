@@ -130,7 +130,7 @@ export component LibraryScreen inherits ScreenBase {
                         // Fixed width, and a scale that doesn't depend on the panel's size: the
                         // box art's size feeds into the layout, so deriving the scale from the
                         // panel's laid-out size can feed back on itself.
-                        width: 128px;
+                        width: 104px;
                         horizontal-stretch: 0;
                         border-color: black;
                         border-width: 1px;
@@ -138,7 +138,7 @@ export component LibraryScreen inherits ScreenBase {
                         // Whole-number scale that fits the panel's width: the renderer doesn't
                         // smooth when scaling, so fractional scales double some pixels and not
                         // others. Box art is at most 120 pixels tall, which fits at this scale.
-                        property <float> boxart-scale: max(1, floor((128 - 8) / Backend.library-boxart-width));
+                        property <float> boxart-scale: max(1, floor((104 - 8) / Backend.library-boxart-width));
 
                         // Not inside an `if`: a hidden `if` stops updating its contents, so the
                         // previous image would stay referenced (and its buffers copied on the
