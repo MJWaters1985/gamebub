@@ -10,6 +10,21 @@ in **Settings → About**. Builds with uncommitted changes add `-dirty` to the c
 Settings → About also says it's unofficial, modified firmware, with a copyright line for
 this fork's changes and a link to this repository.
 
+## New in 1.0.3.mod-20261117
+
+- **Cartridge Music** (Tools → Cartridge Music) plays the music of the Game Boy / Game Boy
+  Color cartridge in the slot, with track names, using a player or music package for that
+  game from `/system/cart-music` on the SD card (not included). A cartridge from another
+  revision or region than the package was made for is refused with a message.
+- **Light / Dark theme** (Settings → General → Theme), applied straight away and at boot.
+- **Auto power off** waits while a background job runs (box art download, Wi-Fi, SD card
+  setup, Check ROMs, Cartridge Manager); the timeout starts again when it ends.
+- **Run ROM**: 96-pixel box art and lighter game lists (less memory); a crash fixed.
+- **SD card**: a failed mount is retried, then at 20 MHz, also when no file system is found.
+- Clearer message when no cartridge is inserted; Y button icon in the button hints.
+- Developer tools: `firmware/tools/bubctl` (USB control, screenshots, serial log, install)
+  and an on-device test suite (`devtest.py`).
+
 ## Cartridge and game compatibility
 
 ### Physical GBA cartridges
