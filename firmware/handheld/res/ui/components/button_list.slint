@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 export component ButtonList inherits VerticalLayout {
     callback on-selected(item: int);
 
@@ -31,13 +32,13 @@ export component ButtonList inherits VerticalLayout {
         min-width: i-text.preferred-width + 6px;
         height: i-text.preferred-height + 6px;
         border-width: 1px;
-        border-color: focused-item == index ? black : transparent;
+        border-color: focused-item == index ? Theme.border : transparent;
 
         i-text := Text {
             text: item;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            color: focused-item == index ? black : gray;
+            color: focused-item == index ? Theme.text : Theme.text-dim;
             // Needed for bug in PopupWindows (PowerMenu).
             // https://github.com/slint-ui/slint/issues/8855
             font-size: 12px;

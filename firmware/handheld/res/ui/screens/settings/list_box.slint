@@ -1,3 +1,4 @@
+import { Theme } from "../../theme.slint";
 import { Icons } from "../../icons.slint";
 
 export component ListBox {
@@ -13,12 +14,13 @@ export component ListBox {
         Image {
             source: Icons.left-caret;
             visible: selected && index > 0;
-            colorize: #333;
+            colorize: Theme.icon;
         }
 
         // Only the current choice is drawn: lists like Time Zone have dozens of choices, and
         // the renderer has little memory.
         Text {
+            color: Theme.text;
             text: root.choices[root.index];
             horizontal-alignment: right;
         }
@@ -26,7 +28,7 @@ export component ListBox {
         Image {
             source: Icons.right-caret;
             visible: selected && index < choices.length - 1;
-            colorize: #333;
+            colorize: Theme.icon;
         }
     }
 

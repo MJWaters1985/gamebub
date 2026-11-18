@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { StatusMessage, StatusKind } from "../components/status_message.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
@@ -35,13 +36,14 @@ export component WifiScreen inherits ScreenBase {
                 spacing: 6px;
 
                 Text {
+                    color: Theme.text;
                     font-weight: 800;
                     text: Backend.wifi-status;
                 }
 
                 Text {
                     wrap: word-wrap;
-                    color: #666;
+                    color: Theme.text-dim;
                     text: "Wi-Fi is only turned on to download box art and set the clock.";
                 }
 
@@ -110,6 +112,7 @@ export component WifiScreen inherits ScreenBase {
                 spacing: 6px;
 
                 Text {
+                    color: Theme.text;
                     font-weight: 800;
                     text: "Choose a network";
                 }

@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 
 import { Button } from "../components/button.slint";
 import { Global, Backend, ScreenId } from "../common.slint";
@@ -19,8 +20,8 @@ export component PowerMenu inherits PopupWindow {
     }
 
     Rectangle {
-        background: #FFF;
-        border-color: black;
+        background: Theme.panel;
+        border-color: Theme.border;
         border-width: 1px;
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;

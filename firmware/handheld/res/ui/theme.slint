@@ -1,0 +1,30 @@
+// UI colours. `dark` picks the set (Settings > General > Theme).
+export global Theme {
+    in-out property <bool> dark: false;
+    // Screen background behind the menus
+    out property <color> background: dark ? #181818 : #E8E8E8;
+    // Dialogs, menus, keyboard, focused buttons
+    out property <color> panel: dark ? #2C2C2C : #FFFFFF;
+    // Status bar strip
+    out property <color> status-bar: dark ? #383838 : #CCCCCC;
+    out property <color> text: dark ? #E8E8E8 : #000000;
+    // Secondary text (labels, values, hints)
+    out property <color> text-dim: dark ? #A0A0A0 : #666666;
+    // Disabled controls and their text
+    out property <color> disabled: dark ? #707070 : #808080;
+    // Outlines and solid fills (scroll bars, progress, cursor)
+    out property <color> border: dark ? #C8C8C8 : #000000;
+    // Selected row background, and its text
+    out property <color> highlight: dark ? #505050 : #BBBBBB;
+    out property <color> highlight-text: dark ? #FFFFFF : #000000;
+    // Icon tint (control hints, list icons)
+    out property <color> icon: dark ? #C8C8C8 : #333333;
+    // Button backgrounds
+    out property <color> button-inactive: dark ? #242424 : #EEEEEE;
+    out property <color> button-disabled: dark ? #202020 : #BBBBBB;
+    // On-screen keyboard keys
+    out property <color> key: dark ? #3C3C3C : #DDDDDD;
+    out property <color> key-toggled: dark ? #606060 : #999999;
+    // Volume/brightness bar track
+    out property <color> track: dark ? #505050 : #D3D3D3;
+}

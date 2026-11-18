@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
 import { ScrollView } from "../components/scroll_view.slint";
@@ -19,6 +20,7 @@ export component AboutScreen inherits ScreenBase {
                     alignment: start;
 
                     Text {
+                        color: Theme.text;
                         horizontal-alignment: center;
                         font-weight: 800;
                         text: "Game Bub™  -  gamebub.net";
@@ -29,6 +31,7 @@ export component AboutScreen inherits ScreenBase {
                         spacing: 8px;
 
                         Text {
+                            color: Theme.text;
                             horizontal-alignment: right;
                             text: ( //
                                 "Device serial:" + //
@@ -41,6 +44,7 @@ export component AboutScreen inherits ScreenBase {
                         }
 
                         Text {
+                            color: Theme.text;
                             horizontal-alignment: left;
                             text: ( //
                                 "\{Backend.hardware-serial}" + //
@@ -54,12 +58,14 @@ export component AboutScreen inherits ScreenBase {
                     }
 
                     Text {
+                        color: Theme.text;
                         horizontal-alignment: center;
                         text: "Game Bub™ is a trademark of Second Bedroom LLC.\n\nGame Bub is open-source hardware and software. For full license information, including open-source libraries and subcomponents, visit docs.gamebub.net.";
                         wrap: word-wrap;
                     }
 
                     Text {
+                        color: Theme.text;
                         horizontal-alignment: center;
                         text: "This is unofficial, modified firmware.\nPortions Copyright © 2026 Mike Waters\ngithub.com/MJWaters1985/gamebub";
                         wrap: word-wrap;

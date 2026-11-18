@@ -93,6 +93,11 @@ mod settings {
                 key: &keys::TIME_ZONE,
                 choices: &crate::timezone::ZONE_NAMES,
             },
+            Entry::List {
+                name: "Theme",
+                key: &keys::THEME,
+                choices: &["Light", "Dark"],
+            },
             Entry::Checkbox {
                 name: "Show Clock",
                 key: &keys::SHOW_CLOCK,
@@ -292,6 +297,7 @@ impl UiState {
             let action = model.changed(i as usize, value);
             match action {
                 SettingsAction::None => {}
+                SettingsAction::Theme => state.apply_theme(),
                 SettingsAction::Subpage(page) => {
                     let entry = (state.settings.page, i as usize);
                     state.settings.stack.push(entry);
@@ -475,6 +481,10 @@ impl SettingsModel {
                 if std::ptr::eq(self.page, &settings::PAGE_DISPLAY) {
                     apply_display_color();
                 }
+                if std::ptr::eq(*key, &crate::kvs::keys::THEME) {
+                    self.notify.row_changed(index);
+                    return SettingsAction::Theme;
+                }
                 if std::ptr::eq(*key, &crate::kvs::keys::TIME_ZONE) {
                     // The date and time row shows local time.
                     crate::timezone::apply();
@@ -520,6 +530,8 @@ fn apply_display_color() {
 
 enum SettingsAction {
     None,
+    /// The menu theme changed.
+    Theme,
     Subpage(&'static Page),
     Screen(ScreenId),
 }

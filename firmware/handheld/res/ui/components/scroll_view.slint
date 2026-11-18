@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 // Vertically scrollable container, where child elements cannot be interacted with 
 export component ScrollView inherits Rectangle {
     in property <length> scroll-rate: 4px;
@@ -8,7 +9,7 @@ export component ScrollView inherits Rectangle {
 
     forward-focus: i-focus-scope;
     border-width: 1px;
-    border-color: black;
+    border-color: Theme.border;
 
     function scroll(y: length) {
         area.viewport-y = clamp(
@@ -50,7 +51,7 @@ export component ScrollView inherits Rectangle {
             y: (-area.viewport-y / area.viewport-height) * parent.height;
             width: 100%;
             height: (area.height / area.viewport-height) * parent.height;
-            background: black;
+            background: Theme.border;
         }
     }
 }

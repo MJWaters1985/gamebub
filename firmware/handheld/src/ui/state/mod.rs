@@ -60,6 +60,13 @@ impl UiState {
         backend.set_battery_level(level);
     }
 
+    /// Apply the Settings > General > Theme choice to the UI.
+    pub(super) fn apply_theme(&self) {
+        let root = self.root.unwrap();
+        let dark = kvs::keys::THEME.get().unwrap_or(0) == 1;
+        root.global::<super::slint::Theme>().set_dark(dark);
+    }
+
     fn setup(&mut self, state: Rc<RefCell<UiState>>, device: &mut Device) {
         let root = self.root.unwrap();
         let backend = root.global::<Backend>();
@@ -73,6 +80,7 @@ impl UiState {
         backend.set_firmware_version(env!("FIRMWARE_DISPLAY_VERSION").into());
         backend.set_sdcard_mounted(std::fs::exists("/sdcard").unwrap_or(false));
         backend.set_sdcard_status(crate::sd_setup::status().into());
+        self.apply_theme();
 
         let text_util = root.global::<super::slint::TextUtil>();
         text_util.on_length(|text| text.chars().count() as i32);

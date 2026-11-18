@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 // On-screen keyboard for typing text with the D-pad.
 //
 // D-pad: move, A: type the highlighted key, B: delete (or cancel when empty), X: shift,
@@ -65,7 +66,7 @@ export component Keyboard inherits Rectangle {
     }
 
     forward-focus: scope;
-    background: white;
+    background: Theme.panel;
 
     scope := FocusScope {
         key-pressed(event) => {
@@ -103,6 +104,7 @@ export component Keyboard inherits Rectangle {
             spacing: 3px;
 
             Text {
+                color: Theme.text;
                 text: root.label;
                 font-weight: 800;
                 overflow: elide;
@@ -110,10 +112,11 @@ export component Keyboard inherits Rectangle {
 
             Rectangle {
                 height: 22px;
-                border-color: black;
+                border-color: Theme.border;
                 border-width: 1px;
 
                 Text {
+                    color: Theme.text;
                     x: 4px;
                     width: parent.width - 8px;
                     vertical-alignment: center;
@@ -129,12 +132,12 @@ export component Keyboard inherits Rectangle {
                 // add four more drawing operations per key.
                 for key[c] in keyrow: Rectangle {
                     height: 26px;
-                    background: (root.cur-row == r && root.cur-col == c) ? black : #ddd;
+                    background: (root.cur-row == r && root.cur-col == c) ? Theme.border : Theme.key;
 
                     Text {
                         horizontal-alignment: center;
                         vertical-alignment: center;
-                        color: (root.cur-row == r && root.cur-col == c) ? white : black;
+                        color: (root.cur-row == r && root.cur-col == c) ? Theme.panel : Theme.text;
                         text: key;
                     }
                 }
@@ -145,12 +148,12 @@ export component Keyboard inherits Rectangle {
 
                 for label[c] in root.specials: Rectangle {
                     height: 26px;
-                    background: (root.cur-row == 4 && root.cur-col == c) ? black : ((c == 0 && root.shift) || (c == 1 && root.symbols)) ? #999 : #ddd;
+                    background: (root.cur-row == 4 && root.cur-col == c) ? Theme.border : ((c == 0 && root.shift) || (c == 1 && root.symbols)) ? Theme.key-toggled : Theme.key;
 
                     Text {
                         horizontal-alignment: center;
                         vertical-alignment: center;
-                        color: (root.cur-row == 4 && root.cur-col == c) ? white : black;
+                        color: (root.cur-row == 4 && root.cur-col == c) ? Theme.panel : Theme.text;
                         text: label;
                     }
                 }

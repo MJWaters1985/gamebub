@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Global, Backend } from "../common.slint";
 
 export component VolumeBar inherits Rectangle {
@@ -16,12 +17,12 @@ export component VolumeBar inherits Rectangle {
     private property <length> round-radius: self.width / 3;
 
     Rectangle {
-        background: lightgray;
+        background: Theme.track;
         border-radius: root.round-radius;
     }
 
     Rectangle {
-        background: #333;
+        background: Theme.icon;
         width: 100%;
         height: parent.height * (root.level * 1%);
         y: parent.height - self.height;
@@ -44,7 +45,7 @@ export component VolumeBar inherits Rectangle {
     }
 
     Rectangle {
-        border-color: black;
+        border-color: Theme.border;
         border-width: 1px;
         border-radius: root.round-radius;
     }

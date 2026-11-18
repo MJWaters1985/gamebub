@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
 import { Button } from "../components/button.slint";
@@ -44,6 +45,7 @@ export component MainMenuScreen inherits ScreenBase {
         }
 
         Text {
+            color: Theme.text;
             text: "™";
             x: i-logo.x + i-logo.width + 4px;
             y: i-logo.y;

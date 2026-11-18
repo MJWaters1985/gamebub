@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 export component Button inherits Rectangle {
     callback on-up() -> EventResult;
     callback on-down() -> EventResult;
@@ -25,19 +26,19 @@ export component Button inherits Rectangle {
 
     states [
         disabled when disabled: {
-            background: #bbb;
-            border-color: gray;
-            text-color: gray;
+            background: Theme.button-disabled;
+            border-color: Theme.disabled;
+            text-color: Theme.disabled;
         }
         focused when focus.has-focus: {
-            background: #fff;
-            border-color: black;
-            text-color: black;
+            background: Theme.panel;
+            border-color: Theme.border;
+            text-color: Theme.text;
         }
         inactive when !focus.has-focus: {
-            background: #eee;
-            border-color: gray;
-            text-color: gray;
+            background: Theme.button-inactive;
+            border-color: Theme.disabled;
+            text-color: Theme.text-dim;
         }
     ]
 

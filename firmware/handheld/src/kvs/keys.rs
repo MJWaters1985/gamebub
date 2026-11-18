@@ -15,6 +15,9 @@ pub static BRIGHTNESS: KvsKey<f32> = KvsKey::new_with_default("brightness", 0.50
 /// Whether dark mode is enabled.
 pub static DARK_MODE: KvsKey<bool> = KvsKey::new_with_default("dark-mode", false);
 
+/// Menu colour theme: 0 = Light, 1 = Dark.
+pub static THEME: KvsKey<i32> = KvsKey::new_with_default("ui-theme", 0);
+
 /// Whether to use DMG mode (instead of CGB mode)
 pub static GB_IS_DMG: KvsKey<bool> = KvsKey::new_with_default("gb-is-dmg", false);
 
@@ -99,6 +102,7 @@ pub fn flush_all() {
     VOLUME.flush();
     BRIGHTNESS.flush();
     DARK_MODE.flush();
+    THEME.flush();
     GB_IS_DMG.flush();
     GB_SKIP_BOOT_ANIM.flush();
     DMG_COLOR_PALETTE.flush();

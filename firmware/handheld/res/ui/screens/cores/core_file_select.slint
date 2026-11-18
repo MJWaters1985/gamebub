@@ -1,3 +1,4 @@
+import { Theme } from "../../theme.slint";
 import { Backend, Global } from "../../common.slint";
 import { FileListView } from "../../components/file_list.slint";
 import { ControlHint } from "../../components/control_hint.slint";
@@ -68,6 +69,7 @@ export component CoreFileSelect {
             spacing: 2px;
 
             Text {
+                color: Theme.text;
                 text: Backend.core-file-select-path;
             }
 
@@ -75,7 +77,7 @@ export component CoreFileSelect {
                 private property <length> scrollbar-width: 2px;
                 private property <bool> has-scrollbar: list.viewport-height > list.height;
                 border-width: 1px;
-                border-color: black;
+                border-color: Theme.border;
 
                 list := FileListView {
                     x: 0px;
@@ -103,7 +105,7 @@ export component CoreFileSelect {
                         y: (-list.viewport-y / list.viewport-height) * parent.height;
                         width: 100%;
                         height: (list.height / list.viewport-height) * parent.height;
-                        background: black;
+                        background: Theme.border;
                     }
                 }
             }
@@ -140,8 +142,8 @@ export component CoreFileSelect {
     }
 
     if Backend.core-file-select-is-loading:  Rectangle {
-        background: #FFF;
-        border-color: black;
+        background: Theme.panel;
+        border-color: Theme.border;
         border-width: 1px;
         width: i-layout.min-width;
         height: i-layout.min-height;
@@ -150,6 +152,7 @@ export component CoreFileSelect {
             padding: 8px;
             spacing: 4px;
             i-text := Text {
+                color: Theme.text;
                 horizontal-alignment: center;
                 text: "Loading...";
             }
@@ -157,8 +160,8 @@ export component CoreFileSelect {
     }
 
     if has-error: Rectangle {
-        background: #FFF;
-        border-color: black;
+        background: Theme.panel;
+        border-color: Theme.border;
         border-width: 1px;
         width: min(self.preferred-width, parent.width - 16px);
         height: min(self.preferred-height, parent.height - 32px);
@@ -167,6 +170,7 @@ export component CoreFileSelect {
             padding: 8px;
             spacing: 4px;
             Text {
+                color: Theme.text;
                 horizontal-alignment: center;
                 text: Backend.core-file-select-error;
                 overflow: elide;

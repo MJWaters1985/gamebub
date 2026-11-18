@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { StatusMessage, ProgressBar } from "../components/status_message.slint";
 import { Global, ScreenId, Backend } from "../common.slint";
 import { ScreenBase } from "../components/screen.slint";
@@ -33,8 +34,8 @@ export component GameScreen inherits ScreenBase {
         menu := Rectangle {
             // Hidden while the Power menu is open over it
             visible: menu-open && !Global.power-menu-open;
-            background: #FFF;
-            border-color: black;
+            background: Theme.panel;
+            border-color: Theme.border;
             border-width: 1px;
             width: i-list.min-width + 20px;
             height: i-list.min-height;
@@ -60,7 +61,7 @@ export component GameScreen inherits ScreenBase {
 
         // Loading: a busy message over the whole screen, like the other busy screens.
         if Backend.core-is-loading: Rectangle {
-            background: #E8E8E8;
+            background: Theme.background;
 
             StatusMessage {
                 padding-left: 8px;

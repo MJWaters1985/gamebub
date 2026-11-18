@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { ListViewBase } from "list_view.slint";
 import { Icons } from "../icons.slint";
 import { ListView } from "std-widgets.slint";
@@ -28,7 +29,7 @@ component FileListItem {
     i-highlight := Rectangle {
         width: root.width;
         height: root.height;
-        background: is-selected ? #bbb : transparent;
+        background: is-selected ? Theme.highlight : transparent;
     }
 
     if (entry.icon != FileIcon.blank): Image {
@@ -36,10 +37,11 @@ component FileListItem {
         width: 8px;
         height: 8px;
         source: iconToImage(entry.icon);
-        colorize: #333;
+        colorize: Theme.icon;
     }
 
     i-text := Text {
+        color: Theme.text;
         x: 12px;
         // Limit the maximum width of text to save memory with many long filenames.
         // TODO: figure out if this is a Slint bug, or if it can be optimized another way.

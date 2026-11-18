@@ -1,3 +1,4 @@
+import { Theme } from "../../theme.slint";
 import { Backend } from "../../common.slint";
 import { ListViewBase } from "../../components/list_view.slint";
 import { SettingType, SettingValue, SettingEntry } from "types.slint";
@@ -27,6 +28,7 @@ export component SettingsListViewItem {
     min-height: i-text.min-height + 2px;
 
     i-text := Text {
+        color: Theme.text;
         x: 2px;
         text: root.item.name;
         vertical-alignment: center;
@@ -36,11 +38,11 @@ export component SettingsListViewItem {
 
     // Checkbox
     if item.type == SettingType.checkbox: Rectangle {
-        background: white;
+        background: Theme.panel;
         x: parent.width - self.width - 4px;
         width: self.height;
         height: parent.height - 2px;
-        border-color: black;
+        border-color: Theme.border;
         border-width: 1px;
 
         if item.value.bool-value: Rectangle {
@@ -48,13 +50,13 @@ export component SettingsListViewItem {
             y: 2px;
             width: parent.width - 4px;
             height: parent.height - 4px;
-            background: gray;
+            background: Theme.text-dim;
         }
     }
     if item.type == SettingType.subpage: Image {
         x: parent.width - self.width - 4px;
         source: Icons.right-arrow;
-        colorize: #666;
+        colorize: Theme.text-dim;
     }
     if item.type == SettingType.datetime: DatetimePicker {
         selected: root.selected;

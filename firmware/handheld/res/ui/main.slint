@@ -1,3 +1,4 @@
+import { Theme } from "theme.slint";
 import { StatusBar } from "components/status_bar.slint";
 import { TextListView } from "components/list_view.slint";
 import { VolumeBar } from "components/volume_bar.slint";
@@ -16,7 +17,7 @@ import { LibraryScreen } from "screens/library.slint";
 import { WifiScreen } from "screens/wifi.slint";
 
 import { TextUtil } from "text_util.slint";
-export { ScreenId, Backend, TextUtil }
+export { ScreenId, Backend, TextUtil, Theme }
 export component MainWindow inherits Window {
     private property <string> screen-title;
 
@@ -42,7 +43,7 @@ export component MainWindow inherits Window {
         screen-title = title;
     }
 
-    background: Global.ui-transparent ? transparent : #E8E8E8;
+    background: Global.ui-transparent ? transparent : Theme.background;
     default-font-family: "Ark Pixel 12px Prop latin";
     default-font-size: 12px;
 

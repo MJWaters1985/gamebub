@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Icons } from "../icons.slint";
 
 export enum StatusKind { none, success, warning, error, empty }
@@ -29,6 +30,7 @@ export component StatusMessage inherits VerticalLayout {
     }
 
     Text {
+        color: Theme.text;
         horizontal-alignment: center;
         font-weight: 800;
         wrap: word-wrap;
@@ -36,6 +38,7 @@ export component StatusMessage inherits VerticalLayout {
     }
 
     if root.text != "": Text {
+        color: Theme.text;
         horizontal-alignment: center;
         wrap: root.wrap-text ? TextWrap.word-wrap : TextWrap.no-wrap;
         overflow: elide;
@@ -50,7 +53,7 @@ export component ProgressBar inherits Rectangle {
     in property <float> progress;
 
     height: 12px;
-    border-color: black;
+    border-color: Theme.border;
     border-width: 1px;
 
     Rectangle {
@@ -58,6 +61,6 @@ export component ProgressBar inherits Rectangle {
         y: 2px;
         height: parent.height - 4px;
         width: (parent.width - 4px) * clamp(root.progress, 0, 1);
-        background: black;
+        background: Theme.border;
     }
 }

@@ -1,3 +1,4 @@
+import { Theme } from "../../theme.slint";
 import { StatusMessage, StatusKind, ProgressBar } from "../../components/status_message.slint";
 import { Global, ScreenId, Backend, BatteryInfo } from "../../common.slint";
 import { ScreenBase } from "../../components/screen.slint";
@@ -127,6 +128,7 @@ export component ToolsScreen inherits ScreenBase {
 
                     // One line each (shortened with "..." if needed), so the actions fit below.
                     Text {
+                        color: Theme.text;
                         font-weight: 800;
                         overflow: elide;
                         vertical-stretch: 0;
@@ -134,6 +136,7 @@ export component ToolsScreen inherits ScreenBase {
                     }
 
                     Text {
+                        color: Theme.text;
                         overflow: elide;
                         vertical-stretch: 0;
                         text: Backend.cart-tool-details;
@@ -230,7 +233,7 @@ export component ToolsScreen inherits ScreenBase {
 
                             Rectangle {
                                 height: 12px;
-                                border-color: black;
+                                border-color: Theme.border;
                                 border-width: 1px;
 
                                 Rectangle {
@@ -238,7 +241,7 @@ export component ToolsScreen inherits ScreenBase {
                                     y: 2px;
                                     height: parent.height - 4px;
                                     width: (parent.width - 4px) * min(1, held / 3s);
-                                    background: black;
+                                    background: Theme.border;
                                 }
                             }
                         }
@@ -452,12 +455,14 @@ export component ToolsScreen inherits ScreenBase {
                     spacing: 6px;
 
                     if Backend.sdcard-status != "": Text {
+                        color: Theme.text;
                         wrap: word-wrap;
                         font-weight: 800;
                         text: Backend.sdcard-status;
                     }
 
                     Text {
+                        color: Theme.text;
                         wrap: word-wrap;
                         text: "Game Bub needs a FAT32 card (exFAT cards can't be read). It keeps ROMs in /roms/<system>, saves in /saves, box art in /boxart and BIOS files in /system.";
                     }
@@ -545,7 +550,7 @@ export component ToolsScreen inherits ScreenBase {
 
                             Rectangle {
                                 height: 12px;
-                                border-color: black;
+                                border-color: Theme.border;
                                 border-width: 1px;
 
                                 Rectangle {
@@ -553,7 +558,7 @@ export component ToolsScreen inherits ScreenBase {
                                     y: 2px;
                                     height: parent.height - 4px;
                                     width: (parent.width - 4px) * min(1, held / 3s);
-                                    background: black;
+                                    background: Theme.border;
                                 }
                             }
                         }
@@ -639,11 +644,13 @@ export component ToolsScreen inherits ScreenBase {
             }
 
             if Backend.sdcard-mounted: Text {
+                color: Theme.text;
                 horizontal-alignment: center;
                 text: "Now exposing the SD card as USB drive";
             }
 
             if !Backend.sdcard-mounted: Text {
+                color: Theme.text;
                 horizontal-alignment: center;
                 text: "Error: no SD card mounted";
             }
@@ -670,6 +677,7 @@ export component ToolsScreen inherits ScreenBase {
                 }
             }
             Text {
+                color: Theme.text;
                 horizontal-alignment: center;
                 text: "Cartridge Backup and Restore Mode\n\nConnect Game Bub to a computer running FlashGBX\nSee the User Guide for more information";
             }
@@ -697,6 +705,7 @@ export component ToolsScreen inherits ScreenBase {
             }
 
             Text {
+                color: Theme.text;
                 y: 8px;
                 horizontal-alignment: center;
                 font-weight: 800;
@@ -710,6 +719,7 @@ export component ToolsScreen inherits ScreenBase {
                 y: (root.height - self.min-height) / 2;
 
                 Text {
+                    color: Theme.text;
                     width: 45%;
                     horizontal-alignment: right;
                     text: ( //
@@ -722,6 +732,7 @@ export component ToolsScreen inherits ScreenBase {
                 }
 
                 Text {
+                    color: Theme.text;
                     width: 45%;
                     horizontal-alignment: left;
                     text: ( //

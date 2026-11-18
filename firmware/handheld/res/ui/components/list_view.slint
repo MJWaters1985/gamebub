@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { TextUtil } from "../text_util.slint";
 import { ListView } from "std-widgets.slint";
 
@@ -110,9 +111,10 @@ export component ListViewBase inherits Rectangle {
 
     forward-focus: i-focus-scope;
     border-width: 1px;
-    border-color: black;
+    border-color: Theme.border;
 
     i-line-measure := Text {
+        color: Theme.text;
         text: "X";
         visible: false;
     }
@@ -130,9 +132,9 @@ export component ListViewBase inherits Rectangle {
                 y: root.focus-item * root.item-height;
                 width: parent.width;
                 height: root.item-height;
-                background: #bbb;
+                background: Theme.highlight;
 
-                border-color: black;
+                border-color: Theme.border;
                 border-width: root.item-selected ? 1px : 0px;
             }
 
@@ -182,7 +184,7 @@ export component ListViewBase inherits Rectangle {
             y: (-area.viewport-y / area.viewport-height) * parent.height;
             width: 100%;
             height: (area.height / area.viewport-height) * parent.height;
-            background: black;
+            background: Theme.border;
         }
     }
 }
@@ -197,6 +199,7 @@ component ScrollingText {
 
     // Measures the full width of the text (the shown copy is cut short)
     i-measure := Text {
+        color: Theme.text;
         width: 0px;
         text: root.text;
         visible: false;
@@ -222,6 +225,7 @@ component ScrollingText {
     }
 
     Text {
+        color: Theme.text;
         width: 100%;
         height: 100%;
         text: root.step == 0 ? root.text : TextUtil.tail(root.text, root.step);
@@ -242,6 +246,7 @@ component TextListItem {
     height: i-text.min-height + 2px + root.extra-height;
 
     i-text := Text {
+        color: Theme.text;
         x: 2px;
         width: root.width - 4px;
         text: root.text;
