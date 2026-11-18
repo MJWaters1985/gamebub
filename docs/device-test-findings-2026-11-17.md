@@ -1,9 +1,9 @@
 # Device test findings, 17 November 2026
 
-**Status (end of day):** findings 1, 2, 4 and 5 fixed (`4f6e8282`); finding 3 was the test's
-mistake, not the firmware's; the reruns found finding 6 (fixed, `4f7109ff`, `58f5a803`) and
-finding 7 (open). Last full run on `4f7109f` + `58f5a80`: every test passes
-(`test-runs/20261117-172914`, `20261117-174653`).
+**Status (end of day):** every finding is fixed except 3, which was the test's mistake. The
+reruns found 6 (fixed: `4f7109ff`, `58f5a803`), 7 (fixed: `dbe0010c`, `7c11f64a`) and 8, the SD
+card failure caught over USB (fixed: `3fd4c9ac`, to confirm on later cold starts). Last full
+run, on `7c11f64`: all eight tests pass (`test-runs/20261117-193657`).
 
 Found by the automated on-device suite (`firmware/tools/bubctl/devtest.py`) on a rev 4 Game Bub
 (hardware 1.4.1.0) running firmware `b5453bb` (branch `cart-music`), with the SD card's
@@ -128,7 +128,7 @@ block 3.8 KB). The screenshot held an 8 KB write buffer and an open file during 
 screenshot is refused, with a warning and the stale file removed, when the largest free block is
 under 24 KB; `bubctl screenshot` asks again up to four times.
 
-### 7. Memory is very tight while a game list with box art is showing (medium) — open
+### 7. Memory is very tight while a game list with box art is showing (high) — fixed
 
 **Seen:** with box art on screen, the largest free block stays between 7 and 22 KB (free memory
 about 55 KB), so 28 of 35 screenshot attempts were refused in `run_rom_lists`. Normal drawing
@@ -141,6 +141,32 @@ Wi-Fi event) can run out, as finding 6 did. This is the Run ROM memory pressure 
 at boot; and keep a reserve (e.g. 32 KB contiguous) that box art loading won't take
 (`THUMBNAIL_HEADROOM` is 24 KB of total free, not contiguous). Then `run_rom_lists` should get
 every screenshot.
+
+**More seen while fixing:** the Genesis list (164 games) with box art ran the heap out in an
+**ordinary frame**, not just a screenshot: Slint's render cache grew with 816 bytes free. An
+emergency reserve block (`f00b85e9`) didn't help and was reverted (`21918834`): it cost 16 KB in
+exactly this view, and a full redraw needs more than any reserve.
+
+**Fixed:**
+- Box art at 96 pixels (28 KB of strips) instead of 120 (43 KB) (`dbe0010c`).
+- `Game` keeps its path as one boxed string and derives the name from it, about 10 KB less for
+  Genesis; box art loads at full size only when 48 KB stays free (was 24 KB), so long lists get
+  smaller box art instead of starving the renderer (`7c11f64a`).
+- After the fix: about 72 KB free with any list and its box art on screen (Genesis: 87 KB with the
+  list, 71 KB with its smaller box art); USB screenshots of every list go through, at most after
+  a retry.
+
+### 8. The SD card sometimes isn't found after a cold start (medium) — fixed, to confirm
+
+**Seen (reported, then caught over USB serial):** after a cold start (the fuel gauge had lost
+power) the card answered but FatFs found no FAT volume: `failed to mount card (13)`
+(`FR_NO_FILESYSTEM`), `ESP_FAIL`. A restart fixed it every time, so the card and its file system
+were fine; the first reads after power-up came back wrong. The mount retries (`2d0a169`) treated
+`ESP_FAIL` as final and never ran.
+
+**Fixed (`3fd4c9ac`):** `ESP_FAIL` is retried like the other errors (four attempts, the last two
+at 20 MHz). To confirm: the next time the Game Bub starts from off, the log should show the card
+mounted (and a warning if it needed a retry).
 
 ## Test suite limits
 
