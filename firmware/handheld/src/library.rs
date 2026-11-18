@@ -171,9 +171,11 @@ pub struct LoadedThumbnail {
     pub strips: Vec<SharedPixelBuffer<Rgb8Pixel>>,
 }
 
-/// Box art size in Run ROM (width and height at most): the size of the thumbnails Download Box
-/// Art makes, so they're shown 1:1.
-pub const BOXART_SIZE: usize = 120;
+/// Box art size in Run ROM (width and height at most). Download Box Art makes 120-pixel
+/// thumbnails; they're shrunk to this by averaging. 120 used 43 KB of strips, which left so
+/// little memory with a game list on screen that a full redraw could run out (device test
+/// finding 7); 96 uses 28 KB.
+pub const BOXART_SIZE: usize = 96;
 
 /// Pixel buffers for box art, allocated once and reused for every game until leaving the list.
 /// Allocating and freeing them per game fragments the heap until the renderer can't get the
