@@ -160,7 +160,7 @@ impl UiState {
             .library
             .games
             .iter()
-            .position(|g| g.path.to_string_lossy() == last)
+            .position(|g| g.path().to_string_lossy() == last)
             .unwrap_or(0);
         backend.set_library_game_index(game_index as i32);
         backend.set_library_view(1);
@@ -174,7 +174,7 @@ impl UiState {
         backend.set_library_has_music(self.library.games.get(index).is_some_and(|g| {
             g.system.core_id == "Game-Bub.GB" && {
                 let mut header = [0u8; 0x150];
-                std::fs::File::open(&g.path)
+                std::fs::File::open(g.path())
                     .and_then(|mut f| std::io::Read::read_exact(&mut f, &mut header))
                     .is_ok_and(|_| crate::cart_tool::music::has_music(&header))
             }
@@ -246,7 +246,7 @@ impl UiState {
             return;
         };
         let system = game.system;
-        kvs::keys::LIBRARY_LAST_GAME.set(&game.path.to_string_lossy().into_owned());
+        kvs::keys::LIBRARY_LAST_GAME.set(&game.path().to_string_lossy().into_owned());
         // Free the box art and game list before the core loads.
         self.library_close();
         kvs::keys::LAST_CORE.set(&system.core_id.to_string());
@@ -255,7 +255,7 @@ impl UiState {
         root.global::<Backend>().set_game_can_load_rom(true);
         worker::send(worker::Message::RunRom {
             core_id: system.core_id.to_string(),
-            path: game.path.clone(),
+            path: game.path(),
         });
     }
 
@@ -267,7 +267,7 @@ impl UiState {
         self.library_close();
         let root = self.root.unwrap();
         root.global::<Backend>().set_game_can_load_rom(false);
-        crate::cart_tool::play_rom_music(game.path.clone());
+        crate::cart_tool::play_rom_music(game.path());
     }
 
     /// Add the game to its core's favorites, or remove it.
@@ -275,7 +275,7 @@ impl UiState {
         let Some(game) = self.library.games.get(index).cloned() else {
             return;
         };
-        let result = crate::core::toggle_core_favorite(game.system.core_id, &game.path);
+        let result = crate::core::toggle_core_favorite(game.system.core_id, &game.path());
         let text = match &result {
             Ok(true) => "Added to Favorites".to_string(),
             Ok(false) => "Removed from Favorites".to_string(),

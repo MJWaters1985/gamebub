@@ -70,14 +70,14 @@ fn check_roms() -> anyhow::Result<(bool, String)> {
     let (mut good, mut unknown) = (0, 0);
     let mut bad = vec![];
     for (i, (gba, game)) in roms.iter().enumerate() {
-        task(&format!("Checking ROM {} of {}\n{}", i + 1, roms.len(), game.name), None);
-        let mut file = std::fs::File::open(&game.path)
-            .with_context(|| format!("Couldn't open {}", game.name))?;
+        task(&format!("Checking ROM {} of {}\n{}", i + 1, roms.len(), game.name()), None);
+        let mut file = std::fs::File::open(game.path())
+            .with_context(|| format!("Couldn't open {}", game.name()))?;
         let mut crc = 0u32;
         let mut header = Vec::new();
         loop {
             let n = std::io::Read::read(&mut file, &mut buf)
-                .with_context(|| format!("Couldn't read {}", game.name))?;
+                .with_context(|| format!("Couldn't read {}", game.name()))?;
             if n == 0 {
                 break;
             }
@@ -90,8 +90,8 @@ fn check_roms() -> anyhow::Result<(bool, String)> {
         match crate::cart_tool::known_crc32(*gba, &header) {
             Some(expected) if expected == crc => good += 1,
             Some(expected) => {
-                log::warn!("{}: CRC32 {crc:08x}, expected {expected:08x}", game.name);
-                bad.push(game.name.clone());
+                log::warn!("{}: CRC32 {crc:08x}, expected {expected:08x}", game.name());
+                bad.push(game.name().to_string());
             }
             None => unknown += 1,
         }

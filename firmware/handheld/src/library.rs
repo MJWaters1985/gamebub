@@ -40,9 +40,9 @@ pub const SYSTEMS: [System; 8] = [
 
 #[derive(Clone, Debug)]
 pub struct Game {
-    /// Name shown in the list (the file name without its extension)
-    pub name: String,
-    pub path: PathBuf,
+    /// The ROM's path, kept as one compact string (long lists are held in full while Run ROM
+    /// shows them; the name is derived from it rather than stored too).
+    path: Box<str>,
     /// System it's listed under (its core and box art folder)
     pub system: System,
 }
@@ -80,12 +80,11 @@ impl System {
                 if file_name.starts_with("._") || !has_extension(&file_name, self.extensions) {
                     return None;
                 }
-                let name = Path::new(&file_name).file_stem()?.to_string_lossy().into_owned();
-                Some(Game { name, path: entry.path(), system: *self })
+                Game::new(entry.path(), *self)
             })
             .take(MAX_GAMES)
             .collect();
-        games.sort_by(|a, b| natural_cmp(&a.name, &b.name));
+        games.sort_by(|a, b| natural_cmp(a.name(), b.name()));
         games
     }
 
@@ -94,13 +93,13 @@ impl System {
     /// keep the renderer's per-frame memory down. Games whose short names would be the same
     /// keep their full names.
     pub fn titles(games: &[Game]) -> Vec<String> {
-        let short: Vec<&str> = games.iter().map(|g| short_title(&g.name)).collect();
+        let short: Vec<&str> = games.iter().map(|g| short_title(g.name())).collect();
         games
             .iter()
             .zip(&short)
             .map(|(game, title)| {
                 if short.iter().filter(|t| *t == title).count() > 1 {
-                    game.name.clone()
+                    game.name().to_string()
                 } else {
                     title.to_string()
                 }
@@ -115,9 +114,26 @@ impl System {
 }
 
 impl Game {
+    fn new(path: PathBuf, system: System) -> Option<Game> {
+        let path = path.into_os_string().into_string().ok()?.into_boxed_str();
+        let game = Game { path, system };
+        (!game.name().is_empty()).then_some(game)
+    }
+
+    /// The ROM's path.
+    pub fn path(&self) -> PathBuf {
+        PathBuf::from(&*self.path)
+    }
+
+    /// Name shown in the list: the file name without its extension.
+    pub fn name(&self) -> &str {
+        let file = self.path.rsplit('/').next().unwrap_or(&self.path);
+        file.rsplit_once('.').map_or(file, |(stem, _)| stem)
+    }
+
     /// Path of the game's box art thumbnail.
     pub fn thumbnail_path(&self) -> PathBuf {
-        self.system.thumbnail_path(&self.name)
+        self.system.thumbnail_path(self.name())
     }
 }
 
@@ -141,18 +157,18 @@ pub fn favorites() -> Vec<Game> {
                 if !path.is_file() {
                     return None;
                 }
-                let name = path.file_stem()?.to_string_lossy().into_owned();
-                Some(Game { name, path, system: *system })
+                Game::new(path, *system)
             })
         })
         .take(MAX_GAMES)
         .collect();
-    games.sort_by(|a, b| natural_cmp(&a.name, &b.name));
+    games.sort_by(|a, b| natural_cmp(a.name(), b.name()));
     games
 }
 
-/// Free memory to leave after loading a thumbnail.
-const THUMBNAIL_HEADROOM: usize = 24 * 1024;
+/// Free memory to leave after loading a thumbnail: a frame of a long game list with box art
+/// needs well over 24 KB (device test finding 7); with less, smaller box art is used.
+const THUMBNAIL_HEADROOM: usize = 48 * 1024;
 
 /// Largest free block to leave after loading a thumbnail, for the renderer.
 const RENDER_HEADROOM: usize = 12 * 1024;

@@ -247,8 +247,8 @@ pub fn missing_in_library() -> Vec<(System, String)> {
             system
                 .games()
                 .into_iter()
-                .filter(|game| !system.thumbnail_path(&game.name).exists())
-                .map(|game| (*system, game.name))
+                .filter(|game| !system.thumbnail_path(game.name()).exists())
+                .map(|game| (*system, game.name().to_string()))
         })
         .collect()
 }

@@ -159,49 +159,50 @@ pub fn identify_library(
     let games: Vec<_> = system
         .games()
         .into_iter()
-        .filter(|game| !db.is_known_name(&game.name))
+        .filter(|game| !db.is_known_name(game.name()))
         .collect();
     for (i, game) in games.iter().enumerate() {
+        let path = game.path();
         progress(
-            &format!("Identifying ROM {} of {}\n{}", i + 1, games.len(), game.name),
+            &format!("Identifying ROM {} of {}\n{}", i + 1, games.len(), game.name()),
             i as f32 / games.len() as f32,
         );
-        let crc = match db.rom_crc32(&game.path, buf) {
+        let crc = match db.rom_crc32(&path, buf) {
             Ok(crc) => crc,
             Err(e) => {
-                log::warn!("Couldn't read {}: {e}", game.path.display());
+                log::warn!("Couldn't read {}: {e}", path.display());
                 result.unknown += 1;
                 continue;
             }
         };
         let Some(name) = db.lookup(crc) else {
-            log::info!("{}: CRC32 {crc:08x} not in the database", game.name);
+            log::info!("{}: CRC32 {crc:08x} not in the database", game.name());
             result.unknown += 1;
             continue;
         };
         let new_name = file_name_for(name);
-        let extension = game.path.extension().unwrap_or_default();
-        let new_path: PathBuf = game.path.with_file_name(&new_name).with_extension(extension);
+        let extension = path.extension().unwrap_or_default();
+        let new_path: PathBuf = path.with_file_name(&new_name).with_extension(extension);
         if new_path.exists() {
-            log::info!("{}: {} already exists", game.name, new_path.display());
+            log::info!("{}: {} already exists", game.name(), new_path.display());
             continue;
         }
-        if let Err(e) = std::fs::rename(&game.path, &new_path) {
-            log::warn!("Couldn't rename {}: {e}", game.path.display());
+        if let Err(e) = std::fs::rename(&path, &new_path) {
+            log::warn!("Couldn't rename {}: {e}", path.display());
             continue;
         }
-        log::info!("Renamed {} to {}", game.path.display(), new_path.display());
+        log::info!("Renamed {} to {}", path.display(), new_path.display());
         result.renamed += 1;
 
         // Keep the game's save files, box art and favorites with it.
         let save = db.save_extension;
-        rename_if_present(&game.path.with_extension(save), &new_path.with_extension(save));
+        rename_if_present(&path.with_extension(save), &new_path.with_extension(save));
         rename_if_present(
-            &crate::core::saves_dir_path(&game.path, save),
+            &crate::core::saves_dir_path(&path, save),
             &crate::core::saves_dir_path(&new_path, save),
         );
-        rename_if_present(&system.thumbnail_path(&game.name), &system.thumbnail_path(&new_name));
-        crate::core::rename_rom_in_settings(system.core_id, &game.path, &new_path);
+        rename_if_present(&system.thumbnail_path(&game.name()), &system.thumbnail_path(&new_name));
+        crate::core::rename_rom_in_settings(system.core_id, &path, &new_path);
     }
     result
 }
