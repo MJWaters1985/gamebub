@@ -256,8 +256,10 @@ fn mount(path: &str, pins: SlotPins, format_if_mount_failed: bool) -> Result<Sdc
                 }
                 break;
             }
-            // The card answered but has no usable file system: retrying won't change that.
-            esp_idf_sys::ESP_FAIL => break,
+            // The card answered but no FAT volume was found (FatFs FR_NO_FILESYSTEM). After a
+            // cold start the first reads can come back wrong although the card is fine (seen:
+            // "failed to mount card (13)", then fine after a restart), so retry this too; a
+            // card that really has no file system costs only the retries' half a second.
             code => log::warn!(
                 "SD card mount attempt {} at {} kHz failed: {}",
                 i + 1,
