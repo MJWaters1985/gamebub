@@ -44,6 +44,16 @@ export component MainMenuScreen inherits ScreenBase {
             }
         }
 
+        // At boot the menus are transparent over the boot bitstream's logo and light background.
+        // In the dark theme, draw the home screen ourselves once the logo animation is over.
+        Timer {
+            interval: 1500ms;
+            running: Theme.dark && Global.ui-transparent;
+            triggered => {
+                Global.ui-transparent = false;
+            }
+        }
+
         Text {
             color: Theme.text;
             text: "™";
