@@ -204,6 +204,11 @@ impl UI {
             let last_input = last_input.clone();
             let mut warned = false;
             move || {
+                // A background job (box art download, Wi-Fi, SD card setup, Cartridge Manager)
+                // counts as activity: the timeout starts again when it finishes.
+                if crate::jobs::busy() {
+                    last_input.set(Instant::now());
+                }
                 let idle = last_input.get().elapsed();
                 if idle < IDLE_CHECK_INTERVAL {
                     warned = false;
