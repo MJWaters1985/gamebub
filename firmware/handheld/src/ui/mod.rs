@@ -292,9 +292,6 @@ impl UI {
 
             ::slint::platform::update_timers_and_animations();
 
-            // Set the memory reserve aside again if a burst used it.
-            crate::reserve::rearm();
-
             // Render UI if needed.
             self.window.draw_if_needed(|renderer| {
                 let frame = FRAMES_DRAWN.fetch_add(1, Ordering::Relaxed);
