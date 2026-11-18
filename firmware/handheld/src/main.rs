@@ -25,6 +25,7 @@ mod led;
 mod net;
 mod library;
 mod power;
+mod reserve;
 mod sd_setup;
 mod rom_db;
 mod timezone;
@@ -97,6 +98,7 @@ fn main() -> anyhow::Result<()> {
     }
     device.set_brightness(kvs::keys::BRIGHTNESS.get().unwrap());
     crate::crash_handler::note(&"device ready");
+    reserve::rearm();
     timezone::apply();
 
     // Setup workers.

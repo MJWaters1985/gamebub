@@ -53,11 +53,12 @@ pub fn save_ui_screenshot(
         .unwrap()
         .as_secs();
     let filename = if usb { USB_PATH.to_string() } else { format!("/sdcard/screenshot-{}.tga", timestamp) };
-    // A full redraw needs room for the renderer's scene; refuse rather than run out of memory.
+    // A full redraw needs room for the renderer's scene: a big enough block, or the memory
+    // reserve (crate::reserve) to fall back on. Refuse rather than run out of memory.
     let largest = unsafe {
         esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT)
     };
-    if largest < 24 * 1024 {
+    if largest < 24 * 1024 && !crate::reserve::armed() {
         return Err(std::io::Error::other(format!("not enough memory ({largest} bytes free in one block)")));
     }
     let mut writer = File::create(&filename)?;
